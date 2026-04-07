@@ -40,7 +40,34 @@ currency currency::from_string(const std::string& text) {
 }
 
 std::string currency::to_string() const {
+	// All this ceremony is because std::format does not have a comma separator format flag...and it makes me angry
+
+	// 2^63 - 1 = 9,223,372,036,854,775,807 (19 digits: take away 2 digits for the cents)
+	// 5 commas mas => 22 characters is the maximum length for dollar amounts in a string
+	char dollar_buffer[22];
+	size_t buffer_n = 0;
+
+	int64_t dollars = std::abs(cents / scale); // dividing first prevents overflow on std::abs(INT64_MIN)
+	if (dollars == 0) {
+		dollar_buffer[buffer_n++] = '0';
+	} else {
+		size_t digits = 0;
+		while (dollars > 0) {
+			char digit = '0' + (dollars % 10);
+			dollar_buffer[buffer_n++] = digit;
+			dollars /= 10;
+			++digits;
+
+			// Prevent a leading comma by ensuring there are still digits left
+			if (dollars > 0 && digits % 3 == 0) {
+				dollar_buffer[buffer_n++] = ',';
+			}
+		}
+	}
+	std::reverse(dollar_buffer, dollar_buffer + buffer_n);
+	std::string_view dollar_str(dollar_buffer, buffer_n);
+
 	return cents < 0
-		? std::format("(${}.{:02})", -cents / scale, -cents % scale)
-		: std::format( "${}.{:02}",   cents / scale,  cents % scale);
+		? std::format("(${}.{:02})", dollar_str, -cents % scale)
+		: std::format( "${}.{:02}",  dollar_str,  cents % scale);
 }
