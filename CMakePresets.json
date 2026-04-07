@@ -1,0 +1,83 @@
+{
+	"version": 3,
+	"configurePresets": [
+		{
+			"name": "android-debug",
+			"binaryDir": "${sourceDir}/out/android-debug",
+			"cacheVariables": {
+				"FUNDOS_PLATFORM": "android",
+				"CMAKE_BUILD_TYPE": "Debug"
+			}
+		},
+		{
+			"name": "android-release",
+			"binaryDir": "${sourceDir}/out/android-release",
+			"cacheVariables": {
+				"FUNDOS_PLATFORM": "android",
+				"CMAKE_BUILD_TYPE": "Release"
+			}
+		},
+		{
+			"name": "linux-debug",
+			"binaryDir": "${sourceDir}/out/linux-debug",
+			"cacheVariables": {
+				"FUNDOS_PLATFORM": "desktop",
+				"CMAKE_BUILD_TYPE": "Debug"
+			}
+		},
+		{
+			"name": "linux-release",
+			"binaryDir": "${sourceDir}/out/linux-release",
+			"cacheVariables": {
+				"FUNDOS_PLATFORM": "desktop",
+				"CMAKE_BUILD_TYPE": "Release"
+			}
+		},
+		{
+			"name": "windows-debug",
+			"binaryDir": "${sourceDir}/out/windows-debug",
+			"cacheVariables": {
+				"FUNDOS_PLATFORM": "desktop"
+			}
+		},
+		{
+			"name": "windows-release",
+			"binaryDir": "${sourceDir}/out/windows-release",
+			"cacheVariables": {
+				"FUNDOS_PLATFORM": "desktop"
+			}
+		}
+	],
+	"buildPresets": [
+		{
+			"name": "android-debug",
+			"configurePreset": "android-debug",
+			"configuration": "Debug"
+		},
+		{
+			"name": "android-release",
+			"configurePreset": "android-release",
+			"configuration": "Release"
+		},
+		{
+			"name": "linux-debug",
+			"configurePreset": "linux-debug",
+			"configuration": "Debug"
+		},
+		{
+			"name": "linux-release",
+			"configurePreset": "linux-release",
+			"configuration": "Release"
+		},
+		{
+			"name": "windows-debug",
+			"configurePreset": "windows-debug",
+			"configuration": "Debug"
+		},
+		{
+			"name": "windows-release",
+			"configurePreset": "windows-release",
+			"configuration": "Release"
+		}
+	]
+}
