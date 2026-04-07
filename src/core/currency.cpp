@@ -15,6 +15,9 @@ int64_t parse_currency(const std::string& text, const currency_locale_info& loca
 	uint8_t digits = 0;
 	state parse_state = state::sign;
 
+	// Currency strings longer than 255 characters (even 32, really - see format_currency) are considered malformed. Garbage in: garbage out
+	assert(text.length() <= 255);
+
 	for (uint8_t i = 0, len = text.length(); i < len; ++i) {
 		char c = text[i];
 		bool is_digit = c >= '0' && c <= '9';
@@ -63,8 +66,8 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 	size_t buffer_n = 0;
 
 	bool is_negative = minor_units < 0;
-	int64_t major_units = std::abs(minor_units / locale.scale); // dividing first prevents overflow on std::abs(INT64_MIN)
-	minor_units         = std::abs(minor_units % locale.scale); // modding  first prevents overflow on std::abs(INT64_MIN)
+	int64_t major_units = std::abs(minor_units / locale.scale); // Note: INT64_MIN with scale=1 (e.g. JPY) overflows std::abs
+	minor_units         = std::abs(minor_units % locale.scale); // Values that extreme are considered malformed input, consistent with the rest of this library.
 
 	// In order to 0 pad the minor_units and thousands-separate the major_units it is beneficial to build the string in reverse order
 	if (locale.symbol_position == currency_symbol_position::after) {
@@ -97,6 +100,7 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 			}
 		}
 	}
+
 	if (locale.symbol_position == currency_symbol_position::before) {
 		copy_symbol_reversed(buffer, buffer_n, locale);
 	}
