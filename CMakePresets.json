@@ -1,50 +1,74 @@
 {
-	"version": 3,
+	"version": 6,
 	"configurePresets": [
 		{
 			"name": "android-debug",
-			"binaryDir": "${sourceDir}/out/android-debug",
+			"binaryDir": "${sourceDir}/out/build/android-debug",
 			"cacheVariables": {
 				"FUNDOS_PLATFORM": "android",
-				"CMAKE_BUILD_TYPE": "Debug"
+				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/android-debug/bin",
+				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": "${sourceDir}/out/android-debug/bin",
+				"CMAKE_ARCHIVE_OUTPUT_DIRECTORY": "${sourceDir}/out/android-debug/lib"
 			}
 		},
 		{
 			"name": "android-release",
-			"binaryDir": "${sourceDir}/out/android-release",
+			"binaryDir": "${sourceDir}/out/build/android-release",
 			"cacheVariables": {
 				"FUNDOS_PLATFORM": "android",
-				"CMAKE_BUILD_TYPE": "Release"
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/android-release/bin",
+				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": "${sourceDir}/out/android-release/bin",
+				"CMAKE_ARCHIVE_OUTPUT_DIRECTORY": "${sourceDir}/out/android-release/lib"
 			}
 		},
 		{
 			"name": "linux-debug",
-			"binaryDir": "${sourceDir}/out/linux-debug",
+			"binaryDir": "${sourceDir}/out/build/linux-debug",
 			"cacheVariables": {
 				"FUNDOS_PLATFORM": "desktop",
-				"CMAKE_BUILD_TYPE": "Debug"
+				"CMAKE_BUILD_TYPE": "Debug",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/linux-debug/bin",
+				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": "${sourceDir}/out/linux-debug/bin",
+				"CMAKE_ARCHIVE_OUTPUT_DIRECTORY": "${sourceDir}/out/linux-debug/lib"
 			}
 		},
 		{
 			"name": "linux-release",
-			"binaryDir": "${sourceDir}/out/linux-release",
+			"binaryDir": "${sourceDir}/out/build/linux-release",
 			"cacheVariables": {
 				"FUNDOS_PLATFORM": "desktop",
-				"CMAKE_BUILD_TYPE": "Release"
+				"CMAKE_BUILD_TYPE": "Release",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/linux-release/bin",
+				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": "${sourceDir}/out/linux-release/bin",
+				"CMAKE_ARCHIVE_OUTPUT_DIRECTORY": "${sourceDir}/out/linux-release/lib"
 			}
 		},
 		{
 			"name": "windows-debug",
-			"binaryDir": "${sourceDir}/out/windows-debug",
+			"binaryDir": "${sourceDir}/out/build/windows-debug",
 			"cacheVariables": {
-				"FUNDOS_PLATFORM": "desktop"
+				"FUNDOS_PLATFORM": "desktop",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/windows-debug/bin",
+				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": "${sourceDir}/out/windows-debug/bin",
+				"CMAKE_ARCHIVE_OUTPUT_DIRECTORY": "${sourceDir}/out/windows-debug/lib"
 			}
 		},
 		{
 			"name": "windows-release",
-			"binaryDir": "${sourceDir}/out/windows-release",
+			"binaryDir": "${sourceDir}/out/build/windows-release",
 			"cacheVariables": {
-				"FUNDOS_PLATFORM": "desktop"
+				"FUNDOS_PLATFORM": "desktop",
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/windows-release/bin",
+				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": "${sourceDir}/out/windows-release/bin",
+				"CMAKE_ARCHIVE_OUTPUT_DIRECTORY": "${sourceDir}/out/windows-release/lib"
 			}
 		}
 	],
