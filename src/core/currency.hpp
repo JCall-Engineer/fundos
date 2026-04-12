@@ -30,6 +30,8 @@ concept Locale = requires {
 	{ T::info } -> std::convertible_to<currency_locale_info>;
 };
 
+// Precondition: text represents a value within int64_t range.
+// Oversized input produces implementation-defined results.
 int64_t parse_currency(const std::string& text, const currency_locale_info& locale);
 std::string format_currency(int64_t minor_units, const currency_locale_info& locale);
 
@@ -44,12 +46,12 @@ struct currency {
 	constexpr currency operator+(const currency& rhs) const { return { minor_units + rhs.minor_units }; }
 	constexpr currency operator-(const currency& rhs) const { return { minor_units - rhs.minor_units }; }
 	constexpr currency operator*(int64_t rhs) const { return { minor_units * rhs }; }
-	constexpr currency operator/(int64_t rhs) const { return { minor_units / rhs }; }
+	constexpr currency operator/(int64_t rhs) const { return { minor_units / rhs }; } // Precondition: rhs != 0
 
 	constexpr currency& operator+=(const currency& rhs) { minor_units += rhs.minor_units; return *this; }
 	constexpr currency& operator-=(const currency& rhs) { minor_units -= rhs.minor_units; return *this; }
 	constexpr currency& operator*=(int64_t rhs) { minor_units *= rhs; return *this; }
-	constexpr currency& operator/=(int64_t rhs) { minor_units /= rhs; return *this; }
+	constexpr currency& operator/=(int64_t rhs) { minor_units /= rhs; return *this; } // Precondition: rhs != 0
 
 	constexpr bool operator==(const currency& rhs) const { return minor_units == rhs.minor_units; }
 	constexpr bool operator!=(const currency& rhs) const { return minor_units != rhs.minor_units; }
