@@ -82,7 +82,7 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 	minor_units         = std::abs(minor_units % locale.scale); // Values that extreme are considered malformed input, consistent with the rest of this library.
 
 	// In order to 0 pad the minor_units and thousands-separate the major_units it is beneficial to build the string in reverse order
-	if (locale.symbol_position == currency_symbol_position::after) {
+	if (locale.symbol_position == currency_locale_info::symbol_placement::after) {
 		copy_symbol_reversed(buffer, buffer_n, locale);
 	}
 
@@ -113,7 +113,7 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 		}
 	}
 
-	if (locale.symbol_position == currency_symbol_position::before) {
+	if (locale.symbol_position == currency_locale_info::symbol_placement::before) {
 		copy_symbol_reversed(buffer, buffer_n, locale);
 	}
 
@@ -123,13 +123,13 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 	// The most comprehensible part of this function lol
 	if (!is_negative) { return std::string(output); }
 	switch (locale.negative_format) {
-		case currency_negative_format::leading_minus:
+		case currency_locale_info::negative_notation::leading_minus:
 			return std::format("-{}", output);
-		case currency_negative_format::trailing_minus:
+		case currency_locale_info::negative_notation::trailing_minus:
 			return std::format("{}-", output);
-		case currency_negative_format::parentheses:
+		case currency_locale_info::negative_notation::parentheses:
 			return std::format("({})", output);
-		case currency_negative_format::angle_brackets:
+		case currency_locale_info::negative_notation::angle_brackets:
 			return std::format("<{}>", output);
 		default:
 			assert(false && "unhandled currency_negative_format");
