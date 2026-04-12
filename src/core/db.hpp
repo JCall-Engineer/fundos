@@ -5,6 +5,8 @@
 
 namespace fundos {
 
+union db_prepared_statements;
+
 class db {
 public:
 	struct owns_connection {};
@@ -24,7 +26,7 @@ private:
 	state status;
 	uint64_t schema;
 	sqlite3* connection;
-	void* prepared;
+	db_prepared_statements* prepared;
 	std::shared_ptr<std::string> errmsg;
 
 public:

@@ -160,10 +160,6 @@ union db_prepared_statements {
 	statements named = {};
 };
 
-static inline db_prepared_statements* prepared_statements(void* p) {
-	return static_cast<db_prepared_statements*>(p);
-}
-
 static inline std::shared_ptr<std::string> get_error(sqlite3* connection) {
 	const char* msg = sqlite3_errmsg(connection);
 	if (msg == nullptr || std::string_view(msg) == "not an error") { return nullptr; }
@@ -183,14 +179,13 @@ std::shared_ptr<db> db::open_memory() {
 }
 
 void db::prepare() {
-	auto* statements = prepared_statements(prepared);
 	for (size_t i = 0; i < num_prepared; ++i) {
 		if (SQLITE_OK != sqlite3_prepare_v3(
 			connection,
-			statements->slots[i].sql,
+			prepared->slots[i].sql,
 			-1, // length, -1 = read to null terminator
 			SQLITE_PREPARE_PERSISTENT, // prepFlags hint: reused frequently, keep associated cache resources warm
-			&(statements->slots[i].statement), // out: stmt
+			&(prepared->slots[i].statement), // out: stmt
 			nullptr // out: tail pointer, unused
 		)) {
 			errmsg = get_error(connection);
@@ -274,11 +269,10 @@ void db::close() {
 			return;
 	}
 	if (prepared != nullptr) { // I believe it always is...
-		auto* statements = prepared_statements(prepared);
 		for (size_t i = 0; i < num_prepared; ++i) {
-			sqlite3_finalize(statements->slots[i].statement);
+			sqlite3_finalize(prepared->slots[i].statement);
 		}
-		delete statements;
+		delete prepared;
 		prepared = nullptr;
 	}
 	if (managed) {
