@@ -2,6 +2,8 @@
 #include <format>
 #include <cassert>
 
+namespace fundos {
+
 int64_t parse_currency(const std::string& text, const currency_locale_info& locale) {
 	enum class state : uint8_t { sign, whole, remainder };
 
@@ -124,3 +126,5 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 			return "";
 	}
 }
+
+} // fundos

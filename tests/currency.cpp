@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "currency.hpp"
+using namespace fundos;
 
 TEST(FromString, ZeroValue) {
 	EXPECT_EQ(currency<currency_locale::USD>::from_string("$0.00").minor_units, 0);

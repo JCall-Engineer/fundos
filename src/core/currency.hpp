@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <string>
 
+namespace fundos {
+
 enum class currency_negative_format : uint8_t {
 	leading_minus,
 	trailing_minus,
@@ -128,4 +130,6 @@ namespace currency_locale {
 			.negative_format      = currency_negative_format::leading_minus,
 		};
 	};
-}
+} // currency_locale
+
+} // fundos
