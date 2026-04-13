@@ -1,6 +1,8 @@
 #include "db.hpp"
 #include <cassert>
 
+#pragma region SQL Queries
+
 static constexpr std::string_view schema_migrations[] = {
 R"sql(
 CREATE TABLE meta (
@@ -274,7 +276,26 @@ union db_prepared_statements {
 	statements named = {};
 };
 
-static inline std::shared_ptr<std::string> get_error(sqlite3* connection) {
+#pragma endregion
+
+static inline db::error classify_sqlite_error(int rc) {
+	switch (rc) {
+		case SQLITE_NOMEM:
+			return db::error::out_of_memory;
+		case SQLITE_BUSY:
+		case SQLITE_LOCKED:
+		case SQLITE_READONLY:
+			return db::error::unavailable;
+		default:
+			assert(false && "unhandled sqlite3 result code");
+		case SQLITE_CORRUPT:
+		case SQLITE_NOTADB:
+		case SQLITE_IOERR:
+			return db::error::corrupted;
+	}
+}
+
+static inline std::shared_ptr<std::string> get_sqlite3_error(sqlite3* connection) {
 	const char* msg = sqlite3_errmsg(connection);
 	if (msg == nullptr || std::string_view(msg) == "not an error") { return nullptr; }
 	return std::make_shared<std::string>(msg);
@@ -283,6 +304,7 @@ static inline std::shared_ptr<std::string> get_error(sqlite3* connection) {
 std::shared_ptr<db> db::open_file(std::string path) {
 	sqlite3* connection;
 	sqlite3_open(path.c_str(), &connection);
+	sqlite3_busy_timeout(connection, 5000);
 	return std::make_shared<db>(connection, owns_connection{});
 }
 
@@ -294,53 +316,113 @@ std::shared_ptr<db> db::open_memory() {
 
 void db::prepare() {
 	for (size_t i = 0; i < num_prepared; ++i) {
-		if (SQLITE_OK != sqlite3_prepare_v3(
+		int rc = sqlite3_prepare_v3(
 			connection,
 			prepared->slots[i].sql,
-			-1, // length, -1 = read to null terminator
-			SQLITE_PREPARE_PERSISTENT, // prepFlags hint: reused frequently, keep associated cache resources warm
+			-1,                              // length, -1 = read to null terminator
+			SQLITE_PREPARE_PERSISTENT,       // prepFlags hint: reused frequently, keep associated cache resources warm
 			&(prepared->slots[i].statement), // out: stmt
-			nullptr // out: tail pointer, unused
-		)) {
-			errmsg = get_error(connection);
-			close();
-			status = state::corrupted;
-			return;
+			nullptr                          // out: tail pointer, unused
+		);
+		if (SQLITE_OK == rc) { continue; }
+
+		errmsg = get_sqlite3_error(connection);
+		close(); // prepare is only called during initialization; closing unconditionally is safe since there is no path for the caller to retry
+		if (SQLITE_ERROR == rc) { // SQL referenced a table/column that doesn't exist — schema drift
+			open_result.result = status::code::schema_error;
+			open_result.schema_status = schema_state::schema_mismatch;
+		} else {
+			open_result.result = status::code::sqlite3_error;
+			open_result.sqlite3_error = classify_sqlite_error(rc);
 		}
+		return;
 	}
 }
 
-void db::migrate() {
-	if (status != state::ok && status != state::older_schema) { return; }
+db::error db::migrate() {
+	switch (open_result.schema_status) {
+		case schema_state::created:
+		case schema_state::older_schema:
+			break;
+		default:
+			return error::none;
+	}
 	for (; schema < schema_latest_version; ++schema) {
 		const char* migration = schema_migrations[schema].data();
-		sqlite3_exec(connection, migration, nullptr, nullptr, nullptr);
+		int rc = sqlite3_exec(connection, migration, nullptr, nullptr, nullptr);
+		if (SQLITE_OK == rc) { continue; }
+
+		errmsg = get_sqlite3_error(connection);
+		error out = error::none;
+		switch (rc) {
+			case SQLITE_ERROR: // Treat the db as corrupted if there is schema drift during migration
+			case SQLITE_CONSTRAINT: // A migration violated a constraint, treat as corrupted
+				out = error::corrupted;
+				break;
+			default:
+				out = classify_sqlite_error(rc);
+		}
+		if (out == error::corrupted) {
+			open_result.result = status::code::sqlite3_error;
+			open_result.sqlite3_error = error::corrupted;
+			close();
+		}
+		return out;
 	}
-	status = state::migrated;
+	if (open_result.schema_status == schema_state::older_schema) {
+		open_result.schema_status = schema_state::migrated;
+	}
+	// prepare cannot happen for older_schema as migrate must be called manually, so we call it here *or* when opening a file with a current schema
 	prepare();
+	return open_result.result == status::code::schema_error
+		? error::corrupted
+		: open_result.sqlite3_error;
 }
 
 void db::open() {
-	sqlite3_exec(connection, "PRAGMA foreign_keys = ON", nullptr, nullptr, nullptr); // required for cascade delete
+	int rc = sqlite3_exec(connection, "PRAGMA foreign_keys = ON", nullptr, nullptr, nullptr); // required for cascade delete
+	if (SQLITE_OK != rc) {
+		open_result.result = status::code::sqlite3_error;
+		open_result.sqlite3_error = classify_sqlite_error(rc);
+		close();
+		return;
+	}
 
 	uint64_t schema_objects = 0;
-	sqlite3_exec(connection,
+	rc = sqlite3_exec(connection,
 		"SELECT COUNT(*) FROM sqlite_schema",
 		[](void* data, int, char** cols, char**) {
 			*static_cast<uint64_t*>(data) = std::atoi(cols[0]);
 			return 0;
 		},
 		&schema_objects, nullptr);
+	if (SQLITE_OK != rc) {
+		open_result.result = status::code::sqlite3_error;
+		open_result.sqlite3_error = classify_sqlite_error(rc);
+		close();
+		return;
+	}
 
 	if (schema_objects == 0) {
-		migrate();
-		status = state::created;
+		open_result.schema_status = schema_state::created;
+		error err = migrate();
+		switch (err) {
+			default:
+				assert(false && "unhandled migration error");
+			case error::none: // nothing to do
+			case error::corrupted: // open_result already set by migrate()
+				break;
+			case error::out_of_memory:
+			case error::unavailable:
+				open_result.schema_status = schema_state::older_schema;
+				open_result.result = status::code::needs_migration;
+		}
 		return;
 	}
 
 	// non-empty db: prepare it's ours
 	std::string app;
-	sqlite3_exec(connection,
+	rc = sqlite3_exec(connection,
 		"SELECT value FROM meta WHERE key='application'"
 		" AND EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta')",
 		[](void* data, int, char** cols, char**) {
@@ -348,54 +430,63 @@ void db::open() {
 			return 0;
 		},
 		&app, nullptr);
+	if (SQLITE_OK != rc) {
+		open_result.result = status::code::sqlite3_error;
+		open_result.sqlite3_error = classify_sqlite_error(rc);
+		close();
+		return;
+	}
 
 	if (app != "fundos") {
 		close();
-		status = state::app_mismatch;
+		open_result.schema_status = schema_state::app_mismatch;
+		open_result.result = status::code::schema_error;
 		return;
 	}
 
 	// app matches: read version
-	sqlite3_exec(connection,
+	rc = sqlite3_exec(connection,
 		"SELECT value FROM meta WHERE key='schema_version'",
 		[](void* data, int, char** cols, char**) {
 			*static_cast<uint64_t*>(data) = std::strtoull(cols[0], nullptr, 10);
 			return 0;
 		},
 		&schema, nullptr);
+	if (SQLITE_OK != rc) {
+		open_result.result = status::code::sqlite3_error;
+		open_result.sqlite3_error = classify_sqlite_error(rc);
+		close();
+		return;
+	}
 
 	if (schema < schema_latest_version) {
-		status = state::older_schema;
+		open_result.schema_status = schema_state::older_schema;
+		open_result.result = status::code::needs_migration;
 		return;
 	} else if (schema > schema_latest_version) {
 		close();
-		status = state::newer_schema;
+		open_result.schema_status = schema_state::newer_schema;
+		open_result.result = status::code::schema_error;
 		return;
 	}
 	prepare();
 }
 void db::close() {
-	switch (status) {
-		case state::closed:
-		case state::app_mismatch:
-		case state::newer_schema:
-		case state::corrupted:
-			return;
-	}
-	if (prepared != nullptr) { // I believe it always is...
-		for (size_t i = 0; i < num_prepared; ++i) {
-			sqlite3_finalize(prepared->slots[i].statement);
-		}
-		delete prepared;
-		prepared = nullptr;
+	if (connection == nullptr) { return; }  // prepared and connection have parity and are managed as one resource
+	for (size_t i = 0; i < num_prepared; ++i) {
+		sqlite3_finalize(prepared->slots[i].statement);
+		prepared->slots[i].statement = nullptr;
 	}
 	if (managed) {
 		sqlite3_close(connection);
 	}
-	status = state::closed;
+	delete prepared;
+	prepared = nullptr;
+	connection = nullptr;
 }
-db::db(sqlite3* c)                  : managed(false), connection(c), prepared(new db_prepared_statements()), status(state::ok), schema(0), errmsg(nullptr) { open(); }
-db::db(sqlite3* c, owns_connection) : managed(true),  connection(c), prepared(new db_prepared_statements()), status(state::ok), schema(0), errmsg(nullptr) { open(); }
+
+db::db(sqlite3* c)                  : connection(c), managed(false), prepared(new db_prepared_statements()) { open(); }
+db::db(sqlite3* c, owns_connection) : connection(c), managed(true),  prepared(new db_prepared_statements()) { open(); }
 db::~db() { close(); }
 
 } // fundos
