@@ -371,6 +371,7 @@ db::error db::migrate() {
 	}
 	if (open_result.schema_status == schema_state::older_schema) {
 		open_result.schema_status = schema_state::migrated;
+		open_result.result = status::code::ok;
 	}
 	// prepare cannot happen for older_schema as migrate must be called manually, so we call it here *or* when opening a file with a current schema
 	prepare();
@@ -455,36 +456,60 @@ void db::open() {
 	}
 
 	// app matches: read version
-	rc = sqlite3_exec(connection,
-		"SELECT value FROM meta WHERE key='schema_version'",
-		[](void* data, int, char** cols, char**) {
-			*static_cast<uint64_t*>(data) = std::strtoull(cols[0], nullptr, 10);
-			return 0;
-		},
-		&schema, nullptr);
-	if (SQLITE_OK != rc) {
+	sqlite3_stmt* schema_statement;
+	rc = sqlite3_prepare_v2(connection,
+		"SELECT value FROM meta WHERE key='schema_version'", -1, // length, -1 = read to null terminator
+		&schema_statement, nullptr); // pzTail is only used for multi-statement strings
+	if (SQLITE_OK != rc) { // Previous queries have ruled out sql errors, let classify_sqlite_error default if they occur
 		open_result.result = status::code::sqlite3_error;
 		open_result.sqlite3_error = classify_sqlite_error(rc);
 		close();
 		return;
 	}
 
+	rc = sqlite3_step(schema_statement);
+	if (rc == SQLITE_DONE) { // No row returned — meta table exists but schema_version key is missing
+		sqlite3_finalize(schema_statement);
+		open_result.result = status::code::sqlite3_error;
+		open_result.sqlite3_error = error::corrupted;
+		close();
+		return;
+	}
+	if (rc != SQLITE_ROW) { // Unexpected sql error
+		sqlite3_finalize(schema_statement);
+		open_result.result = status::code::sqlite3_error;
+		open_result.sqlite3_error = classify_sqlite_error(rc);
+		close();
+		return;
+	}
+
+	int64_t version = sqlite3_column_int64(schema_statement, 0);
+	sqlite3_finalize(schema_statement);
+
+	if (version < 0) { // db was affected by 3rd party in unpredictable way
+		open_result.result = status::code::sqlite3_error;
+		open_result.sqlite3_error = error::corrupted;
+		close();
+		return;
+	}
+
+	schema = static_cast<uint64_t>(version);
 	if (schema < schema_latest_version) {
 		open_result.schema_status = schema_state::older_schema;
 		open_result.result = status::code::needs_migration;
 		return;
 	} else if (schema > schema_latest_version) {
-		close();
 		open_result.schema_status = schema_state::newer_schema;
 		open_result.result = status::code::schema_error;
+		close();
 		return;
 	}
-	prepare();
+	prepare(); // if prepare succeeds we will "trust" this db
 }
 void db::close() {
 	if (connection == nullptr) { return; }  // prepared and connection have parity and are managed as one resource
 	for (size_t i = 0; i < num_prepared; ++i) {
-		sqlite3_finalize(prepared->slots[i].statement);
+		sqlite3_finalize(prepared->slots[i].statement); // passing a nullptr is a noop
 		prepared->slots[i].statement = nullptr;
 	}
 	if (managed) {
