@@ -301,6 +301,8 @@ static inline std::shared_ptr<std::string> get_sqlite3_error(sqlite3* connection
 	return std::make_shared<std::string>(msg);
 }
 
+#pragma region Lifecycle
+
 std::shared_ptr<db> db::open_file(std::string path) {
 	sqlite3* connection;
 	sqlite3_open(path.c_str(), &connection);
@@ -371,6 +373,8 @@ db::error db::migrate() {
 	}
 	if (open_result.schema_status == schema_state::older_schema) {
 		open_result.schema_status = schema_state::migrated;
+	}
+	if (open_result.result == status::code::needs_migration) {
 		open_result.result = status::code::ok;
 	}
 	// prepare cannot happen for older_schema as migrate must be called manually, so we call it here *or* when opening a file with a current schema
@@ -383,6 +387,7 @@ db::error db::migrate() {
 void db::open() {
 	int rc = sqlite3_exec(connection, "PRAGMA foreign_keys = ON", nullptr, nullptr, nullptr); // required for cascade delete
 	if (SQLITE_OK != rc) {
+		errmsg = get_sqlite3_error(connection);
 		open_result.result = status::code::sqlite3_error;
 		open_result.sqlite3_error = classify_sqlite_error(rc);
 		close();
@@ -399,6 +404,7 @@ void db::open() {
 		},
 		&schema_objects, nullptr);
 	if (SQLITE_OK != rc) {
+		errmsg = get_sqlite3_error(connection);
 		open_result.result = status::code::sqlite3_error;
 		open_result.sqlite3_error = classify_sqlite_error(rc);
 		close();
@@ -434,6 +440,7 @@ void db::open() {
 		},
 		&app, nullptr);
 	if (SQLITE_OK != rc) {
+		errmsg = get_sqlite3_error(connection);
 		switch (rc) {
 			case SQLITE_ERROR: // meta table exists but doesn't have key column or value column
 			case SQLITE_ABORT: // meta table has application key but its value is null
@@ -461,6 +468,7 @@ void db::open() {
 		"SELECT value FROM meta WHERE key='schema_version'", -1, // length, -1 = read to null terminator
 		&schema_statement, nullptr); // pzTail is only used for multi-statement strings
 	if (SQLITE_OK != rc) { // Previous queries have ruled out sql errors, let classify_sqlite_error default if they occur
+		errmsg = get_sqlite3_error(connection);
 		open_result.result = status::code::sqlite3_error;
 		open_result.sqlite3_error = classify_sqlite_error(rc);
 		close();
@@ -470,12 +478,14 @@ void db::open() {
 	rc = sqlite3_step(schema_statement);
 	if (rc == SQLITE_DONE) { // No row returned — meta table exists but schema_version key is missing
 		sqlite3_finalize(schema_statement);
-		open_result.result = status::code::sqlite3_error;
+		open_result.result = status::code::schema_error;
+		open_result.schema_status = schema_state::schema_mismatch;
 		open_result.sqlite3_error = error::corrupted;
 		close();
 		return;
 	}
 	if (rc != SQLITE_ROW) { // Unexpected sql error
+		errmsg = get_sqlite3_error(connection);
 		sqlite3_finalize(schema_statement);
 		open_result.result = status::code::sqlite3_error;
 		open_result.sqlite3_error = classify_sqlite_error(rc);
@@ -486,8 +496,9 @@ void db::open() {
 	int64_t version = sqlite3_column_int64(schema_statement, 0);
 	sqlite3_finalize(schema_statement);
 
-	if (version < 0) { // db was affected by 3rd party in unpredictable way
-		open_result.result = status::code::sqlite3_error;
+	if (version <= 0) { // db was affected by 3rd party in unpredictable way
+		open_result.result = status::code::schema_error;
+		open_result.schema_status = schema_state::schema_mismatch;
 		open_result.sqlite3_error = error::corrupted;
 		close();
 		return;
@@ -525,3 +536,5 @@ db::db(sqlite3* c, owns_connection) : connection(c), managed(true),  prepared(ne
 db::~db() { close(); }
 
 } // fundos
+
+#pragma endregion
