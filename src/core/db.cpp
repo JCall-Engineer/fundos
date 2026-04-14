@@ -388,11 +388,12 @@ void db::open() {
 		return;
 	}
 
-	uint64_t schema_objects = 0;
+	int schema_objects = 0;
 	rc = sqlite3_exec(connection,
 		"SELECT COUNT(*) FROM sqlite_schema",
 		[](void* data, int, char** cols, char**) {
-			*static_cast<uint64_t*>(data) = std::atoi(cols[0]);
+			// The failure mode for a query against sqlite_schema is practically negligible, atoi is fine
+			*static_cast<int*>(data) = std::atoi(cols[0]);
 			return 0;
 		},
 		&schema_objects, nullptr);
@@ -420,27 +421,36 @@ void db::open() {
 		return;
 	}
 
-	// non-empty db: ensure it's ours
+	// non-empty db: ensure it's ours by checking for existence of meta table and the application identifier
 	std::string app;
 	rc = sqlite3_exec(connection,
 		"SELECT value FROM meta WHERE key='application'"
 		" AND EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta')",
 		[](void* data, int, char** cols, char**) {
-			*static_cast<std::string*>(data) = cols[0];
+			if (cols[0] == nullptr) { return 1; } // value could be null if this is a foreign db with a meta table but no application key
+			*static_cast<std::string*>(data) = cols[0]; // string = null is undefined behavior, thus the prior check
 			return 0;
 		},
 		&app, nullptr);
 	if (SQLITE_OK != rc) {
-		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_error(rc);
+		switch (rc) {
+			case SQLITE_ERROR: // meta table exists but doesn't have key column or value column
+			case SQLITE_ABORT: // meta table has application key but its value is null
+				open_result.result = status::code::schema_error;
+				open_result.schema_status = schema_state::app_mismatch;
+				break;
+			default:
+				open_result.result = status::code::sqlite3_error;
+				open_result.sqlite3_error = classify_sqlite_error(rc);
+		}
 		close();
 		return;
 	}
 
-	if (app != "fundos") {
-		close();
+	if (app != "fundos") { // if meta table does not have application key this will be an empty string (0 rows returned)
 		open_result.schema_status = schema_state::app_mismatch;
 		open_result.result = status::code::schema_error;
+		close();
 		return;
 	}
 
