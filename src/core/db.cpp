@@ -420,7 +420,7 @@ void db::open() {
 		return;
 	}
 
-	// non-empty db: prepare it's ours
+	// non-empty db: ensure it's ours
 	std::string app;
 	rc = sqlite3_exec(connection,
 		"SELECT value FROM meta WHERE key='application'"
