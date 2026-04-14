@@ -47,6 +47,20 @@ TEST(DbOpen, EmptyOrCurrentDb) {
 	}
 }
 
+TEST(DbOpen, NullDb) {
+	sqlite3* connection = nullptr;
+	auto file = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = file->get_status();
+	EXPECT_EQ(file->is_ready(), false);
+	EXPECT_EQ(file->is_connected(), false);
+	EXPECT_EQ(status.result, db::status::code::null_db);
+	EXPECT_EQ(status.schema_status, db::schema_state::none);
+	EXPECT_EQ(status.sqlite3_error, db::error::none);
+	EXPECT_EQ(status.is_ok(), false);
+	EXPECT_EQ(status.has_error(), true);
+	EXPECT_EQ(status.needs_migration(), false);
+}
+
 TEST(DbOpen, ForeignDbNoMeta) {
 	auto connection = mockDb();
 	int rc = sqlite3_exec(connection, R"sql(

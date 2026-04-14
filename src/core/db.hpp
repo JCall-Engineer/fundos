@@ -12,6 +12,7 @@ public:
 	struct owns_connection {};
 
 	enum class schema_state : uint8_t {
+		none,            // empty or nonexistent db
 		current,         // existing db, schema current
 		created,         // fresh db, schema applied
 		migrated,        // schema updated this session
@@ -34,13 +35,14 @@ public:
 			needs_migration,
 
 			// Errors
+			null_db,
 			schema_error,
 			sqlite3_error,
 		};
-		static constexpr code first_error = code::schema_error;
+		static constexpr code first_error = code::null_db;
 
 		code         result        = code::ok;
-		schema_state schema_status = schema_state::current;
+		schema_state schema_status = schema_state::none;
 		error        sqlite3_error = error::none;
 
 		bool is_ok()           const { return result == code::ok; }

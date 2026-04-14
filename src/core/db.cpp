@@ -385,6 +385,13 @@ db::error db::migrate() {
 }
 
 void db::open() {
+	if (connection == nullptr) {
+		open_result.result = status::code::null_db;
+		delete prepared;
+		prepared = nullptr;
+		return;
+	}
+
 	int rc = sqlite3_exec(connection, "PRAGMA foreign_keys = ON", nullptr, nullptr, nullptr); // required for cascade delete
 	if (SQLITE_OK != rc) {
 		errmsg = get_sqlite3_error(connection);
@@ -514,6 +521,8 @@ void db::open() {
 		open_result.result = status::code::schema_error;
 		close();
 		return;
+	} else {
+		open_result.schema_status = schema_state::current;
 	}
 	prepare(); // if prepare succeeds we will "trust" this db
 }
