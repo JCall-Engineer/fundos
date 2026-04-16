@@ -59,6 +59,14 @@ private:
 	status open_result = {};
 	std::shared_ptr<std::string> errmsg = nullptr;
 
+	inline void get_sqlite3_error() {
+		const char* msg = sqlite3_errmsg(connection);
+		errmsg =
+			msg == nullptr || std::string_view(msg) == "not an error"
+			? nullptr
+			: std::make_shared<std::string>(msg);
+	}
+
 public:
 	static std::shared_ptr<db> open_file(std::string);
 	static std::shared_ptr<db> open_memory();

@@ -1,6 +1,8 @@
 #include "db.hpp"
 #include <cassert>
 
+namespace fundos {
+
 #pragma region SQL Queries
 
 static constexpr std::string_view schema_migrations[] = {
@@ -98,8 +100,6 @@ CREATE INDEX idx_allocations_fund_id ON allocations(fund_id);
 )sql", // version 1
 };
 static constexpr std::size_t schema_latest_version = std::size(schema_migrations);
-
-namespace fundos {
 
 struct statement_slot {
 	sqlite3_stmt* statement = nullptr;
@@ -278,29 +278,6 @@ union db_prepared_statements {
 
 #pragma endregion
 
-static inline db::error classify_sqlite_error(int rc) {
-	switch (rc) {
-		case SQLITE_NOMEM:
-			return db::error::out_of_memory;
-		case SQLITE_BUSY:
-		case SQLITE_LOCKED:
-		case SQLITE_READONLY:
-			return db::error::unavailable;
-		default:
-			assert(false && "unhandled sqlite3 result code");
-		case SQLITE_CORRUPT:
-		case SQLITE_NOTADB:
-		case SQLITE_IOERR:
-			return db::error::corrupted;
-	}
-}
-
-static inline std::shared_ptr<std::string> get_sqlite3_error(sqlite3* connection) {
-	const char* msg = sqlite3_errmsg(connection);
-	if (msg == nullptr || std::string_view(msg) == "not an error") { return nullptr; }
-	return std::make_shared<std::string>(msg);
-}
-
 #pragma region Lifecycle
 
 std::shared_ptr<db> db::open_file(std::string path) {
@@ -316,6 +293,23 @@ std::shared_ptr<db> db::open_memory() {
 	return std::make_shared<db>(connection, owns_connection{});
 }
 
+static inline db::error classify_sqlite_open_error(int rc) {
+	switch (rc) {
+		case SQLITE_NOMEM:
+			return db::error::out_of_memory;
+		case SQLITE_BUSY:
+		case SQLITE_LOCKED:
+		case SQLITE_READONLY:
+			return db::error::unavailable;
+		default:
+			assert(false && "unhandled sqlite3 result code"); // In production fall through to corrupted
+		case SQLITE_CORRUPT:
+		case SQLITE_NOTADB:
+		case SQLITE_IOERR:
+			return db::error::corrupted;
+	}
+}
+
 void db::prepare() {
 	for (size_t i = 0; i < num_prepared; ++i) {
 		int rc = sqlite3_prepare_v3(
@@ -328,14 +322,14 @@ void db::prepare() {
 		);
 		if (SQLITE_OK == rc) { continue; }
 
-		errmsg = get_sqlite3_error(connection);
+		get_sqlite3_error();
 		close(); // prepare is only called during initialization; closing unconditionally is safe since there is no path for the caller to retry
 		if (SQLITE_ERROR == rc) { // SQL referenced a table/column that doesn't exist — schema drift
 			open_result.result = status::code::schema_error;
 			open_result.schema_status = schema_state::schema_mismatch;
 		} else {
 			open_result.result = status::code::sqlite3_error;
-			open_result.sqlite3_error = classify_sqlite_error(rc);
+			open_result.sqlite3_error = classify_sqlite_open_error(rc);
 		}
 		return;
 	}
@@ -354,7 +348,7 @@ db::error db::migrate() {
 		int rc = sqlite3_exec(connection, migration, nullptr, nullptr, nullptr);
 		if (SQLITE_OK == rc) { continue; }
 
-		errmsg = get_sqlite3_error(connection);
+		get_sqlite3_error();
 		error out = error::none;
 		switch (rc) {
 			case SQLITE_ERROR: // Treat the db as corrupted if there is schema drift during migration
@@ -362,7 +356,7 @@ db::error db::migrate() {
 				out = error::corrupted;
 				break;
 			default:
-				out = classify_sqlite_error(rc);
+				out = classify_sqlite_open_error(rc);
 		}
 		if (out == error::corrupted) {
 			open_result.result = status::code::sqlite3_error;
@@ -394,9 +388,9 @@ void db::open() {
 
 	int rc = sqlite3_exec(connection, "PRAGMA foreign_keys = ON", nullptr, nullptr, nullptr); // required for cascade delete
 	if (SQLITE_OK != rc) {
-		errmsg = get_sqlite3_error(connection);
+		get_sqlite3_error();
 		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_error(rc);
+		open_result.sqlite3_error = classify_sqlite_open_error(rc);
 		close();
 		return;
 	}
@@ -411,9 +405,9 @@ void db::open() {
 		},
 		&schema_objects, nullptr);
 	if (SQLITE_OK != rc) {
-		errmsg = get_sqlite3_error(connection);
+		get_sqlite3_error();
 		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_error(rc);
+		open_result.sqlite3_error = classify_sqlite_open_error(rc);
 		close();
 		return;
 	}
@@ -447,7 +441,7 @@ void db::open() {
 		},
 		&app, nullptr);
 	if (SQLITE_OK != rc) {
-		errmsg = get_sqlite3_error(connection);
+		get_sqlite3_error();
 		switch (rc) {
 			case SQLITE_ERROR: // meta table exists but doesn't have key column or value column
 			case SQLITE_ABORT: // meta table has application key but its value is null
@@ -456,7 +450,7 @@ void db::open() {
 				break;
 			default:
 				open_result.result = status::code::sqlite3_error;
-				open_result.sqlite3_error = classify_sqlite_error(rc);
+				open_result.sqlite3_error = classify_sqlite_open_error(rc);
 		}
 		close();
 		return;
@@ -475,9 +469,9 @@ void db::open() {
 		"SELECT value FROM meta WHERE key='schema_version'", -1, // length, -1 = read to null terminator
 		&schema_statement, nullptr); // pzTail is only used for multi-statement strings
 	if (SQLITE_OK != rc) { // Previous queries have ruled out sql errors, let classify_sqlite_error default if they occur
-		errmsg = get_sqlite3_error(connection);
+		get_sqlite3_error();
 		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_error(rc);
+		open_result.sqlite3_error = classify_sqlite_open_error(rc);
 		close();
 		return;
 	}
@@ -492,10 +486,10 @@ void db::open() {
 		return;
 	}
 	if (rc != SQLITE_ROW) { // Unexpected sql error
-		errmsg = get_sqlite3_error(connection);
+		get_sqlite3_error();
 		sqlite3_finalize(schema_statement);
 		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_error(rc);
+		open_result.sqlite3_error = classify_sqlite_open_error(rc);
 		close();
 		return;
 	}
@@ -544,6 +538,6 @@ db::db(sqlite3* c)                  : connection(c), managed(false), prepared(ne
 db::db(sqlite3* c, owns_connection) : connection(c), managed(true),  prepared(new db_prepared_statements()) { open(); }
 db::~db() { close(); }
 
-} // fundos
-
 #pragma endregion
+
+} // fundos
