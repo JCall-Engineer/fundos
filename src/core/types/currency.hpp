@@ -1,7 +1,7 @@
 #pragma once
+#include "currency_locale.hpp"
 #include <cassert>
 #include <optional>
-#include "currency_locale.hpp"
 
 namespace fundos {
 

@@ -77,9 +77,9 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 	char buffer[32];
 	size_t buffer_n = 0;
 
-	bool is_negative = minor_units < 0;
+	bool    is_negative =          minor_units < 0;
 	int64_t major_units = std::abs(minor_units / locale.scale); // Note: INT64_MIN with scale=1 (e.g. JPY) overflows std::abs
-	minor_units         = std::abs(minor_units % locale.scale); // Values that extreme are considered malformed input, consistent with the rest of this library.
+	        minor_units = std::abs(minor_units % locale.scale); // Values that extreme are considered malformed input, consistent with the rest of this library.
 
 	// In order to 0 pad the minor_units and thousands-separate the major_units it is beneficial to build the string in reverse order
 	if (locale.symbol_position == currency_locale_info::symbol_placement::after) {

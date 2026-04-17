@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "currency.hpp"
+#include "types/currency.hpp"
 using namespace fundos;
 
 TEST(FromString, ZeroValue) {
