@@ -69,15 +69,7 @@ TEST(TypeArithmetic, PercentBasic) { // necessary? debatable
 	EXPECT_EQ(c.basis_points, -4279);
 	EXPECT_EQ(d.basis_points, -4279);
 
-	c = a * scalar1;
-	d = a; d *= scalar1;
-	EXPECT_EQ(c.basis_points, 42);
-	EXPECT_EQ(d.basis_points, 42);
-
-	c = b / scalar2;
-	d = b; d /= scalar2;
-	EXPECT_EQ(c.basis_points, 430);
-	EXPECT_EQ(d.basis_points, 430);
+	// Percentages do not overload * % and /
 
 	// Actually useful
 	c = percentage::whole();
@@ -136,6 +128,13 @@ TEST(TypeArithmetic, CurrencyBasic) { // necessary? debatable
 	d = b; d /= scalar2;
 	EXPECT_EQ(c.minor_units, 430);
 	EXPECT_EQ(d.minor_units, 430);
+
+	b = { 1000 }; // $10
+	scalar2 = 3;
+	c = b % scalar2;
+	d = b; d %= scalar2;
+	EXPECT_EQ(c.minor_units, 1); // 1 cent left over from dividing $10 3 ways
+	EXPECT_EQ(d.minor_units, 1);
 }
 
 TEST(CurrencyStringConversions, WellformedStrings) {

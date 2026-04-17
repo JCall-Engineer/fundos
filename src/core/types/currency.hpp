@@ -21,14 +21,19 @@ struct currency {
 	}
 	std::string to_string() const { return format_currency(minor_units, locale); }
 
+	// Convert operator allows this to be used like a true primitive type
+	constexpr explicit operator int64_t() const { return minor_units; }
+
 	constexpr currency operator+(const currency& rhs) const { return { minor_units + rhs.minor_units }; }
 	constexpr currency operator-(const currency& rhs) const { return { minor_units - rhs.minor_units }; }
 	constexpr currency operator*(int64_t rhs) const {                   return { minor_units * rhs }; }
+	constexpr currency operator%(int64_t rhs) const { assert(rhs != 0); return { minor_units % rhs }; }
 	constexpr currency operator/(int64_t rhs) const { assert(rhs != 0); return { minor_units / rhs }; }
 
 	constexpr currency& operator+=(const currency& rhs) { minor_units += rhs.minor_units; return *this; }
 	constexpr currency& operator-=(const currency& rhs) { minor_units -= rhs.minor_units; return *this; }
 	constexpr currency& operator*=(int64_t rhs) {                   minor_units *= rhs; return *this; }
+	constexpr currency& operator%=(int64_t rhs) { assert(rhs != 0); minor_units %= rhs; return *this; }
 	constexpr currency& operator/=(int64_t rhs) { assert(rhs != 0); minor_units /= rhs; return *this; }
 
 	constexpr bool operator==(const currency& rhs) const { return minor_units == rhs.minor_units; }
