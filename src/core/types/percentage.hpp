@@ -53,7 +53,7 @@ struct percentage {
 
 	// Split on percentage::whole() keeps high * basis_points within int64_t for ratio <= percentage::whole()
 	template<SignedScalar S>
-	S scale(const S& value) const {
+	inline S scale(const S& value) const { // S may not be trivially copyable (it most likely is but it's not guaranteed by SignedScalar)
 		constexpr int64_t split = whole().basis_points;
 		assert(basis_points >= 0 && basis_points <= split && "scale() risks overflow for percentages outside [0, 1]");
 
