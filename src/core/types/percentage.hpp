@@ -55,7 +55,7 @@ struct percentage {
 	template<SignedScalar S>
 	S scale(const S& value) const {
 		constexpr int64_t split = whole().basis_points;
-		assert(basis_points >= 0 && basis_points <= split && "scale risks overflow for values outside [0, 1]");
+		assert(basis_points >= 0 && basis_points <= split && "scale() risks overflow for percentages outside [0, 1]");
 
 		const int64_t raw = static_cast<int64_t>(value);
 		int64_t high = raw / split;
