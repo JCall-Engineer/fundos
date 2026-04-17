@@ -3,16 +3,15 @@
 namespace fundos {
 
 std::optional<int32_t> parse_percentage(const std::string& text) {
-	enum class state : uint8_t { sign, whole, remainder };
+	enum class state : uint8_t { whole, remainder };
 
 	constexpr uint8_t max_decimals = 2;
 
-	int32_t sign = 1;
 	int32_t whole = 0;
 	int32_t remainder = 0;
 
 	uint8_t decimals = 0;
-	state parse_state = state::sign;
+	state parse_state = state::whole;
 
 	// percentage strings longer than 255 characters (even 9, really - see format_percentage) are considered malformed.
 	if (text.length() > 255) { return std::nullopt; }
@@ -24,11 +23,6 @@ std::optional<int32_t> parse_percentage(const std::string& text) {
 		int32_t digit = c - '0';
 
 		switch (parse_state) {
-			case state::sign:
-				if (is_digit) { whole = digit; parse_state = state::whole; }
-				else if (is_decimal_separator) { parse_state = state::remainder; }
-				else if (c == '-') { sign = -1; }
-				break;
 			case state::whole:
 				if (is_digit) {
 					whole = whole * 10 + digit;
@@ -47,7 +41,7 @@ std::optional<int32_t> parse_percentage(const std::string& text) {
 	while (decimals < max_decimals) { remainder *= 10; ++decimals; } // max_decimals guarantees this doesn't overflow
 	if (whole == 100 && remainder > 0) { return std::nullopt; }
 
-	return { sign * (whole * 100 + remainder) };
+	return { whole * 100 + remainder };
 }
 
 std::string format_percentage(int32_t basis_points, const percentage_locale_info& locale) {
@@ -62,37 +56,37 @@ std::string format_percentage(int32_t basis_points, const percentage_locale_info
 	char buffer[9];
 	size_t buffer_n = 0;
 
-	bool    is_negative   =          basis_points < 0;
-	int32_t whole_percent = std::abs(basis_points / 100);
-	        basis_points  = std::abs(basis_points % 100);
+	bool is_negative = basis_points < 0;
+	if (is_negative) { basis_points = -basis_points; }
+
+	// Grab each digit
+	struct { uint8_t hundreds, tens, ones, tenths, hundredths; } digit = {
+		(uint8_t)( basis_points / 10000),
+		(uint8_t)((basis_points % 10000) / 1000),
+		(uint8_t)((basis_points % 1000)  / 100),
+		(uint8_t)((basis_points % 100)   / 10),
+		(uint8_t)( basis_points % 10),
+	};
+
+	auto digit_char = [](uint8_t digit) { return '0' + digit; };
+	auto push = [&buffer, &buffer_n](char character) {
+		buffer[buffer_n++] = character;
+	};
 
 	if (locale.symbol_position == percentage_locale_info::symbol_placement::before) {
-		buffer[buffer_n++] = '%';
-		if (locale.has_space_around_number) {
-			buffer[buffer_n++] = ' ';
-		}
+		push('%');
+		if (locale.has_space_around_number) { push(' '); }
 	}
-
-	if (is_negative) {
-		buffer[buffer_n++] = '-';
-	}
-
-	if (whole_percent == 100) {
-		buffer[buffer_n++] = '1';
-	}
-	buffer[buffer_n++] = '0' + (whole_percent / 10) % 10;
-	buffer[buffer_n++] = '0' +  whole_percent % 10;
-
-	buffer[buffer_n++] = locale.decimal_separator;
-
-	buffer[buffer_n++] = '0' + basis_points / 10;
-	buffer[buffer_n++] = '0' + basis_points % 10;
-
+	if (is_negative)                      { push('-'); }
+	if (digit.hundreds)                   { push(digit_char(digit.hundreds)); }
+	if (digit.hundreds || digit.tens)     { push(digit_char(digit.tens)); }
+	                                        push(digit_char(digit.ones));
+	if (digit.hundredths || digit.tenths) { push(locale.decimal_separator);
+	                                        push(digit_char(digit.tenths)); }
+	if (digit.hundredths)                 { push(digit_char(digit.hundredths)); }
 	if (locale.symbol_position == percentage_locale_info::symbol_placement::after) {
-		if (locale.has_space_around_number) {
-			buffer[buffer_n++] = ' ';
-		}
-		buffer[buffer_n++] = '%';
+		if (locale.has_space_around_number) { push(' '); }
+		push('%');
 	}
 
 	return std::string(buffer, buffer_n);
