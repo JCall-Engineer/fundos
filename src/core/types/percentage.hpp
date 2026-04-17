@@ -23,7 +23,7 @@ std::string format_percentage(int32_t basis_points, const percentage_locale_info
 // In domain: values range from [0, 1], but this struct doesn't inherently limit to those values except for string conversions and multiplication operator provided
 struct percentage {
 	int32_t basis_points = 0; // 0.01%
-	static constexpr uint32_t scale = 10000;
+	static constexpr percentage whole() { return percentage{10000}; }
 
 	static std::optional<percentage> from_string(const std::string& text) {
 		auto parsed = parse_percentage(text);
@@ -32,6 +32,16 @@ struct percentage {
 	}
 	std::string to_string()                                     const { return format_percentage(basis_points, percentage_locale_info{}); }
 	std::string to_string(const percentage_locale_info& locale) const { return format_percentage(basis_points, locale); }
+
+	constexpr percentage operator+(const percentage& rhs) const { return { basis_points + rhs.basis_points }; }
+	constexpr percentage operator-(const percentage& rhs) const { return { basis_points - rhs.basis_points }; }
+	constexpr percentage operator*(int32_t rhs) const {                   return { basis_points * rhs }; }
+	constexpr percentage operator/(int32_t rhs) const { assert(rhs != 0); return { basis_points / rhs }; }
+
+	constexpr percentage& operator+=(const percentage& rhs) { basis_points += rhs.basis_points; return *this; }
+	constexpr percentage& operator-=(const percentage& rhs) { basis_points -= rhs.basis_points; return *this; }
+	constexpr percentage& operator*=(int32_t rhs) {                   basis_points *= rhs; return *this; }
+	constexpr percentage& operator/=(int32_t rhs) { assert(rhs != 0); basis_points /= rhs; return *this; }
 
 	constexpr bool operator==(const percentage& rhs) const { return basis_points == rhs.basis_points; }
 	constexpr bool operator!=(const percentage& rhs) const { return basis_points != rhs.basis_points; }
@@ -45,18 +55,15 @@ struct percentage {
 
 #include "types/currency.hpp"
 
-// Overflows for currencies with abs(minor_units) > INT64_MAX / 100
+// Split on percentage::whole() keeps high * basis_points within int64_t for ratio <= percentage::whole()
 template<fundos::CurrencyLocale Locale>
 constexpr fundos::currency<Locale> operator*(const fundos::currency<Locale>& monetary, const fundos::percentage& ratio) {
 	assert(ratio.basis_points >= 0 && "cannot multiply currency by negative percentage");
 
-	int32_t whole     = ratio.basis_points / 100;
-	int32_t remainder = ratio.basis_points % 100;
-
-	int64_t s1 = monetary.minor_units * whole     / 100;
-	int64_t s2 = monetary.minor_units * remainder / 10000;
-
-	return { s1 + s2 };
+	constexpr int64_t split = fundos::percentage::whole().basis_points;
+	int64_t high = monetary.minor_units / split;
+	int64_t low  = monetary.minor_units % split;
+	return { high * ratio.basis_points + (low * ratio.basis_points / split) };
 }
 
 template<fundos::CurrencyLocale Locale>

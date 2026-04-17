@@ -40,6 +40,99 @@ TEST(PercentageStringConversions, ToString) {
 	EXPECT_EQ(percentage{9876}.to_string(eur), "% 98,76");
 }
 
+TEST(TypeArithmetic, PercentBasic) { // necessary? debatable
+	percentage a{21}, b{4300}, c, d;
+	int64_t scalar1 = 2, scalar2 = 10;
+
+	c = a + b;
+	d = a; d += b;
+	EXPECT_EQ(c.basis_points, 4321);
+	EXPECT_EQ(d.basis_points, 4321);
+
+	c = b + a;
+	d = b; d += a;
+	EXPECT_EQ(c.basis_points, 4321);
+	EXPECT_EQ(d.basis_points, 4321);
+
+	c = b - a;
+	d = b; d -= a;
+	EXPECT_EQ(c.basis_points, 4279);
+	EXPECT_EQ(d.basis_points, 4279);
+
+	c = a - b;
+	d = a; d -= b;
+	EXPECT_EQ(c.basis_points, -4279);
+	EXPECT_EQ(d.basis_points, -4279);
+
+	c = a * scalar1;
+	d = a; d *= scalar1;
+	EXPECT_EQ(c.basis_points, 42);
+	EXPECT_EQ(d.basis_points, 42);
+
+	c = b / scalar2;
+	d = b; d /= scalar2;
+	EXPECT_EQ(c.basis_points, 430);
+	EXPECT_EQ(d.basis_points, 430);
+
+	// Actually useful
+	c = percentage::whole();
+	d = percentage{5000}; // 50%
+	c -= d;
+	EXPECT_EQ(c, d);
+}
+
+TEST(TypeArithmetic, CurrencyScaledByPercentage) {
+	currency<currency_locale::USD> a{10000}, b; // $100
+	percentage r{2500}; // 25%
+
+	b = a * r;
+	EXPECT_EQ(b, currency<currency_locale::USD>{2500}); // $25
+
+	b = r * (a * 2);
+	EXPECT_EQ(b, currency<currency_locale::USD>{5000}); // $50
+
+	// Validate upper limit for overflow risk
+	a.minor_units = (INT64_MAX / 100) - 1; // 92_233_720_368_547_757 or $922,337,203,685,477 or $922t
+	r.basis_points = 9999; // 99.99%
+	b = r * a;
+	EXPECT_EQ(b.minor_units, 92'224'496'996'510'902);
+}
+
+TEST(TypeArithmetic, CurrencyBasic) { // necessary? debatable
+	currency<currency_locale::USD> a{21}, b{4300}, c, d;
+	int64_t scalar1 = 2, scalar2 = 10;
+
+	c = a + b;
+	d = a; d += b;
+	EXPECT_EQ(c.minor_units, 4321);
+	EXPECT_EQ(d.minor_units, 4321);
+
+	c = b + a;
+	d = b; d += a;
+	EXPECT_EQ(c.minor_units, 4321);
+	EXPECT_EQ(d.minor_units, 4321);
+
+	c = b - a;
+	d = b; d -= a;
+	EXPECT_EQ(c.minor_units, 4279);
+	EXPECT_EQ(d.minor_units, 4279);
+
+	c = a - b;
+	d = a; d -= b;
+	EXPECT_EQ(c.minor_units, -4279);
+	EXPECT_EQ(d.minor_units, -4279);
+
+	c = a * scalar1;
+	d = a; d *= scalar1;
+	EXPECT_EQ(c.minor_units, 42);
+	EXPECT_EQ(d.minor_units, 42);
+
+	c = b / scalar2;
+	d = b; d /= scalar2;
+	EXPECT_EQ(c.minor_units, 430);
+	EXPECT_EQ(d.minor_units, 430);
+}
+
 TEST(CurrencyStringConversions, WellformedStrings) {
 	// Zero
 	EXPECT_EQ(currency<currency_locale::USD>::from_string("$0.00").value().minor_units, 0);
