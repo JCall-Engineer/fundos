@@ -53,6 +53,14 @@ struct percentage {
 
 } // fundos
 
+constexpr fundos::percentage operator""_percent(unsigned long long percent) {
+	return fundos::percentage{static_cast<int32_t>(percent) * 100};
+}
+
+constexpr fundos::percentage operator""_percent(long double percent) {
+	return fundos::percentage{static_cast<int32_t>(percent * 100.0L)};
+}
+
 #include "types/currency.hpp"
 
 // Split on percentage::whole() keeps high * basis_points within int64_t for ratio <= percentage::whole()

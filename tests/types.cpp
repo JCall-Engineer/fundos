@@ -19,6 +19,11 @@ TEST(PercentageStringConversions, MalformedStrings) {
 	EXPECT_FALSE(percentage::from_string("100.01%"));
 }
 
+TEST(PercentageStringConversions, Literals) {
+	EXPECT_EQ((50_percent).basis_points, 5000);
+	EXPECT_EQ((98.76_percent).basis_points, 9876);
+}
+
 TEST(PercentageStringConversions, ToString) {
 	percentage_locale_info eur = {
 		.decimal_separator = ',',
