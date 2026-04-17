@@ -278,6 +278,10 @@ union db_prepared_statements {
 
 #pragma endregion
 
+#pragma region Query Execution Layer
+
+#pragma endregion
+
 #pragma region Lifecycle
 
 std::shared_ptr<db> db::open_file(std::string path) {

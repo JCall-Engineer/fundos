@@ -1,7 +1,9 @@
 #pragma once
 #include "sqlite3.h"
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace fundos {
 
@@ -82,6 +84,16 @@ public:
 	const status&                get_status()   const { return open_result; }
 	bool                         is_connected() const { return connection != nullptr; }
 	bool                         is_ready()     const { return open_result.is_ok() && is_connected(); }
+
+	template<typename T>
+	struct result {
+		error err = error::none;
+		std::optional<T> val;
+		operator bool() const { return err == error::none; }
+	};
+
+	// Query methods
+	//result<std::vector<user>> get_users();
 
 private:
 	void open();
