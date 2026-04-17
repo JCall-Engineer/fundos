@@ -1,5 +1,6 @@
 #pragma once
 #include "sqlite3.h"
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
