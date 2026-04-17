@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
-#include "db.hpp"
+
+#include "data/db.hpp"
 using namespace fundos;
 
 sqlite3* mockDb() {

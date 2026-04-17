@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
-#include "types.hpp"
+
+#include "types/currency.hpp"
+#include "types/percentage.hpp"
 using namespace fundos;
 
 TEST(PercentageStringConversions, WellformedStrings) {
