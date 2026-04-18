@@ -132,7 +132,7 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 		case currency_locale_info::negative_notation::angle_brackets:
 			return std::format("<{}>", output);
 		default:
-			assert(false && "unhandled currency_negative_format");
+			FUNDOS_ASSERT(false, "unhandled currency_negative_format");
 			return "";
 	}
 }

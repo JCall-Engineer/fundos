@@ -1,5 +1,5 @@
 #include "db.hpp"
-#include <cassert>
+#include "assert.hpp"
 
 namespace fundos {
 
@@ -112,6 +112,11 @@ struct statements {
 	)sql" };
 	statement_slot insert_user { .sql = R"sql(
 		INSERT INTO users (name) VALUES (?)
+	)sql" };
+	statement_slot update_user { .sql = R"sql(
+		UPDATE users
+		SET name = ?
+		WHERE id = ?
 	)sql" };
 	statement_slot delete_user { .sql = R"sql(
 		DELETE FROM users WHERE id = ?
@@ -269,6 +274,7 @@ struct statements {
 	//statement name { .sql = R"sql()sql" };
 };
 static constexpr std::size_t num_prepared = sizeof(statements) / sizeof(statement_slot);
+static_assert(sizeof(statements) % sizeof(statement_slot) == 0, "db_prepared_statements must contain only statement_slot members with no padding");
 
 // I begroan that this layout isn't cache-efficient but prepared statements are not accessed in order so it doesn't matter and this gives us safety
 union db_prepared_statements {
@@ -306,7 +312,7 @@ static inline db::error classify_sqlite_open_error(int rc) {
 		case SQLITE_READONLY:
 			return db::error::unavailable;
 		default:
-			assert(false && "unhandled sqlite3 result code"); // In production fall through to corrupted
+			FUNDOS_ASSERT(false, "unhandled sqlite3 result code"); // In production fall through to corrupted
 		case SQLITE_CORRUPT:
 		case SQLITE_NOTADB:
 		case SQLITE_IOERR:
@@ -421,7 +427,7 @@ void db::open() {
 		error err = migrate();
 		switch (err) {
 			default:
-				assert(false && "unhandled migration error");
+				FUNDOS_ASSERT(false, "unhandled migration error");
 			case error::none: // nothing to do
 			case error::corrupted: // open_result already set by migrate()
 				break;
