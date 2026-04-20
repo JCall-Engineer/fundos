@@ -1,10 +1,11 @@
 #pragma once
-#include "sqlite3.h"
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+#include "sqlite3.h"
+#include "models.hpp"
 
 namespace fundos {
 
@@ -26,9 +27,13 @@ public:
 	};
 	enum class error : uint8_t {
 		none,            // happy path
+		not_ready,       // called a query function before migration or after a closed connection
 		corrupted,       // unrecoverable fs error, connection closed
 		unavailable,     // busy or locked
 		out_of_memory,   // potentially transient error
+		disk_full,       // potentially transient error
+		constraint,      // either a FOREIGN KEY or UNIQUE violation
+		internal,        // an unexpected situation that would abort a debug build
 	};
 
 	struct status {
@@ -86,15 +91,38 @@ public:
 	bool                         is_connected() const { return connection != nullptr; }
 	bool                         is_ready()     const { return open_result.is_ok() && is_connected(); }
 
+#pragma region Query methods
+
 	template<typename T>
 	struct result {
 		error err = error::none;
 		std::optional<T> val;
-		operator bool() const { return err == error::none; }
+		operator bool()  const { return val.has_value(); }
+		bool ok()        const { return err == error::none; }
+		bool not_found() const { return err == error::none && !val.has_value(); }
 	};
 
-	// Query methods
-	//result<std::vector<user>> get_users();
+private:
+	typedef std::function<void(sqlite3_stmt*)> executor;
+
+	template<typename T>
+	using extractor = std::function<T(sqlite3_stmt*)>;
+
+	// insert/update/delete
+	error execute(sqlite3_stmt* stmt, executor bind);
+
+	// single row or no result
+	template<typename T>
+	result<T> fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extract);
+
+	// multiple rows
+	template<typename T>
+	result<std::vector<T>> fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract);
+
+public:
+	result<std::vector<user>> get_users();
+
+#pragma endregion
 
 private:
 	void open();

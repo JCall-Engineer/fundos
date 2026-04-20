@@ -1,3 +1,4 @@
+#include <functional>
 #include "db.hpp"
 #include "assert.hpp"
 
@@ -286,6 +287,94 @@ union db_prepared_statements {
 
 #pragma region Query Execution Layer
 
+static inline db::error classify_sqlite_runtime_error(int rc) {
+	switch (rc) {
+		case SQLITE_FULL:
+			return db::error::disk_full;
+		case SQLITE_NOMEM:
+			return db::error::out_of_memory;
+		case SQLITE_BUSY:
+		case SQLITE_LOCKED:
+		// READONLY cannot be returned at step time
+			return db::error::unavailable;
+		case SQLITE_CORRUPT:
+		// NOTADB cannot be returned at step time
+		case SQLITE_IOERR:
+			return db::error::corrupted;
+		case SQLITE_CONSTRAINT:
+			return db::error::constraint;
+		// SQLITE_INTERRUPT: not expected, would indicate external sqlite3_interrupt() call
+		default:
+			FUNDOS_ASSERT(false, "unhandled sqlite3 step result code");
+			return db::error::internal;
+	}
+}
+
+db::error db::execute(sqlite3_stmt* stmt, executor bind) {
+	if (!is_ready()) { return db::error::not_ready; }
+	bind(stmt);
+	int rc = sqlite3_step(stmt);
+	sqlite3_reset(stmt);
+	if (SQLITE_DONE != rc) {
+		get_sqlite3_error();
+		return classify_sqlite_runtime_error(rc);
+	}
+	return db::error::none;
+}
+
+template<typename T>
+db::result<T> db::fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
+	if (!is_ready()) { return result<T> { .err = db::error::not_ready }; }
+	bind(stmt);
+	int rc = sqlite3_step(stmt);
+	switch (rc) {
+		case SQLITE_ROW: {
+			T value = extract(stmt);
+			sqlite3_reset(stmt);
+			return result<T> { .val = value };
+		}
+		case SQLITE_DONE:
+			sqlite3_reset(stmt);
+			return result<T> {};  // not_found: err==none, val==nullopt
+		default:
+			get_sqlite3_error();
+			sqlite3_reset(stmt);
+			return result<T> { .err = classify_sqlite_runtime_error(rc) };
+
+	}
+}
+
+template<typename T>
+db::result<std::vector<T>> db::fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
+	if (!is_ready()) { return result<std::vector<T>> { .err = db::error::not_ready }; }
+	bind(stmt);
+	int rc;
+	std::vector<T> rows;
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+		rows.push_back(extract(stmt));
+	}
+	sqlite3_reset(stmt);
+	if (SQLITE_DONE != rc) {
+		get_sqlite3_error();
+		return result<std::vector<T>> { .err = classify_sqlite_runtime_error(rc) };
+	}
+	return result<std::vector<T>> { .val = rows };
+}
+
+db::result<std::vector<user>> db::get_users() {
+	auto statement = prepared->named.get_users.statement;
+	return fetch_many<user>(
+		statement,
+		[](sqlite3_stmt*) {},
+		[](sqlite3_stmt* stmt) -> user {
+			return user {
+				.id   = sqlite3_column_int64(stmt, 0),
+				.name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
+			};
+		}
+	);
+}
+
 #pragma endregion
 
 #pragma region Lifecycle
@@ -305,6 +394,8 @@ std::shared_ptr<db> db::open_memory() {
 
 static inline db::error classify_sqlite_open_error(int rc) {
 	switch (rc) {
+		case SQLITE_FULL:
+			return db::error::disk_full;
 		case SQLITE_NOMEM:
 			return db::error::out_of_memory;
 		case SQLITE_BUSY:
