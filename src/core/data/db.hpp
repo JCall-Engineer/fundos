@@ -103,6 +103,8 @@ public:
 	};
 
 private:
+	error classify_sqlite_runtime_error(int rc);
+
 	typedef std::function<void(sqlite3_stmt*)> executor;
 
 	template<typename T>
@@ -119,8 +121,13 @@ private:
 	template<typename T>
 	result<std::vector<T>> fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract);
 
+	error transaction(std::function<error()> work);
+
 public:
 	result<std::vector<user>> get_users();
+	error insert_user(std::string name);
+	error update_user(user);
+	error delete_user(int64_t id);
 
 #pragma endregion
 

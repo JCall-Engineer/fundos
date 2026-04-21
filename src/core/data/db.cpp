@@ -83,7 +83,7 @@ CREATE TABLE transactions (
 	account_id      INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
 	amount          INTEGER NOT NULL,
 	date            TEXT NOT NULL,
-	memo            TEXT,
+	memo            TEXT NOT NULL,
 	bank_ref        TEXT,
 	import_source   TEXT,
 	UNIQUE(account_id, bank_ref, import_source)
@@ -287,8 +287,8 @@ union db_prepared_statements {
 
 #pragma region Query Execution Layer
 
-static inline db::error classify_sqlite_runtime_error(int rc) {
-	switch (rc) {
+db::error db::classify_sqlite_runtime_error(int rc) {
+	switch (rc & 0xFF) {
 		case SQLITE_FULL:
 			return db::error::disk_full;
 		case SQLITE_NOMEM:
@@ -300,6 +300,7 @@ static inline db::error classify_sqlite_runtime_error(int rc) {
 		case SQLITE_CORRUPT:
 		// NOTADB cannot be returned at step time
 		case SQLITE_IOERR:
+			close();
 			return db::error::corrupted;
 		case SQLITE_CONSTRAINT:
 			return db::error::constraint;
@@ -361,10 +362,41 @@ db::result<std::vector<T>> db::fetch_many(sqlite3_stmt* stmt, executor bind, ext
 	return result<std::vector<T>> { .val = rows };
 }
 
+// work() must propagate all errors immediately — transaction() relies on
+// error::corrupted being returned to skip COMMIT/ROLLBACK on a closed connection.
+// Do not silently swallow errors from execute/fetch_one/fetch_many inside work().
+db::error db::transaction(std::function<error()> work) {
+	if (!is_ready()) { return error::not_ready; }
+	int rc = sqlite3_exec(connection, "BEGIN", nullptr, nullptr, nullptr);
+	if (rc != SQLITE_OK) {
+		get_sqlite3_error();
+		return classify_sqlite_runtime_error(rc);
+	}
+	error result = work();
+	switch (result) {
+		case error::none:
+			rc = sqlite3_exec(connection, "COMMIT", nullptr, nullptr, nullptr);
+			if (rc != SQLITE_OK) {
+				get_sqlite3_error();
+				return classify_sqlite_runtime_error(rc);
+			}
+			return error::none;
+		default:
+			rc = sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
+			if (SQLITE_OK == rc) {
+				return result;
+			}
+			get_sqlite3_error();
+			close(); // failed rollback means untrustworthy state regardless of cause
+			[[fallthrough]];
+		case error::corrupted:
+			return error::corrupted;
+	}
+}
+
 db::result<std::vector<user>> db::get_users() {
-	auto statement = prepared->named.get_users.statement;
 	return fetch_many<user>(
-		statement,
+		prepared->named.get_users.statement,
 		[](sqlite3_stmt*) {},
 		[](sqlite3_stmt* stmt) -> user {
 			return user {
@@ -375,6 +407,33 @@ db::result<std::vector<user>> db::get_users() {
 	);
 }
 
+db::error db::insert_user(std::string name) {
+	return execute(
+		prepared->named.insert_user.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_STATIC);
+		}
+	);
+}
+
+db::error db::update_user(user user) {
+	return execute(
+		prepared->named.update_user.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_text(stmt, 1, user.name.c_str(), -1, SQLITE_STATIC); // name is the first parameter in the query
+			sqlite3_bind_int64(stmt, 2, user.id);
+		}
+	);
+}
+
+db::error db::delete_user(int64_t id) {
+	return execute(
+		prepared->named.delete_user.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, id);
+		}
+	);
+}
 #pragma endregion
 
 #pragma region Lifecycle
@@ -404,6 +463,7 @@ static inline db::error classify_sqlite_open_error(int rc) {
 			return db::error::unavailable;
 		default:
 			FUNDOS_ASSERT(false, "unhandled sqlite3 result code"); // In production fall through to corrupted
+			[[fallthrough]];
 		case SQLITE_CORRUPT:
 		case SQLITE_NOTADB:
 		case SQLITE_IOERR:
@@ -519,6 +579,7 @@ void db::open() {
 		switch (err) {
 			default:
 				FUNDOS_ASSERT(false, "unhandled migration error");
+				[[fallthrough]];
 			case error::none: // nothing to do
 			case error::corrupted: // open_result already set by migrate()
 				break;
