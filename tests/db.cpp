@@ -476,7 +476,7 @@ TEST(DbQuery, SaveEntities) {
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
-		EXPECT_EQ(row.id(), emergency.id());
+		EXPECT_EQ(row.id(), checking.id());
 		EXPECT_EQ(row.name, "Debit Card");
 		EXPECT_EQ(row.bank_ref, "ref1");
 		EXPECT_EQ(row.import_source, "bank");
