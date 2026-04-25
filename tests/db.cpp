@@ -417,7 +417,6 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.id(), alice.id());
 		EXPECT_EQ(row.name, alice.name);
 	}
-
 	{
 		auto result = file->get_funds();
 		ASSERT_TRUE(result.ok());
@@ -427,7 +426,6 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.name, emergency.name);
 		EXPECT_EQ(row.closed_at, emergency.closed_at);
 	}
-
 	{
 		auto result = file->get_accounts();
 		ASSERT_TRUE(result.ok());
@@ -438,6 +436,69 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.closed_at, checking.closed_at);
 		EXPECT_EQ(row.bank_ref, checking.bank_ref);
 		EXPECT_EQ(row.import_source, checking.import_source);
+	}
+
+	// Verify membership additions and removals
+	ASSERT_EQ(file->add_user_to_account(checking.id(), alice.id()), db::error::none);
+	{
+		auto result = file->get_account_members(checking.id());
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 1);
+		auto& row = (*result.val)[0];
+		EXPECT_EQ(row.id(), alice.id());
+		EXPECT_EQ(row.name, alice.name);
+	}
+	{
+		auto result = file->get_account_memberships(alice.id());
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 1);
+		auto& row = (*result.val)[0];
+		EXPECT_EQ(row.id(), checking.id());
+		EXPECT_EQ(row.name, checking.name);
+		EXPECT_EQ(row.closed_at, checking.closed_at);
+		EXPECT_EQ(row.bank_ref, checking.bank_ref);
+		EXPECT_EQ(row.import_source, checking.import_source);
+	}
+	ASSERT_EQ(file->remove_user_from_account(checking.id(), alice.id()), db::error::none);
+	{
+		auto result = file->get_account_members(checking.id());
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 0);
+	}
+	{
+		auto result = file->get_account_memberships(alice.id());
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 0);
+	}
+
+	ASSERT_EQ(file->add_user_to_fund(emergency.id(), alice.id()), db::error::none);
+	{
+		auto result = file->get_fund_members(emergency.id());
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 1);
+		auto& row = (*result.val)[0];
+		EXPECT_EQ(row.id(), alice.id());
+		EXPECT_EQ(row.name, alice.name);
+	}
+	{
+		auto result = file->get_fund_memberships(alice.id());
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 1);
+		auto& row = (*result.val)[0];
+		EXPECT_EQ(row.id(), emergency.id());
+		EXPECT_EQ(row.name, emergency.name);
+		EXPECT_EQ(row.closed_at, emergency.closed_at);
+	}
+	ASSERT_EQ(file->remove_user_from_fund(emergency.id(), alice.id()), db::error::none);
+	{
+		auto result = file->get_fund_members(emergency.id());
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 0);
+	}
+	{
+		auto result = file->get_fund_memberships(alice.id());
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 0);
 	}
 
 	// Verify update path
