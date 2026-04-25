@@ -124,10 +124,29 @@ private:
 	error transaction(std::function<error()> work);
 
 public:
-	result<std::vector<user>> get_users();
-	error insert_user(std::string name);
-	error update_user(user);
-	error delete_user(int64_t id);
+	result<std::vector<user>>    get_users();
+	error                        save_user(user&);
+	error                        delete_user(int64_t user_id);
+
+	result<std::vector<account>> get_accounts();
+	error                        save_account(account&);
+
+	result<std::vector<fund>>    get_funds();
+	error                        save_fund(fund&);
+
+	result<std::vector<account>> get_account_memberships(int64_t user_id);
+	result<std::vector<account>> get_account_nonmemberships(int64_t user_id);
+	result<std::vector<user>>    get_account_members(int64_t account_id);
+	result<std::vector<user>>    get_account_nonmembers(int64_t account_id);
+	error                        add_user_to_account(int64_t account_id, int64_t user_id);
+	error                        remove_user_from_account(int64_t account_id, int64_t user_id);
+
+	result<std::vector<fund>>    get_fund_memberships(int64_t user_id);
+	result<std::vector<fund>>    get_fund_nonmemberships(int64_t user_id);
+	result<std::vector<user>>    get_fund_members(int64_t fund_id);
+	result<std::vector<user>>    get_fund_nonmembers(int64_t fund_id);
+	error                        add_user_to_fund(int64_t fund_id, int64_t user_id);
+	error                        remove_user_from_fund(int64_t fund_id, int64_t user_id);
 
 #pragma endregion
 

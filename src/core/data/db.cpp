@@ -109,29 +109,37 @@ struct statement_slot {
 
 struct statements {
 	statement_slot get_users { .sql = R"sql(
-		SELECT * FROM users
+		SELECT id, name FROM users
 	)sql" };
 	statement_slot insert_user { .sql = R"sql(
 		INSERT INTO users (name) VALUES (?)
 	)sql" };
 	statement_slot update_user { .sql = R"sql(
-		UPDATE users
-		SET name = ?
-		WHERE id = ?
+		UPDATE users SET name = ? WHERE id = ?
 	)sql" };
 	statement_slot delete_user { .sql = R"sql(
 		DELETE FROM users WHERE id = ?
 	)sql" };
 
-	statement_slot get_user_accounts { .sql = R"sql(
-		SELECT accounts.* FROM accounts
-		JOIN account_members ON account_members.account_id = accounts.id
-		WHERE account_members.user_id = ?
+	statement_slot get_account_memberships { .sql = R"sql(
+		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_ref, accounts.import_source
+		FROM accounts JOIN account_members ON account_members.account_id = accounts.id
+		WHERE account_members.user_id = ? AND accounts.closed_at IS NULL
 	)sql" };
-	statement_slot get_account_users { .sql = R"sql(
-		SELECT users.* FROM users
-		JOIN account_members ON account_members.user_id = users.id
+	statement_slot get_account_nonmemberships { .sql = R"sql(
+		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_ref, accounts.import_source
+		FROM accounts LEFT JOIN account_members ON account_members.account_id = accounts.id AND account_members.user_id = ?
+		WHERE account_members.account_id IS NULL AND accounts.closed_at IS NULL
+	)sql" };
+	statement_slot get_account_members { .sql = R"sql(
+		SELECT users.id, users.name
+		FROM users JOIN account_members ON account_members.user_id = users.id
 		WHERE account_members.account_id = ?
+	)sql" };
+	statement_slot get_account_nonmembers { .sql = R"sql(
+		SELECT users.id, users.name
+		FROM users LEFT JOIN account_members ON account_members.user_id = users.id AND account_members.account_id = ?
+		WHERE account_members.user_id IS NULL
 	)sql" };
 	statement_slot add_user_to_account { .sql = R"sql(
 		INSERT INTO account_members (account_id, user_id)
@@ -142,15 +150,25 @@ struct statements {
 		WHERE account_id = ? AND user_id = ?
 	)sql" };
 
-	statement_slot get_user_funds { .sql = R"sql(
-		SELECT funds.* FROM funds
-		JOIN fund_members ON fund_members.fund_id = funds.id
-		WHERE fund_members.user_id = ?
+	statement_slot get_fund_memberships { .sql = R"sql(
+		SELECT funds.id, funds.name, funds.closed_at
+		FROM funds JOIN fund_members ON fund_members.fund_id = funds.id
+		WHERE fund_members.user_id = ? AND funds.closed_at IS NULL
 	)sql" };
-	statement_slot get_fund_users { .sql = R"sql(
-		SELECT users.* FROM users
-		JOIN fund_members ON fund_members.user_id = users.id
+	statement_slot get_fund_nonmemberships { .sql = R"sql(
+		SELECT funds.id, funds.name, funds.closed_at
+		FROM funds LEFT JOIN fund_members ON fund_members.fund_id = funds.id AND fund_members.user_id = ?
+		WHERE fund_members.fund_id IS NULL AND funds.closed_at IS NULL
+	)sql" };
+	statement_slot get_fund_members { .sql = R"sql(
+		SELECT users.id, users.name
+		FROM users JOIN fund_members ON fund_members.user_id = users.id
 		WHERE fund_members.fund_id = ?
+	)sql" };
+	statement_slot get_fund_nonmembers { .sql = R"sql(
+		SELECT users.id, users.name
+		FROM users LEFT JOIN fund_members ON fund_members.user_id = users.id AND fund_members.fund_id = ?
+		WHERE fund_members.user_id IS NULL
 	)sql" };
 	statement_slot add_user_to_fund { .sql = R"sql(
 		INSERT INTO fund_members (fund_id, user_id)
@@ -162,7 +180,7 @@ struct statements {
 	)sql" };
 
 	statement_slot get_funds { .sql = R"sql(
-		SELECT * FROM funds
+		SELECT id, name, closed_at FROM funds
 	)sql" };
 	statement_slot get_fund_balance { .sql = R"sql(
 		SELECT COALESCE(SUM(allocations.amount), 0) FROM allocations
@@ -178,7 +196,7 @@ struct statements {
 	)sql" };
 
 	statement_slot get_accounts { .sql = R"sql(
-		SELECT * FROM accounts
+		SELECT id, name, closed_at, bank_ref, import_source FROM accounts
 	)sql" };
 	statement_slot get_account_balance { .sql = R"sql(
 		SELECT COALESCE(SUM(amount), 0) FROM transactions
@@ -264,7 +282,7 @@ struct statements {
 
 	statement_slot filter_allocations { .sql = R"sql(
 		SELECT allocations.*, transactions.date FROM allocations
-		JOIN transactions ON transactions.id = allocations.transaction_id
+		JOIN transactions ON transactions.id_= allocations.transaction_id
 		WHERE allocations.fund_id = ?
 		AND transactions.date BETWEEN ? AND ?
 	)sql" };
@@ -272,7 +290,7 @@ struct statements {
 		INSERT INTO allocations (transaction_id, fund_id, amount)
 		VALUES (?, ?, ?)
 	)sql" };
-	//statement name { .sql = R"sql()sql" };
+	//statement_slot name { .sql = R"sql()sql" };
 };
 static constexpr std::size_t num_prepared = sizeof(statements) / sizeof(statement_slot);
 static_assert(sizeof(statements) % sizeof(statement_slot) == 0, "db_prepared_statements must contain only statement_slot members with no padding");
@@ -286,6 +304,27 @@ union db_prepared_statements {
 #pragma endregion
 
 #pragma region Query Execution Layer
+
+static inline std::string extract_text(sqlite3_stmt* stmt, int index) {
+	return reinterpret_cast<const char*>(sqlite3_column_text(stmt, index));
+}
+
+static inline void bind_text(sqlite3_stmt* stmt, int index, const std::string& value) {
+	sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_STATIC);
+}
+
+static inline std::optional<std::string> extract_optional_text(sqlite3_stmt* stmt, int index) {
+	if (sqlite3_column_type(stmt, index) == SQLITE_NULL) { return std::nullopt; }
+	return reinterpret_cast<const char*>(sqlite3_column_text(stmt, index));
+}
+
+static inline void bind_optional_text(sqlite3_stmt* stmt, int index, const std::optional<std::string>& value) {
+	if (value) {
+		sqlite3_bind_text(stmt, index, value->c_str(), -1, SQLITE_STATIC);
+	} else {
+		sqlite3_bind_null(stmt, index);
+	}
+}
 
 db::error db::classify_sqlite_runtime_error(int rc) {
 	switch (rc & 0xFF) {
@@ -362,9 +401,11 @@ db::result<std::vector<T>> db::fetch_many(sqlite3_stmt* stmt, executor bind, ext
 	return result<std::vector<T>> { .val = rows };
 }
 
-// work() must propagate all errors immediately — transaction() relies on
-// error::corrupted being returned to skip COMMIT/ROLLBACK on a closed connection.
-// Do not silently swallow errors from execute/fetch_one/fetch_many inside work().
+//-------------------------------------------------------------------------------------+
+// work() must propagate all errors immediately — transaction() relies on              |
+// error::corrupted being returned to skip COMMIT/ROLLBACK on a closed connection.     |
+// Do not silently swallow errors from execute/fetch_one/fetch_many inside work().     |
+//-------------------------------------------------------------------------------------+
 db::error db::transaction(std::function<error()> work) {
 	if (!is_ready()) { return error::not_ready; }
 	int rc = sqlite3_exec(connection, "BEGIN", nullptr, nullptr, nullptr);
@@ -394,46 +435,306 @@ db::error db::transaction(std::function<error()> work) {
 	}
 }
 
+//-------------------------------------------------------------------------------------+
+// Extractors are intentionally duplicated per query function rather than shared.      |
+// Column indices are determined by each SQL statement's SELECT order, which is        |
+// not guaranteed to remain consistent across queries even for the same model type.    |
+// Sharing extractors would couple unrelated queries and risk silent data corruption   |
+// if any statement's column order ever diverges. Treat each extractor as local        |
+// to its query and verify column indices against the SQL when making changes.         |
+//-------------------------------------------------------------------------------------+
 db::result<std::vector<user>> db::get_users() {
 	return fetch_many<user>(
 		prepared->named.get_users.statement,
 		[](sqlite3_stmt*) {},
 		[](sqlite3_stmt* stmt) -> user {
-			return user {
-				.id   = sqlite3_column_int64(stmt, 0),
-				.name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
-			};
+			user row;
+			row.id_   = sqlite3_column_int64(stmt, 0);
+			row.name  = extract_text        (stmt, 1);
+			return row;
 		}
 	);
 }
 
-db::error db::insert_user(std::string name) {
-	return execute(
-		prepared->named.insert_user.statement,
-		[&](sqlite3_stmt* stmt) {
-			sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_STATIC);
-		}
-	);
+db::error db::save_user(user& user) {
+	if (!user.is_persisted()) {
+		error err = execute(
+			prepared->named.insert_user.statement,
+			[&](sqlite3_stmt* stmt) {
+				bind_text(stmt, 1, user.name);
+			}
+		);
+		if (err != error::none) { return err; }
+		user.id_= sqlite3_last_insert_rowid(connection);
+		return error::none;
+	} else {
+		return execute(
+			prepared->named.update_user.statement,
+			[&](sqlite3_stmt* stmt) {
+				bind_text         (stmt, 1, user.name);
+				sqlite3_bind_int64(stmt, 2, user.id_);
+			}
+		);
+	}
 }
 
-db::error db::update_user(user user) {
-	return execute(
-		prepared->named.update_user.statement,
-		[&](sqlite3_stmt* stmt) {
-			sqlite3_bind_text(stmt, 1, user.name.c_str(), -1, SQLITE_STATIC); // name is the first parameter in the query
-			sqlite3_bind_int64(stmt, 2, user.id);
-		}
-	);
-}
-
-db::error db::delete_user(int64_t id) {
+db::error db::delete_user(int64_t user_id) {
 	return execute(
 		prepared->named.delete_user.statement,
 		[&](sqlite3_stmt* stmt) {
-			sqlite3_bind_int64(stmt, 1, id);
+			sqlite3_bind_int64(stmt, 1, user_id);
 		}
 	);
 }
+
+db::result<std::vector<account>> db::get_account_memberships(int64_t user_id) {
+	return fetch_many<account>(
+		prepared->named.get_account_memberships.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, user_id);
+		},
+		[](sqlite3_stmt* stmt) -> account {
+			account row;
+			row.id_           = sqlite3_column_int64 (stmt, 0);
+			row.name          = extract_text         (stmt, 1);
+			row.closed_at     = extract_optional_text(stmt, 2);
+			row.bank_ref      = extract_optional_text(stmt, 3);
+			row.import_source = extract_optional_text(stmt, 4);
+			return row;
+		}
+	);
+}
+
+db::result<std::vector<account>> db::get_account_nonmemberships(int64_t user_id) {
+	return fetch_many<account>(
+		prepared->named.get_account_nonmemberships.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, user_id);
+		},
+		[](sqlite3_stmt* stmt) -> account {
+			account row;
+			row.id_           = sqlite3_column_int64 (stmt, 0);
+			row.name          = extract_text         (stmt, 1);
+			row.closed_at     = extract_optional_text(stmt, 2);
+			row.bank_ref      = extract_optional_text(stmt, 3);
+			row.import_source = extract_optional_text(stmt, 4);
+			return row;
+		}
+	);
+}
+
+db::result<std::vector<user>> db::get_account_members(int64_t account_id) {
+	return fetch_many<user>(
+		prepared->named.get_account_members.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, account_id);
+		},
+		[](sqlite3_stmt* stmt) -> user {
+			user row;
+			row.id_   = sqlite3_column_int64(stmt, 0);
+			row.name  = extract_text        (stmt, 1);
+			return row;
+		}
+	);
+}
+
+db::result<std::vector<user>> db::get_account_nonmembers(int64_t account_id) {
+	return fetch_many<user>(
+		prepared->named.get_account_nonmembers.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, account_id);
+		},
+		[](sqlite3_stmt* stmt) -> user {
+			user row;
+			row.id_   = sqlite3_column_int64(stmt, 0);
+			row.name  = extract_text        (stmt, 1);
+			return row;
+		}
+	);
+}
+
+db::error db::add_user_to_account(int64_t account_id, int64_t user_id) {
+	return execute(
+		prepared->named.add_user_to_account.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, account_id);
+			sqlite3_bind_int64(stmt, 2, user_id);
+		}
+	);
+}
+
+db::error db::remove_user_from_account(int64_t account_id, int64_t user_id) {
+	return execute(
+		prepared->named.remove_user_from_account.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, account_id);
+			sqlite3_bind_int64(stmt, 2, user_id);
+		}
+	);
+}
+
+db::result<std::vector<fund>> db::get_fund_memberships(int64_t user_id) {
+	return fetch_many<fund>(
+		prepared->named.get_fund_memberships.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, user_id);
+		},
+		[](sqlite3_stmt* stmt) -> fund {
+			fund row;
+			row.id_       = sqlite3_column_int64 (stmt, 0);
+			row.name      = extract_text         (stmt, 1);
+			row.closed_at = extract_optional_text(stmt, 2);
+			return row;
+		}
+	);
+}
+
+db::result<std::vector<fund>> db::get_fund_nonmemberships(int64_t user_id) {
+	return fetch_many<fund>(
+		prepared->named.get_fund_nonmemberships.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, user_id);
+		},
+		[](sqlite3_stmt* stmt) -> fund {
+			fund row;
+			row.id_       = sqlite3_column_int64 (stmt, 0);
+			row.name      = extract_text         (stmt, 1);
+			row.closed_at = extract_optional_text(stmt, 2);
+			return row;
+		}
+	);
+}
+
+db::result<std::vector<user>> db::get_fund_members(int64_t fund_id) {
+	return fetch_many<user>(
+		prepared->named.get_fund_members.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, fund_id);
+		},
+		[](sqlite3_stmt* stmt) -> user {
+			user row;
+			row.id_   = sqlite3_column_int64(stmt, 0);
+			row.name  = extract_text        (stmt, 1);
+			return row;
+		}
+	);
+}
+
+db::result<std::vector<user>> db::get_fund_nonmembers(int64_t fund_id) {
+	return fetch_many<user>(
+		prepared->named.get_fund_nonmembers.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, fund_id);
+		},
+		[](sqlite3_stmt* stmt) -> user {
+			user row;
+			row.id_   = sqlite3_column_int64(stmt, 0);
+			row.name  = extract_text        (stmt, 1);
+			return row;
+		}
+	);
+}
+
+db::error db::add_user_to_fund(int64_t fund_id, int64_t user_id) {
+	return execute(
+		prepared->named.add_user_to_fund.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, fund_id);
+			sqlite3_bind_int64(stmt, 2, user_id);
+		}
+	);
+}
+
+db::error db::remove_user_from_fund(int64_t fund_id, int64_t user_id) {
+	return execute(
+		prepared->named.remove_user_from_fund.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, fund_id);
+			sqlite3_bind_int64(stmt, 2, user_id);
+		}
+	);
+}
+
+db::result<std::vector<fund>> db::get_funds() {
+	return fetch_many<fund>(
+		prepared->named.get_funds.statement,
+		[](sqlite3_stmt*) {},
+		[](sqlite3_stmt* stmt) -> fund {
+			fund row;
+			row.id_       = sqlite3_column_int64 (stmt, 0);
+			row.name      = extract_text         (stmt, 1);
+			row.closed_at = extract_optional_text(stmt, 2);
+			return row;
+		}
+	);
+}
+
+db::error db::save_fund(fund& fund) {
+	if (!fund.is_persisted()) {
+		error err = execute(
+			prepared->named.insert_fund.statement,
+			[&](sqlite3_stmt* stmt) {
+				bind_text(stmt, 1, fund.name);
+			}
+		);
+		if (err != error::none) { return err; }
+		fund.id_= sqlite3_last_insert_rowid(connection);
+		return error::none;
+	} else {
+		return execute(
+			prepared->named.update_fund.statement,
+			[&](sqlite3_stmt* stmt) {
+				bind_text         (stmt, 1, fund.name);
+				bind_optional_text(stmt, 2, fund.closed_at);
+				sqlite3_bind_int64(stmt, 3, fund.id_);
+			}
+		);
+	}
+}
+
+db::result<std::vector<account>> db::get_accounts() {
+	return fetch_many<account>(
+		prepared->named.get_accounts.statement,
+		[](sqlite3_stmt*) {},
+		[](sqlite3_stmt* stmt) -> account {
+			account row;
+			row.id_           = sqlite3_column_int64 (stmt, 0);
+			row.name          = extract_text         (stmt, 1);
+			row.closed_at     = extract_optional_text(stmt, 2);
+			row.bank_ref      = extract_optional_text(stmt, 3);
+			row.import_source = extract_optional_text(stmt, 4);
+			return row;
+		}
+	);
+}
+
+db::error db::save_account(account& account) {
+	if (!account.is_persisted()) {
+		error err = execute(
+			prepared->named.insert_account.statement,
+			[&](sqlite3_stmt* stmt) {
+				bind_text         (stmt, 1, account.name);
+				bind_optional_text(stmt, 2, account.bank_ref);
+				bind_optional_text(stmt, 3, account.import_source);
+			}
+		);
+		if (err != error::none) { return err; }
+		account.id_= sqlite3_last_insert_rowid(connection);
+		return error::none;
+	} else {
+		return execute(
+			prepared->named.update_account.statement,
+			[&](sqlite3_stmt* stmt) {
+				bind_text         (stmt, 1, account.name);
+				bind_optional_text(stmt, 2, account.closed_at);
+				bind_optional_text(stmt, 3, account.bank_ref);
+				bind_optional_text(stmt, 4, account.import_source);
+				sqlite3_bind_int64(stmt, 5, account.id_);
+			}
+		);
+	}
+}
+
 #pragma endregion
 
 #pragma region Lifecycle
@@ -547,7 +848,16 @@ void db::open() {
 		return;
 	}
 
-	int rc = sqlite3_exec(connection, "PRAGMA foreign_keys = ON", nullptr, nullptr, nullptr); // required for cascade delete
+	int rc = sqlite3_exec(connection, "PRAGMA locking_mode = EXCLUSIVE;", nullptr, nullptr, nullptr); // Just adds an extra assurance that the db isn't going to change while we have it open
+	if (SQLITE_OK != rc) {
+		get_sqlite3_error();
+		open_result.result = status::code::sqlite3_error;
+		open_result.sqlite3_error = classify_sqlite_open_error(rc);
+		close();
+		return;
+	}
+
+	rc = sqlite3_exec(connection, "PRAGMA foreign_keys = ON", nullptr, nullptr, nullptr); // required for cascade delete
 	if (SQLITE_OK != rc) {
 		get_sqlite3_error();
 		open_result.result = status::code::sqlite3_error;

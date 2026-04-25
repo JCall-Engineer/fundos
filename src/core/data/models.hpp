@@ -7,27 +7,33 @@
 
 namespace fundos {
 
-struct user {
-	int64_t id;
+class db;
+struct db_managed {
+	friend class db;
+private:
+	int64_t id_ = 0;
+public:
+	int64_t id() const { return id_; }
+	bool is_persisted() const { return id_ != 0; }
+};
+
+struct user : db_managed {
 	std::string name;
 };
 
-struct fund {
-	int64_t id;
+struct fund : db_managed {
 	std::string name;
 	std::optional<std::string> closed_at;
 };
 
-struct account {
-	int64_t id;
+struct account : db_managed {
 	std::string name;
 	std::optional<std::string> closed_at;
 	std::optional<std::string> bank_ref;
 	std::optional<std::string> import_source;
 };
 
-struct budget {
-	int64_t id;
+struct budget : db_managed {
 	std::string name;
 	int64_t overflow_fund;
 };
@@ -37,16 +43,14 @@ enum class phase_kind : uint8_t {
 	percentage,
 };
 
-struct budget_phase {
-	int64_t id;
+struct budget_phase : db_managed {
 	int64_t budget_id;
 	int32_t position;
 	phase_kind kind;
 };
 
 template<CurrencyLocale Locale>
-struct fixed_target {
-	int64_t id;
+struct fixed_target : db_managed {
 	int64_t phase_id;
 	int64_t fund_id;
 	currency<Locale> amount;
@@ -55,8 +59,7 @@ struct fixed_target {
 };
 
 template<CurrencyLocale Locale>
-struct percentage_target {
-	int64_t id;
+struct percentage_target : db_managed {
 	int64_t phase_id;
 	int64_t fund_id;
 	percentage amount;
@@ -65,8 +68,7 @@ struct percentage_target {
 };
 
 template<CurrencyLocale Locale>
-struct transaction {
-	int64_t id;
+struct transaction : db_managed {
 	int64_t account_id;
 	currency<Locale> amount;
 	std::string date;
@@ -76,8 +78,7 @@ struct transaction {
 };
 
 template<CurrencyLocale Locale>
-struct allocation {
-	int64_t id;
+struct allocation : db_managed {
 	int64_t transaction_id;
 	int64_t fund_id;
 	currency<Locale> amount;
