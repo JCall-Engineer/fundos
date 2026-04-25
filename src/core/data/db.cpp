@@ -282,7 +282,7 @@ struct statements {
 
 	statement_slot filter_allocations { .sql = R"sql(
 		SELECT allocations.*, transactions.date FROM allocations
-		JOIN transactions ON transactions.id_= allocations.transaction_id
+		JOIN transactions ON transactions.id = allocations.transaction_id
 		WHERE allocations.fund_id = ?
 		AND transactions.date BETWEEN ? AND ?
 	)sql" };
