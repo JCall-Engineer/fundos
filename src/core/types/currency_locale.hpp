@@ -101,17 +101,17 @@ struct data {
 		}
 	};
 };
-static constexpr std::size_t num_currency_locales = sizeof(data) / sizeof(slot);
+static constexpr std::size_t num_locales = sizeof(data) / sizeof(slot);
 static_assert(sizeof(data) % sizeof(slot) == 0, "slots must contain only slot members with no padding");
 
 union registry {
-	slot slots[num_currency_locales];
+	slot slots[num_locales];
 	data named;
 };
 static constexpr registry locales = { .named = {} };
 
 static inline std::optional<info> get_locale(std::string_view identifier) {
-	for (std::size_t i = 0; i < num_currency_locales; i++) {
+	for (std::size_t i = 0; i < num_locales; i++) {
 		if (locales.slots[i].identifier == identifier)
 			return locales.slots[i].info;
 	}

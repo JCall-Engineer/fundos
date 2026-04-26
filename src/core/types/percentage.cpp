@@ -44,7 +44,7 @@ std::optional<int32_t> parse_percentage(const std::string& text) {
 	return { whole * 100 + remainder };
 }
 
-std::string format_percentage(int32_t basis_points, const percentage_locale_info& locale) {
+std::string format_percentage(int32_t basis_points, const percentage_locale::info& locale) {
 	// Unfortunately, std::format is of little help here after we add locale-variables, so we build the whole string manually
 
 	// 5 digits max (3 whole, 2 decimal for 100%)
@@ -73,7 +73,7 @@ std::string format_percentage(int32_t basis_points, const percentage_locale_info
 		buffer[buffer_n++] = character;
 	};
 
-	if (locale.symbol_position == percentage_locale_info::symbol_placement::before) {
+	if (locale.symbol_position == percentage_locale::info::symbol_placement::before) {
 		push('%');
 		if (locale.has_space_around_number) { push(' '); }
 	}
@@ -84,7 +84,7 @@ std::string format_percentage(int32_t basis_points, const percentage_locale_info
 	if (digit.hundredths || digit.tenths) { push(locale.decimal_separator);
 	                                        push(digit_char(digit.tenths)); }
 	if (digit.hundredths)                 { push(digit_char(digit.hundredths)); }
-	if (locale.symbol_position == percentage_locale_info::symbol_placement::after) {
+	if (locale.symbol_position == percentage_locale::info::symbol_placement::after) {
 		if (locale.has_space_around_number) { push(' '); }
 		push('%');
 	}

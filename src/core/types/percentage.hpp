@@ -3,22 +3,12 @@
 #include <optional>
 #include <string>
 #include "assert.hpp"
+#include "percentage_locale.hpp"
 
 namespace fundos {
 
-struct percentage_locale_info {
-	enum class symbol_placement : uint8_t {
-		before,
-		after
-	};
-
-	char decimal_separator = '.';
-	bool has_space_around_number = false;
-	symbol_placement symbol_position = symbol_placement::after;
-};
-
 std::optional<int32_t> parse_percentage(const std::string& text);
-std::string format_percentage(int32_t basis_points, const percentage_locale_info& locale);
+std::string format_percentage(int32_t basis_points, const percentage_locale::info& locale);
 
 template<typename Scalar>
 concept SignedScalar = requires(Scalar value, int64_t factor) {
@@ -37,8 +27,7 @@ struct percentage {
 		if (!parsed) { return std::nullopt; }
 		return percentage{*parsed};
 	}
-	std::string to_string()                                     const { return format_percentage(basis_points, percentage_locale_info{}); }
-	std::string to_string(const percentage_locale_info& locale) const { return format_percentage(basis_points, locale); }
+	std::string to_string(const percentage_locale::info& locale) const { return format_percentage(basis_points, locale); }
 
 	// Convert operator allows this to be used like a true primitive type
 	constexpr explicit operator int64_t() const { return basis_points; }
