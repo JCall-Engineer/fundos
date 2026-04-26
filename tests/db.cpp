@@ -544,3 +544,82 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.closed_at, "2025-06-01");
 	}
 }
+
+TEST(DbQuery, MetaLocales) {
+	auto connection = mockSchema();
+	auto file = std::make_shared<db>(connection, db::owns_connection{});
+	{
+		auto saved_currency   = file->get_currency_locale();
+		auto saved_percentage = file->get_percentage_locale();
+
+		EXPECT_EQ(saved_currency.not_found(),   true);
+		EXPECT_EQ(saved_percentage.not_found(), true);
+	}
+	{
+		auto currency_result   = file->set_currency_locale_preset(currency_locale::locales.named.USD);
+		auto percentage_result = file->set_percentage_locale_preset(percentage_locale::locales.named.en);
+
+		EXPECT_EQ(currency_result, db::error::none);
+		EXPECT_EQ(percentage_result, db::error::none);
+
+		auto saved_currency   = file->get_currency_locale();
+		auto saved_percentage = file->get_percentage_locale();
+
+		EXPECT_EQ(saved_currency.ok(),   true);
+		EXPECT_EQ(saved_percentage.ok(), true);
+
+		auto c_locale = saved_currency.val.value();
+		auto p_locale = saved_percentage.val.value();
+
+		EXPECT_EQ(c_locale.scale,               currency_locale::locales.named.USD.info.scale);
+		EXPECT_EQ(c_locale.symbol,              currency_locale::locales.named.USD.info.symbol);
+		EXPECT_EQ(c_locale.thousands_separator, currency_locale::locales.named.USD.info.thousands_separator);
+		EXPECT_EQ(c_locale.decimal_separator,   currency_locale::locales.named.USD.info.decimal_separator);
+		EXPECT_EQ(c_locale.symbol_position,     currency_locale::locales.named.USD.info.symbol_position);
+		EXPECT_EQ(c_locale.negative_format,     currency_locale::locales.named.USD.info.negative_format);
+
+		EXPECT_EQ(p_locale.decimal_separator,       percentage_locale::locales.named.en.info.decimal_separator);
+		EXPECT_EQ(p_locale.has_space_around_number, percentage_locale::locales.named.en.info.has_space_around_number);
+		EXPECT_EQ(p_locale.symbol_position,         percentage_locale::locales.named.en.info.symbol_position);
+	}
+	{
+		currency_locale::info custom_currency = {
+			.scale = 1000,
+			.symbol = "L",
+			.thousands_separator = ';',
+			.decimal_separator = ':',
+			.symbol_position = currency_locale::info::symbol_placement::before,
+			.negative_format = currency_locale::info::negative_notation::leading_minus,
+		};
+		percentage_locale::info custom_percentage = {
+			.decimal_separator = ':',
+			.has_space_around_number = true,
+			.symbol_position = percentage_locale::info::symbol_placement::before,
+		};
+		auto currency_result   = file->set_currency_locale(custom_currency);
+		auto percentage_result = file->set_percentage_locale(custom_percentage);
+
+		EXPECT_EQ(currency_result, db::error::none);
+		EXPECT_EQ(percentage_result, db::error::none);
+
+		auto saved_currency   = file->get_currency_locale();
+		auto saved_percentage = file->get_percentage_locale();
+
+		EXPECT_EQ(saved_currency.ok(),   true);
+		EXPECT_EQ(saved_percentage.ok(), true);
+
+		auto c_locale = saved_currency.val.value();
+		auto p_locale = saved_percentage.val.value();
+
+		EXPECT_EQ(c_locale.scale,               custom_currency.scale);
+		EXPECT_EQ(c_locale.symbol,              custom_currency.symbol);
+		EXPECT_EQ(c_locale.thousands_separator, custom_currency.thousands_separator);
+		EXPECT_EQ(c_locale.decimal_separator,   custom_currency.decimal_separator);
+		EXPECT_EQ(c_locale.symbol_position,     custom_currency.symbol_position);
+		EXPECT_EQ(c_locale.negative_format,     custom_currency.negative_format);
+
+		EXPECT_EQ(p_locale.decimal_separator,       custom_percentage.decimal_separator);
+		EXPECT_EQ(p_locale.has_space_around_number, custom_percentage.has_space_around_number);
+		EXPECT_EQ(p_locale.symbol_position,         custom_percentage.symbol_position);
+	}
+}

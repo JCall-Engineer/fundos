@@ -1,3 +1,4 @@
+#include <array>
 #include <functional>
 #include "db.hpp"
 #include "assert.hpp"
@@ -108,6 +109,14 @@ struct statement_slot {
 };
 
 struct statements {
+	statement_slot get_meta { .sql = R"sql(
+		SELECT value FROM meta WHERE key = ?
+	)sql" };
+	statement_slot set_meta { .sql = R"sql(
+		INSERT INTO meta (key, value) VALUES (?, ?)
+		ON CONFLICT (key) DO UPDATE SET value = excluded.value
+	)sql" };
+
 	statement_slot get_users { .sql = R"sql(
 		SELECT id, name FROM users
 	)sql" };
@@ -375,7 +384,7 @@ db::result<T> db::fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extr
 		}
 		case SQLITE_DONE:
 			sqlite3_reset(stmt);
-			return result<T> {};  // not_found: err==none, val==nullopt
+			return result<T> {}; // not_found: err==none, val==nullopt
 		default:
 			get_sqlite3_error();
 			sqlite3_reset(stmt);
@@ -435,6 +444,28 @@ db::error db::transaction(std::function<error()> work) {
 	}
 }
 
+db::result<std::string> db::get_meta(std::string key) {
+	return fetch_one<std::string>(
+		prepared->named.get_meta.statement,
+		[&](sqlite3_stmt* stmt) {
+			bind_text(stmt, 1, key);
+		},
+		[](sqlite3_stmt* stmt) -> std::string {
+			return extract_text(stmt, 0);
+		}
+	);
+}
+
+db::error db::set_meta(std::string key, std::string value) {
+	return execute(
+		prepared->named.set_meta.statement,
+		[&](sqlite3_stmt* stmt) {
+			bind_text(stmt, 1, key);
+			bind_text(stmt, 2, value);
+		}
+	);
+}
+
 //-------------------------------------------------------------------------------------+
 // Extractors are intentionally duplicated per query function rather than shared.      |
 // Column indices are determined by each SQL statement's SELECT order, which is        |
@@ -443,6 +474,241 @@ db::error db::transaction(std::function<error()> work) {
 // if any statement's column order ever diverges. Treat each extractor as local        |
 // to its query and verify column indices against the SQL when making changes.         |
 //-------------------------------------------------------------------------------------+
+struct locale_register {
+	const std::string percentage_locale_key = "percentage_locale";
+	const std::string currency_locale_key   = "currency_locale";
+	const std::string custom_sentinel_val   = "custom";
+
+	const std::string percentage_locale_decimal_separator_key = "percentage_locale_decimal_separator";
+	const std::string percentage_locale_has_space_key         = "percentage_locale_has_space";
+	const std::string percentage_locale_symbol_position_key   = "percentage_locale_symbol_position";
+
+	const std::string currency_locale_scale_key               = "currency_locale_scale";
+	const std::string currency_locale_symbol_key              = "currency_locale_symbol";
+	const std::string currency_locale_thousands_separator_key = "currency_locale_thousands_separator";
+	const std::string currency_locale_decimal_separator_key   = "currency_locale_decimal_separator";
+	const std::string currency_locale_symbol_position_key     = "currency_locale_symbol_position";
+	const std::string currency_locale_negative_format_key     = "currency_locale_negative_format";
+};
+static locale_register locale_meta = {};
+
+template<typename Enum, std::size_t N>
+using enum_string_map = std::array<std::pair<Enum, std::string>, N>;
+
+static constexpr size_t num_symbol_placement = 2;
+static const enum_string_map<percentage_locale::info::symbol_placement, num_symbol_placement> percentage_symbol_placement_map = {{
+	{ percentage_locale::info::symbol_placement::before, "before" },
+	{ percentage_locale::info::symbol_placement::after,  "after"  },
+}};
+static const enum_string_map<currency_locale::info::symbol_placement, num_symbol_placement> currency_symbol_placement_map = {{
+	{ currency_locale::info::symbol_placement::before, "before" },
+	{ currency_locale::info::symbol_placement::after,  "after"  },
+}};
+
+static constexpr size_t num_negative_format = 4;
+static const enum_string_map<currency_locale::info::negative_notation, num_negative_format> currency_negative_notation_map = {{
+	{ currency_locale::info::negative_notation::parentheses,    "parentheses"    },
+	{ currency_locale::info::negative_notation::angle_brackets, "angle_brackets" },
+	{ currency_locale::info::negative_notation::leading_minus,  "leading_minus"  },
+	{ currency_locale::info::negative_notation::trailing_minus, "trailing_minus" },
+}};
+
+template<typename Enum, std::size_t N>
+static inline std::optional<std::string> enum_to_string(const enum_string_map<Enum, N>& map, Enum value) {
+	for (const auto& pair : map) {
+		if (pair.first == value) { return pair.second; }
+	}
+	return std::nullopt;
+}
+
+template<typename Enum, std::size_t N>
+static inline std::optional<Enum> string_to_enum(const enum_string_map<Enum, N>& map, std::string_view value) {
+	for (const auto& pair : map) {
+		if (pair.second == value) { return pair.first; }
+	}
+	return std::nullopt;
+}
+
+db::result<currency_locale::info> db::get_currency_locale() {
+	static auto NOT_FOUND = result<currency_locale::info>{}; // not_found: err==none, val==nullopt
+	static auto ERROR = [](error err) { return result<currency_locale::info>{ .err = err }; };
+	static const std::unordered_map<std::string, int16_t> valid_scales = {
+		{ "1", 1 }, { "10", 10 }, { "100", 100 }, { "1000", 1000 },
+	};
+
+	auto preset_result = get_meta(locale_meta.currency_locale_key);
+	if (preset_result.err != error::none) { return ERROR(preset_result.err); }
+	if (preset_result.not_found()) { return NOT_FOUND; }
+
+	std::string preset_value = preset_result.val.value();
+	// It looks ugly, I know, but it's the best I could do for functionality
+	if (preset_value == locale_meta.custom_sentinel_val) {
+		// Extract scale from meta
+		auto scale_result = get_meta(locale_meta.currency_locale_scale_key);
+		if (scale_result.err != error::none) { return ERROR(scale_result.err); }
+		if (scale_result.not_found()) { return NOT_FOUND; }
+		auto scale_it = valid_scales.find(scale_result.val.value());
+		if (scale_it == valid_scales.end()) { return NOT_FOUND; }
+		int16_t scale = scale_it->second;
+
+		// Extract symbol from meta
+		auto symbol_result = get_meta(locale_meta.currency_locale_symbol_key);
+		if (symbol_result.err != error::none) { return ERROR(symbol_result.err); }
+		if (symbol_result.not_found()) { return NOT_FOUND; }
+		std::string symbol = symbol_result.val.value();
+		if (symbol.length() > 4) { return NOT_FOUND; } // This is an implicit assumption for currency::to_string
+
+		// Extract thousands_separator from meta
+		auto thousands_result = get_meta(locale_meta.currency_locale_thousands_separator_key);
+		if (thousands_result.err != error::none) { return ERROR(thousands_result.err); }
+		if (thousands_result.not_found()) { return NOT_FOUND; }
+		char thousands_separator = thousands_result.val.value()[0];
+
+		// Extract decimal_separator from meta
+		auto decimal_result = get_meta(locale_meta.currency_locale_decimal_separator_key);
+		if (decimal_result.err != error::none) { return ERROR(decimal_result.err); }
+		if (decimal_result.not_found()) { return NOT_FOUND; }
+		char decimal_separator = decimal_result.val.value()[0];
+
+		// Extract symbol position from meta
+		auto position_result = get_meta(locale_meta.currency_locale_symbol_position_key);
+		if (position_result.err != error::none) { return ERROR(position_result.err); }
+		if (position_result.not_found()) { return NOT_FOUND; }
+		auto position_enum = string_to_enum(currency_symbol_placement_map, position_result.val.value());
+		if (!position_enum.has_value()) { return NOT_FOUND; }
+		currency_locale::info::symbol_placement symbol_position = position_enum.value();
+
+		// Extract negative format from meta
+		auto negative_result = get_meta(locale_meta.currency_locale_negative_format_key);
+		if (negative_result.err != error::none) { return ERROR(negative_result.err); }
+		if (negative_result.not_found()) { return NOT_FOUND; }
+		auto negative_enum = string_to_enum(currency_negative_notation_map, negative_result.val.value());
+		if (!negative_enum.has_value()) { return NOT_FOUND; }
+		currency_locale::info::negative_notation negative_format = negative_enum.value();
+
+		return result<currency_locale::info>{ .val = currency_locale::info{
+			.scale = scale,
+			.symbol = symbol,
+			.thousands_separator = thousands_separator,
+			.decimal_separator = decimal_separator,
+			.symbol_position = symbol_position,
+			.negative_format = negative_format,
+		}};
+	}
+	auto locale = currency_locale::get_locale(preset_value);
+	if (locale.has_value()) {
+		return result<currency_locale::info>{ .val = locale.value() };
+	}
+	return NOT_FOUND;
+}
+db::error db::set_currency_locale_preset(const currency_locale::slot& slot) {
+	return set_meta(locale_meta.currency_locale_key, slot.identifier);
+
+}
+db::error db::set_currency_locale(const currency_locale::info& locale) {
+	return transaction([&]() -> error {
+		error result = set_meta(locale_meta.currency_locale_key, locale_meta.custom_sentinel_val);
+		if (result != error::none) { return result; }
+
+		switch (locale.scale) {
+			case 1: case 10: case 100: case 1000:
+				result = set_meta(locale_meta.currency_locale_scale_key, std::to_string(locale.scale));
+				if (result != error::none) { return result; }
+				break;
+			default:
+				return error::internal;
+		}
+
+		if (locale.symbol.length() > 4) { return error::internal; }
+		result = set_meta(locale_meta.currency_locale_symbol_key, locale.symbol);
+		if (result != error::none) { return result; }
+
+		result = set_meta(locale_meta.currency_locale_thousands_separator_key, std::string(1, locale.thousands_separator));
+		if (result != error::none) { return result; }
+
+		result = set_meta(locale_meta.currency_locale_decimal_separator_key, std::string(1, locale.decimal_separator));
+		if (result != error::none) { return result; }
+
+		auto symbol_pos = enum_to_string(currency_symbol_placement_map, locale.symbol_position);
+		if (!symbol_pos.has_value()) { return error::internal; }
+		result = set_meta(locale_meta.currency_locale_symbol_position_key, symbol_pos.value());
+		if (result != error::none) { return result; }
+
+		auto negative_format = enum_to_string(currency_negative_notation_map, locale.negative_format);
+		if (!negative_format.has_value()) { return error::internal; }
+		result = set_meta(locale_meta.currency_locale_negative_format_key, negative_format.value());
+		if (result != error::none) { return result; }
+
+		return error::none;
+	});
+}
+
+db::result<percentage_locale::info> db::get_percentage_locale() {
+	static auto NOT_FOUND = result<percentage_locale::info>{}; // not_found: err==none, val==nullopt
+	static auto ERROR = [](error err) { return result<percentage_locale::info>{ .err = err }; };
+
+	auto preset_result = get_meta(locale_meta.percentage_locale_key);
+	if (preset_result.err != error::none) { return ERROR(preset_result.err); }
+	if (preset_result.not_found()) { return NOT_FOUND; }
+
+	std::string preset_value = preset_result.val.value();
+	if (preset_value == locale_meta.custom_sentinel_val) {
+		// Extract decimal_separator from meta
+		auto decimal_result = get_meta(locale_meta.percentage_locale_decimal_separator_key);
+		if (decimal_result.err != error::none) { return ERROR(decimal_result.err); }
+		if (decimal_result.not_found()) { return NOT_FOUND; }
+		char decimal_separator = decimal_result.val.value()[0];
+
+		// Extract has_space from meta
+		auto space_result = get_meta(locale_meta.percentage_locale_has_space_key);
+		if (space_result.err != error::none) { return ERROR(space_result.err); }
+		if (space_result.not_found()) { return NOT_FOUND; }
+		bool has_space_around_number = space_result.val.value() == "1";
+
+		// Extract symbol position from meta
+		auto position_result = get_meta(locale_meta.percentage_locale_symbol_position_key);
+		if (position_result.err != error::none) { return ERROR(position_result.err); }
+		if (position_result.not_found()) { return NOT_FOUND; }
+		auto position_enum = string_to_enum(percentage_symbol_placement_map, position_result.val.value());
+		if (!position_enum.has_value()) { return NOT_FOUND; }
+		percentage_locale::info::symbol_placement symbol_position = position_enum.value();
+
+		return result<percentage_locale::info>{ .val = percentage_locale::info{
+			.decimal_separator = decimal_separator,
+			.has_space_around_number = has_space_around_number,
+			.symbol_position = symbol_position,
+		}};
+	}
+	auto locale = percentage_locale::get_locale(preset_value);
+	if (locale.has_value()) {
+		return result<percentage_locale::info>{ .val = locale.value() };
+	}
+	return NOT_FOUND;
+}
+db::error db::set_percentage_locale_preset(const percentage_locale::slot& slot) {
+	return set_meta(locale_meta.percentage_locale_key, slot.identifier);
+}
+db::error db::set_percentage_locale(const percentage_locale::info& locale) {
+	return transaction([&]() -> error {
+		error result = set_meta(locale_meta.percentage_locale_key, locale_meta.custom_sentinel_val);
+		if (result != error::none) { return result; }
+
+		result = set_meta(locale_meta.percentage_locale_decimal_separator_key, std::string(1, locale.decimal_separator));
+		if (result != error::none) { return result; }
+
+		result = set_meta(locale_meta.percentage_locale_has_space_key, locale.has_space_around_number ? "1" : "0");
+		if (result != error::none) { return result; }
+
+		auto symbol_pos = enum_to_string(percentage_symbol_placement_map, locale.symbol_position);
+		if (!symbol_pos.has_value()) { return error::internal; }
+		result = set_meta(locale_meta.percentage_locale_symbol_position_key, symbol_pos.value());
+		if (result != error::none) { return result; }
+
+		return error::none;
+	});
+
+}
+
 db::result<std::vector<user>> db::get_users() {
 	return fetch_many<user>(
 		prepared->named.get_users.statement,

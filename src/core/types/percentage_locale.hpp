@@ -52,7 +52,7 @@ union registry {
 };
 static constexpr registry locales = { .named = {} };
 
-static inline std::optional<info> get_locale(std::string_view identifier) {
+static inline std::optional<info> const get_locale(std::string_view identifier) {
 	for (std::size_t i = 0; i < num_locales; i++) {
 		if (locales.slots[i].identifier == identifier)
 			return locales.slots[i].info;

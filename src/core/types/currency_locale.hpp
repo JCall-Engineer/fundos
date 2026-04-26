@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace fundos::currency_locale {
@@ -17,7 +18,7 @@ struct info {
 	};
 
 	int16_t scale;
-	std::string_view symbol;
+	std::string symbol;
 	char thousands_separator;
 	char decimal_separator;
 	symbol_placement symbol_position;
@@ -107,8 +108,9 @@ static_assert(sizeof(data) % sizeof(slot) == 0, "slots must contain only slot me
 union registry {
 	slot slots[num_locales];
 	data named;
+	~registry() { named.~data(); }
 };
-static constexpr registry locales = { .named = {} };
+extern const registry locales;
 
 static inline std::optional<info> get_locale(std::string_view identifier) {
 	for (std::size_t i = 0; i < num_locales; i++) {

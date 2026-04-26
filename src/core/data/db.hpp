@@ -123,7 +123,18 @@ private:
 
 	error transaction(std::function<error()> work);
 
+	result<std::string> get_meta(std::string key);
+	error               set_meta(std::string key, std::string value);
+
 public:
+	result<currency_locale::info>   get_currency_locale();
+	error                           set_currency_locale_preset(const currency_locale::slot&);
+	error                           set_currency_locale(const currency_locale::info&);
+
+	result<percentage_locale::info> get_percentage_locale();
+	error                           set_percentage_locale_preset(const percentage_locale::slot&);
+	error                           set_percentage_locale(const percentage_locale::info&);
+
 	result<std::vector<user>>    get_users();
 	error                        save_user(user&);
 	error                        delete_user(int64_t user_id);
