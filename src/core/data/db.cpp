@@ -1008,14 +1008,22 @@ db::error db::save_account(account& account) {
 
 std::shared_ptr<db> db::open_file(std::string path) {
 	sqlite3* connection;
-	sqlite3_open(path.c_str(), &connection);
+	int rc = sqlite3_open(path.c_str(), &connection);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(connection); // must still close even on failure
+		return std::make_shared<db>(classify_sqlite_open_error(rc));
+	}
 	sqlite3_busy_timeout(connection, 5000);
 	return std::make_shared<db>(connection, owns_connection{});
 }
 
 std::shared_ptr<db> db::open_memory() {
 	sqlite3* connection;
-	sqlite3_open(":memory:", &connection);
+	int rc = sqlite3_open(":memory:", &connection);
+	if (rc != SQLITE_OK) {
+		sqlite3_close(connection); // must still close even on failure
+		return std::make_shared<db>(classify_sqlite_open_error(rc));
+	}
 	return std::make_shared<db>(connection, owns_connection{});
 }
 
@@ -1273,6 +1281,10 @@ void db::close() {
 	connection = nullptr;
 }
 
+db::db(error err) : connection(nullptr), managed(false), prepared(nullptr) {
+	open_result.result = status::code::sqlite3_error;
+	open_result.sqlite3_error = err;
+}
 db::db(sqlite3* c)                  : connection(c), managed(false), prepared(new db_prepared_statements()) { open(); }
 db::db(sqlite3* c, owns_connection) : connection(c), managed(true),  prepared(new db_prepared_statements()) { open(); }
 db::~db() { close(); }

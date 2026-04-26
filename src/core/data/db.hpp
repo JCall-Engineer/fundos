@@ -78,6 +78,7 @@ private:
 public:
 	static std::shared_ptr<db> open_file(std::string);
 	static std::shared_ptr<db> open_memory();
+	explicit db(error);                      // nothing opens
 	explicit db(sqlite3*);                   // borrows, no close
 	explicit db(sqlite3*, owns_connection);  // owns, closes on dtor
 	~db();
