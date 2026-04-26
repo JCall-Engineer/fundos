@@ -562,12 +562,14 @@ db::result<currency_locale::info> db::get_currency_locale() {
 		auto thousands_result = get_meta(locale_meta.currency_locale_thousands_separator_key);
 		if (thousands_result.err != error::none) { return ERROR(thousands_result.err); }
 		if (thousands_result.not_found()) { return NOT_FOUND; }
+		if (thousands_result.val.value().empty()) { return NOT_FOUND; }
 		char thousands_separator = thousands_result.val.value()[0];
 
 		// Extract decimal_separator from meta
 		auto decimal_result = get_meta(locale_meta.currency_locale_decimal_separator_key);
 		if (decimal_result.err != error::none) { return ERROR(decimal_result.err); }
 		if (decimal_result.not_found()) { return NOT_FOUND; }
+		if (decimal_result.val.value().empty()) { return NOT_FOUND; }
 		char decimal_separator = decimal_result.val.value()[0];
 
 		// Extract symbol position from meta
@@ -603,7 +605,6 @@ db::result<currency_locale::info> db::get_currency_locale() {
 }
 db::error db::set_currency_locale_preset(const currency_locale::slot& slot) {
 	return set_meta(locale_meta.currency_locale_key, slot.identifier);
-
 }
 db::error db::set_currency_locale(const currency_locale::info& locale) {
 	return transaction([&]() -> error {
@@ -657,6 +658,7 @@ db::result<percentage_locale::info> db::get_percentage_locale() {
 		auto decimal_result = get_meta(locale_meta.percentage_locale_decimal_separator_key);
 		if (decimal_result.err != error::none) { return ERROR(decimal_result.err); }
 		if (decimal_result.not_found()) { return NOT_FOUND; }
+		if (decimal_result.val.value().empty()) { return NOT_FOUND; }
 		char decimal_separator = decimal_result.val.value()[0];
 
 		// Extract has_space from meta
@@ -706,7 +708,6 @@ db::error db::set_percentage_locale(const percentage_locale::info& locale) {
 
 		return error::none;
 	});
-
 }
 
 db::result<std::vector<user>> db::get_users() {

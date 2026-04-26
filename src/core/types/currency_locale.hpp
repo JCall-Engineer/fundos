@@ -108,7 +108,7 @@ static_assert(sizeof(data) % sizeof(slot) == 0, "slots must contain only slot me
 union registry {
 	slot slots[num_locales];
 	data named;
-	~registry() { named.~data(); }
+	~registry() { named.~data(); } // info has a nontrivial dtor (symbol), meaning we must explicitly state which member of registry is "active"
 };
 extern const registry locales;
 
