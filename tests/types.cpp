@@ -81,14 +81,14 @@ TEST(TypeArithmetic, PercentBasic) { // necessary? debatable
 }
 
 TEST(TypeArithmetic, CurrencyScaledByPercentage) {
-	currency<currency_locale::USD> a{10000}, b; // $100
+	currency a{10000}, b; // $100
 	percentage r{2500}; // 25%
 
 	b = a * r;
-	EXPECT_EQ(b, currency<currency_locale::USD>{2500}); // $25
+	EXPECT_EQ(b, currency{2500}); // $25
 
 	b = r * (a * 2);
-	EXPECT_EQ(b, currency<currency_locale::USD>{5000}); // $50
+	EXPECT_EQ(b, currency{5000}); // $50
 
 	// Validate upper limit for overflow risk
 	a.minor_units = (INT64_MAX / 100) - 1; // 92_233_720_368_547_757 or $922,337,203,685,477 or $922t
@@ -98,7 +98,7 @@ TEST(TypeArithmetic, CurrencyScaledByPercentage) {
 }
 
 TEST(TypeArithmetic, CurrencyBasic) { // necessary? debatable
-	currency<currency_locale::USD> a{21}, b{4300}, c, d;
+	currency a{21}, b{4300}, c, d;
 	int64_t scalar1 = 2, scalar2 = 10;
 
 	c = a + b;
@@ -141,86 +141,86 @@ TEST(TypeArithmetic, CurrencyBasic) { // necessary? debatable
 
 TEST(CurrencyStringConversions, WellformedStrings) {
 	// Zero
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("$0.00").value().minor_units, 0);
+	EXPECT_EQ(currency::from_string("$0.00", currency_locale::USD::info).value().minor_units, 0);
 
 	// Positive
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("$1,234.50").value().minor_units, 123450);
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("$1.50").value().minor_units, 150);
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("1.5").value().minor_units, 150);
+	EXPECT_EQ(currency::from_string("$1,234.50", currency_locale::USD::info).value().minor_units, 123450);
+	EXPECT_EQ(currency::from_string("$1.50", currency_locale::USD::info).value().minor_units, 150);
+	EXPECT_EQ(currency::from_string("1.5", currency_locale::USD::info).value().minor_units, 150);
 
 	// Negative
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("($1,234.50)").value().minor_units, -123450);
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("($1.50)").value().minor_units, -150);
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("<$1.50>").value().minor_units, -150);
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("1.50-").value().minor_units, -150);
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("-1.5").value().minor_units, -150);
+	EXPECT_EQ(currency::from_string("($1,234.50)", currency_locale::USD::info).value().minor_units, -123450);
+	EXPECT_EQ(currency::from_string("($1.50)", currency_locale::USD::info).value().minor_units, -150);
+	EXPECT_EQ(currency::from_string("<$1.50>", currency_locale::USD::info).value().minor_units, -150);
+	EXPECT_EQ(currency::from_string("1.50-", currency_locale::USD::info).value().minor_units, -150);
+	EXPECT_EQ(currency::from_string("-1.5", currency_locale::USD::info).value().minor_units, -150);
 }
 
 TEST(CurrencyStringConversions, MalformedStrings) {
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("$x1a,b2c3d4e.f5-g0h.i012").value().minor_units, 123450);
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("abc").value().minor_units, 0);
-	EXPECT_EQ(currency<currency_locale::USD>::from_string("").value().minor_units, 0);
+	EXPECT_EQ(currency::from_string("$x1a,b2c3d4e.f5-g0h.i012", currency_locale::USD::info).value().minor_units, 123450);
+	EXPECT_EQ(currency::from_string("abc", currency_locale::USD::info).value().minor_units, 0);
+	EXPECT_EQ(currency::from_string("", currency_locale::USD::info).value().minor_units, 0);
 
 	// std::nullopt checks
-	EXPECT_FALSE(currency<currency_locale::USD>::from_string(std::string(256, '1')));
-	EXPECT_FALSE(currency<currency_locale::USD>::from_string("99999999999999999999.00"));
-	EXPECT_FALSE(currency<currency_locale::USD>::from_string(std::to_string(INT64_MAX / 100 + 1)));
+	EXPECT_FALSE(currency::from_string(std::string(256, '1'), currency_locale::USD::info));
+	EXPECT_FALSE(currency::from_string("99999999999999999999.00", currency_locale::USD::info));
+	EXPECT_FALSE(currency::from_string(std::to_string(INT64_MAX / 100 + 1), currency_locale::USD::info));
 }
 
 TEST(CurrencyStringConversions, USD) {
-	EXPECT_EQ(currency<currency_locale::USD>{0}.to_string(), "$0.00");
-	EXPECT_EQ(currency<currency_locale::USD>{150}.to_string(), "$1.50");
-	EXPECT_EQ(currency<currency_locale::USD>{-150}.to_string(), "($1.50)");
-	EXPECT_EQ(currency<currency_locale::USD>{123450}.to_string(), "$1,234.50");
-	EXPECT_EQ(currency<currency_locale::USD>{-123450}.to_string(), "($1,234.50)");
-	EXPECT_EQ(currency<currency_locale::USD>{123456789}.to_string(), "$1,234,567.89");
-	EXPECT_EQ(currency<currency_locale::USD>{-123456789}.to_string(), "($1,234,567.89)");
+	EXPECT_EQ(currency{{0}}.to_string(currency_locale::USD::info), "$0.00");
+	EXPECT_EQ(currency{{150}}.to_string(currency_locale::USD::info), "$1.50");
+	EXPECT_EQ(currency{{-150}}.to_string(currency_locale::USD::info), "($1.50)");
+	EXPECT_EQ(currency{{123450}}.to_string(currency_locale::USD::info), "$1,234.50");
+	EXPECT_EQ(currency{{-123450}}.to_string(currency_locale::USD::info), "($1,234.50)");
+	EXPECT_EQ(currency{{123456789}}.to_string(currency_locale::USD::info), "$1,234,567.89");
+	EXPECT_EQ(currency{{-123456789}}.to_string(currency_locale::USD::info), "($1,234,567.89)");
 }
 
 TEST(CurrencyStringConversions, EUR) {
-	EXPECT_EQ(currency<currency_locale::EUR>{0}.to_string(),        "0,00€");
-	EXPECT_EQ(currency<currency_locale::EUR>{150}.to_string(),      "1,50€");
-	EXPECT_EQ(currency<currency_locale::EUR>{-150}.to_string(),     "-1,50€");
-	EXPECT_EQ(currency<currency_locale::EUR>{123450}.to_string(),   "1.234,50€");
-	EXPECT_EQ(currency<currency_locale::EUR>{-123450}.to_string(),  "-1.234,50€");
+	EXPECT_EQ(currency{{0}}.to_string(currency_locale::EUR::info),        "0,00€");
+	EXPECT_EQ(currency{{150}}.to_string(currency_locale::EUR::info),      "1,50€");
+	EXPECT_EQ(currency{{-150}}.to_string(currency_locale::EUR::info),     "-1,50€");
+	EXPECT_EQ(currency{{123450}}.to_string(currency_locale::EUR::info),   "1.234,50€");
+	EXPECT_EQ(currency{{-123450}}.to_string(currency_locale::EUR::info),  "-1.234,50€");
 }
 
 TEST(CurrencyStringConversions, GBP) {
-	EXPECT_EQ(currency<currency_locale::GBP>{0}.to_string(),        "£0.00");
-	EXPECT_EQ(currency<currency_locale::GBP>{150}.to_string(),      "£1.50");
-	EXPECT_EQ(currency<currency_locale::GBP>{-150}.to_string(),     "-£1.50");
-	EXPECT_EQ(currency<currency_locale::GBP>{123450}.to_string(),   "£1,234.50");
-	EXPECT_EQ(currency<currency_locale::GBP>{-123450}.to_string(),  "-£1,234.50");
+	EXPECT_EQ(currency{{0}}.to_string(currency_locale::GBP::info),        "£0.00");
+	EXPECT_EQ(currency{{150}}.to_string(currency_locale::GBP::info),      "£1.50");
+	EXPECT_EQ(currency{{-150}}.to_string(currency_locale::GBP::info),     "-£1.50");
+	EXPECT_EQ(currency{{123450}}.to_string(currency_locale::GBP::info),   "£1,234.50");
+	EXPECT_EQ(currency{{-123450}}.to_string(currency_locale::GBP::info),  "-£1,234.50");
 }
 
 TEST(CurrencyStringConversions, CAD) {
-	EXPECT_EQ(currency<currency_locale::CAD>{0}.to_string(),        "CA$0.00");
-	EXPECT_EQ(currency<currency_locale::CAD>{150}.to_string(),      "CA$1.50");
-	EXPECT_EQ(currency<currency_locale::CAD>{-150}.to_string(),     "(CA$1.50)");
-	EXPECT_EQ(currency<currency_locale::CAD>{123450}.to_string(),   "CA$1,234.50");
-	EXPECT_EQ(currency<currency_locale::CAD>{-123450}.to_string(),  "(CA$1,234.50)");
+	EXPECT_EQ(currency{{0}}.to_string(currency_locale::CAD::info),        "CA$0.00");
+	EXPECT_EQ(currency{{150}}.to_string(currency_locale::CAD::info),      "CA$1.50");
+	EXPECT_EQ(currency{{-150}}.to_string(currency_locale::CAD::info),     "(CA$1.50)");
+	EXPECT_EQ(currency{{123450}}.to_string(currency_locale::CAD::info),   "CA$1,234.50");
+	EXPECT_EQ(currency{{-123450}}.to_string(currency_locale::CAD::info),  "(CA$1,234.50)");
 }
 
 TEST(CurrencyStringConversions, AUD) {
-	EXPECT_EQ(currency<currency_locale::AUD>{0}.to_string(),        "A$0.00");
-	EXPECT_EQ(currency<currency_locale::AUD>{150}.to_string(),      "A$1.50");
-	EXPECT_EQ(currency<currency_locale::AUD>{-150}.to_string(),     "(A$1.50)");
-	EXPECT_EQ(currency<currency_locale::AUD>{123450}.to_string(),   "A$1,234.50");
-	EXPECT_EQ(currency<currency_locale::AUD>{-123450}.to_string(),  "(A$1,234.50)");
+	EXPECT_EQ(currency{{0}}.to_string(currency_locale::AUD::info),        "A$0.00");
+	EXPECT_EQ(currency{{150}}.to_string(currency_locale::AUD::info),      "A$1.50");
+	EXPECT_EQ(currency{{-150}}.to_string(currency_locale::AUD::info),     "(A$1.50)");
+	EXPECT_EQ(currency{{123450}}.to_string(currency_locale::AUD::info),   "A$1,234.50");
+	EXPECT_EQ(currency{{-123450}}.to_string(currency_locale::AUD::info),  "(A$1,234.50)");
 }
 
 TEST(CurrencyStringConversions, JPY) {
-	EXPECT_EQ(currency<currency_locale::JPY>{0}.to_string(),        "¥0");
-	EXPECT_EQ(currency<currency_locale::JPY>{150}.to_string(),      "¥150");
-	EXPECT_EQ(currency<currency_locale::JPY>{-150}.to_string(),     "-¥150");
-	EXPECT_EQ(currency<currency_locale::JPY>{123450}.to_string(),   "¥123,450");
-	EXPECT_EQ(currency<currency_locale::JPY>{-123450}.to_string(),  "-¥123,450");
+	EXPECT_EQ(currency{{0}}.to_string(currency_locale::JPY::info),        "¥0");
+	EXPECT_EQ(currency{{150}}.to_string(currency_locale::JPY::info),      "¥150");
+	EXPECT_EQ(currency{{-150}}.to_string(currency_locale::JPY::info),     "-¥150");
+	EXPECT_EQ(currency{{123450}}.to_string(currency_locale::JPY::info),   "¥123,450");
+	EXPECT_EQ(currency{{-123450}}.to_string(currency_locale::JPY::info),  "-¥123,450");
 }
 
 TEST(CurrencyStringConversions, CNY) {
-	EXPECT_EQ(currency<currency_locale::CNY>{0}.to_string(),        "CN¥0.00");
-	EXPECT_EQ(currency<currency_locale::CNY>{150}.to_string(),      "CN¥1.50");
-	EXPECT_EQ(currency<currency_locale::CNY>{-150}.to_string(),     "-CN¥1.50");
-	EXPECT_EQ(currency<currency_locale::CNY>{123450}.to_string(),   "CN¥1,234.50");
-	EXPECT_EQ(currency<currency_locale::CNY>{-123450}.to_string(),  "-CN¥1,234.50");
+	EXPECT_EQ(currency{{0}}.to_string(currency_locale::CNY::info),        "CN¥0.00");
+	EXPECT_EQ(currency{{150}}.to_string(currency_locale::CNY::info),      "CN¥1.50");
+	EXPECT_EQ(currency{{-150}}.to_string(currency_locale::CNY::info),     "-CN¥1.50");
+	EXPECT_EQ(currency{{123450}}.to_string(currency_locale::CNY::info),   "CN¥1,234.50");
+	EXPECT_EQ(currency{{-123450}}.to_string(currency_locale::CNY::info),  "-CN¥1,234.50");
 }

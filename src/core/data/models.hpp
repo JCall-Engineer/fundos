@@ -49,39 +49,35 @@ struct budget_phase : db_managed {
 	phase_kind kind;
 };
 
-template<CurrencyLocale Locale>
 struct fixed_target : db_managed {
 	int64_t phase_id;
 	int64_t fund_id;
-	currency<Locale> amount;
-	std::optional<currency<Locale>> cap;
+	currency amount;
+	std::optional<currency> cap;
 	bool allow_overdraw;
 };
 
-template<CurrencyLocale Locale>
 struct percentage_target : db_managed {
 	int64_t phase_id;
 	int64_t fund_id;
 	percentage amount;
-	std::optional<currency<Locale>> cap;
+	std::optional<currency> cap;
 	bool allow_overdraw;
 };
 
-template<CurrencyLocale Locale>
 struct transaction : db_managed {
 	int64_t account_id;
-	currency<Locale> amount;
+	currency amount;
 	std::string date;
 	std::string memo;
 	std::optional<std::string> bank_ref;
 	std::optional<std::string> import_source;
 };
 
-template<CurrencyLocale Locale>
 struct allocation : db_managed {
 	int64_t transaction_id;
 	int64_t fund_id;
-	currency<Locale> amount;
+	currency amount;
 };
 
 }; // fundos

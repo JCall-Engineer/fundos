@@ -53,7 +53,7 @@ struct percentage {
 
 	// Split on percentage::whole() keeps high * basis_points within int64_t for ratio <= percentage::whole()
 	template<SignedScalar S>
-	inline S scale(const S& value) const { // S may not be trivially copyable (it most likely is but it's not guaranteed by SignedScalar)
+	constexpr S scale(const S& value) const { // S may not be trivially copyable (it most likely is but it's not guaranteed by SignedScalar)
 		constexpr int64_t split = whole().basis_points;
 		FUNDOS_ASSERT(basis_points >= 0 && basis_points <= split, "scale() risks overflow for percentages outside [0, 1]");
 
@@ -83,12 +83,10 @@ constexpr fundos::percentage operator""_percent(long double percent) {
 
 #include "types/currency.hpp"
 
-template<fundos::CurrencyLocale Locale>
-constexpr fundos::currency<Locale> operator*(const fundos::currency<Locale>& monetary, const fundos::percentage& ratio) {
+constexpr fundos::currency operator*(const fundos::currency& monetary, const fundos::percentage& ratio) {
 	return { ratio.scale(monetary.minor_units) };
 }
 
-template<fundos::CurrencyLocale Locale>
-constexpr fundos::currency<Locale> operator*(const fundos::percentage& ratio, const fundos::currency<Locale>& monetary) {
+constexpr fundos::currency operator*(const fundos::percentage& ratio, const fundos::currency& monetary) {
 	return { ratio.scale(monetary.minor_units) };
 }
