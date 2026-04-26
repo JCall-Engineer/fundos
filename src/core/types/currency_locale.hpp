@@ -2,9 +2,9 @@
 #include <cstdint>
 #include <string>
 
-namespace fundos {
+namespace fundos::currency_locale {
 
-struct currency_locale_info {
+struct info {
 	enum class symbol_placement : uint8_t {
 		before,
 		after
@@ -24,84 +24,98 @@ struct currency_locale_info {
 	negative_notation negative_format;
 };
 
-template<typename T>
-concept CurrencyLocale = requires {
-	{ T::info } -> std::convertible_to<currency_locale_info>;
+struct slot {
+	const char* identifier;
+	info info;
 };
 
-namespace currency_locale {
+struct data {
+	slot USD {
+		"USD", {
+			.scale                = 100,
+			.symbol               = "$",
+			.thousands_separator  = ',',
+			.decimal_separator    = '.',
+			.symbol_position      = info::symbol_placement::before,
+			.negative_format      = info::negative_notation::parentheses,
+		}
+	};
+	slot CAD {
+		"CAD", {
+			.scale                = 100,
+			.symbol               = "CA$",
+			.thousands_separator  = ',',
+			.decimal_separator    = '.',
+			.symbol_position      = info::symbol_placement::before,
+			.negative_format      = info::negative_notation::parentheses,
+		}
+	};
+	slot GBP {
+		"GBP", {
+			.scale                = 100,
+			.symbol               = "\xc2\xa3", // £ in UTF-8
+			.thousands_separator  = ',',
+			.decimal_separator    = '.',
+			.symbol_position      = info::symbol_placement::before,
+			.negative_format      = info::negative_notation::leading_minus,
+		}
+	};
+	slot EUR {
+		"EUR", {
+			.scale                = 100,
+			.symbol               = "\xe2\x82\xac", // € in UTF-8
+			.thousands_separator  = '.',
+			.decimal_separator    = ',',
+			.symbol_position      = info::symbol_placement::after,
+			.negative_format      = info::negative_notation::leading_minus,
+		}
+	};
+	slot AUD {
+		"AUD", {
+			.scale                = 100,
+			.symbol               = "A$",
+			.thousands_separator  = ',',
+			.decimal_separator    = '.',
+			.symbol_position      = info::symbol_placement::before,
+			.negative_format      = info::negative_notation::parentheses,
+		}
+	};
+	slot JPY {
+		"JPY", {
+			.scale                = 1, // No minor unit
+			.symbol               = "\xc2\xa5", // ¥ in UTF-8
+			.thousands_separator  = ',',
+			.decimal_separator    = '.', // Unused given scale=1
+			.symbol_position      = info::symbol_placement::before,
+			.negative_format      = info::negative_notation::leading_minus,
+		}
+	};
+	slot CNY {
+		"CNY", {
+			.scale                = 100,
+			.symbol               = "CN\xc2\xa5", // CN¥ in UTF-8
+			.thousands_separator  = ',',
+			.decimal_separator    = '.',
+			.symbol_position      = info::symbol_placement::before,
+			.negative_format      = info::negative_notation::leading_minus,
+		}
+	};
+};
+static constexpr std::size_t num_currency_locales = sizeof(data) / sizeof(slot);
+static_assert(sizeof(data) % sizeof(slot) == 0, "slots must contain only slot members with no padding");
 
-struct USD {
-	static constexpr currency_locale_info info = {
-		.scale                = 100,
-		.symbol               = "$",
-		.thousands_separator  = ',',
-		.decimal_separator    = '.',
-		.symbol_position      = currency_locale_info::symbol_placement::before,
-		.negative_format      = currency_locale_info::negative_notation::parentheses,
-	};
+union registry {
+	slot slots[num_currency_locales];
+	data named;
 };
-struct CAD {
-	static constexpr currency_locale_info info = {
-		.scale                = 100,
-		.symbol               = "CA$",
-		.thousands_separator  = ',',
-		.decimal_separator    = '.',
-		.symbol_position      = currency_locale_info::symbol_placement::before,
-		.negative_format      = currency_locale_info::negative_notation::parentheses,
-	};
-};
-struct GBP {
-	static constexpr currency_locale_info info = {
-		.scale                = 100,
-		.symbol               = "\xc2\xa3", // £ in UTF-8
-		.thousands_separator  = ',',
-		.decimal_separator    = '.',
-		.symbol_position      = currency_locale_info::symbol_placement::before,
-		.negative_format      = currency_locale_info::negative_notation::leading_minus,
-	};
-};
-struct EUR {
-	static constexpr currency_locale_info info = {
-		.scale                = 100,
-		.symbol               = "\xe2\x82\xac", // € in UTF-8
-		.thousands_separator  = '.',
-		.decimal_separator    = ',',
-		.symbol_position      = currency_locale_info::symbol_placement::after,
-		.negative_format      = currency_locale_info::negative_notation::leading_minus,
-	};
-};
-struct AUD {
-	static constexpr currency_locale_info info = {
-		.scale                = 100,
-		.symbol               = "A$",
-		.thousands_separator  = ',',
-		.decimal_separator    = '.',
-		.symbol_position      = currency_locale_info::symbol_placement::before,
-		.negative_format      = currency_locale_info::negative_notation::parentheses,
-	};
-};
-struct JPY {
-	static constexpr currency_locale_info info = {
-		.scale                = 1, // No minor unit
-		.symbol               = "\xc2\xa5", // ¥ in UTF-8
-		.thousands_separator  = ',',
-		.decimal_separator    = '.', // Unused given scale=1
-		.symbol_position      = currency_locale_info::symbol_placement::before,
-		.negative_format      = currency_locale_info::negative_notation::leading_minus,
-	};
-};
-struct CNY {
-	static constexpr currency_locale_info info = {
-		.scale                = 100,
-		.symbol               = "CN\xc2\xa5", // CN¥ in UTF-8
-		.thousands_separator  = ',',
-		.decimal_separator    = '.',
-		.symbol_position      = currency_locale_info::symbol_placement::before,
-		.negative_format      = currency_locale_info::negative_notation::leading_minus,
-	};
-};
+static constexpr registry locales = { .named = {} };
 
-} // currency_locale
+static inline std::optional<info> get_locale(std::string_view identifier) {
+	for (std::size_t i = 0; i < num_currency_locales; i++) {
+		if (locales.slots[i].identifier == identifier)
+			return locales.slots[i].info;
+	}
+	return std::nullopt;
+}
 
-} // fundos
+} // fundos::currency_locale

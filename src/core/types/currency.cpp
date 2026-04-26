@@ -3,7 +3,7 @@
 
 namespace fundos {
 
-std::optional<int64_t> parse_currency(const std::string& text, const currency_locale_info& locale) {
+std::optional<int64_t> parse_currency(const std::string& text, const currency_locale::info& locale) {
 	enum class state : uint8_t { sign, whole, remainder };
 
 	uint8_t max_digits = 0;
@@ -59,13 +59,13 @@ std::optional<int64_t> parse_currency(const std::string& text, const currency_lo
 }
 
 inline // helper for format_currency writes the arbitrary size symbol in reverse byte order
-void copy_symbol_reversed(char* buffer, size_t& buffer_n, const currency_locale_info& locale) {
+void copy_symbol_reversed(char* buffer, size_t& buffer_n, const currency_locale::info& locale) {
 	for (auto it = locale.symbol.rbegin(); it != locale.symbol.rend(); ++it) {
 		buffer[buffer_n++] = *it;
 	}
 }
 
-std::string format_currency(int64_t minor_units, const currency_locale_info& locale) {
+std::string format_currency(int64_t minor_units, const currency_locale::info& locale) {
 	// Unfortunately, std::format is of little help here after we add thousands separators (locale-variable no less), so we (mostly) build the whole string manually
 
 	// 19 digits max (combined between major_units and minor_units): max uint64_t = 2^63 - 1 = 9,223,372,036,854,775,807
@@ -82,7 +82,7 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 	        minor_units = std::abs(minor_units % locale.scale); // Values that extreme are considered malformed input, consistent with the rest of this library.
 
 	// In order to 0 pad the minor_units and thousands-separate the major_units it is beneficial to build the string in reverse order
-	if (locale.symbol_position == currency_locale_info::symbol_placement::after) {
+	if (locale.symbol_position == currency_locale::info::symbol_placement::after) {
 		copy_symbol_reversed(buffer, buffer_n, locale);
 	}
 
@@ -113,7 +113,7 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 		}
 	}
 
-	if (locale.symbol_position == currency_locale_info::symbol_placement::before) {
+	if (locale.symbol_position == currency_locale::info::symbol_placement::before) {
 		copy_symbol_reversed(buffer, buffer_n, locale);
 	}
 
@@ -123,13 +123,13 @@ std::string format_currency(int64_t minor_units, const currency_locale_info& loc
 	// The most comprehensible part of this function lol
 	if (!is_negative) { return std::string(output); }
 	switch (locale.negative_format) {
-		case currency_locale_info::negative_notation::leading_minus:
+		case currency_locale::info::negative_notation::leading_minus:
 			return std::format("-{}", output);
-		case currency_locale_info::negative_notation::trailing_minus:
+		case currency_locale::info::negative_notation::trailing_minus:
 			return std::format("{}-", output);
-		case currency_locale_info::negative_notation::parentheses:
+		case currency_locale::info::negative_notation::parentheses:
 			return std::format("({})", output);
-		case currency_locale_info::negative_notation::angle_brackets:
+		case currency_locale::info::negative_notation::angle_brackets:
 			return std::format("<{}>", output);
 		default:
 			FUNDOS_ASSERT(false, "unhandled currency_negative_format");
