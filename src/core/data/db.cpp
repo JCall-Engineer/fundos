@@ -317,7 +317,6 @@ union db_prepared_statements {
 static inline std::string extract_text(sqlite3_stmt* stmt, int index) {
 	return reinterpret_cast<const char*>(sqlite3_column_text(stmt, index));
 }
-
 static inline void bind_text(sqlite3_stmt* stmt, int index, const std::string& value) {
 	sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_STATIC);
 }
@@ -326,7 +325,6 @@ static inline std::optional<std::string> extract_optional_text(sqlite3_stmt* stm
 	if (sqlite3_column_type(stmt, index) == SQLITE_NULL) { return std::nullopt; }
 	return reinterpret_cast<const char*>(sqlite3_column_text(stmt, index));
 }
-
 static inline void bind_optional_text(sqlite3_stmt* stmt, int index, const std::optional<std::string>& value) {
 	if (value) {
 		sqlite3_bind_text(stmt, index, value->c_str(), -1, SQLITE_STATIC);
@@ -455,7 +453,6 @@ db::result<std::string> db::get_meta(std::string key) {
 		}
 	);
 }
-
 db::error db::set_meta(std::string key, std::string value) {
 	return execute(
 		prepared->named.set_meta.statement,
@@ -722,7 +719,6 @@ db::result<std::vector<user>> db::get_users() {
 		}
 	);
 }
-
 db::error db::save_user(user& user) {
 	if (!user.is_persisted()) {
 		error err = execute(
@@ -744,7 +740,6 @@ db::error db::save_user(user& user) {
 		);
 	}
 }
-
 db::error db::delete_user(int64_t user_id) {
 	return execute(
 		prepared->named.delete_user.statement,
@@ -771,7 +766,6 @@ db::result<std::vector<account>> db::get_account_memberships(int64_t user_id) {
 		}
 	);
 }
-
 db::result<std::vector<account>> db::get_account_nonmemberships(int64_t user_id) {
 	return fetch_many<account>(
 		prepared->named.get_account_nonmemberships.statement,
@@ -804,7 +798,6 @@ db::result<std::vector<user>> db::get_account_members(int64_t account_id) {
 		}
 	);
 }
-
 db::result<std::vector<user>> db::get_account_nonmembers(int64_t account_id) {
 	return fetch_many<user>(
 		prepared->named.get_account_nonmembers.statement,
@@ -829,7 +822,6 @@ db::error db::add_user_to_account(int64_t account_id, int64_t user_id) {
 		}
 	);
 }
-
 db::error db::remove_user_from_account(int64_t account_id, int64_t user_id) {
 	return execute(
 		prepared->named.remove_user_from_account.statement,
@@ -855,7 +847,6 @@ db::result<std::vector<fund>> db::get_fund_memberships(int64_t user_id) {
 		}
 	);
 }
-
 db::result<std::vector<fund>> db::get_fund_nonmemberships(int64_t user_id) {
 	return fetch_many<fund>(
 		prepared->named.get_fund_nonmemberships.statement,
@@ -871,7 +862,6 @@ db::result<std::vector<fund>> db::get_fund_nonmemberships(int64_t user_id) {
 		}
 	);
 }
-
 db::result<std::vector<user>> db::get_fund_members(int64_t fund_id) {
 	return fetch_many<user>(
 		prepared->named.get_fund_members.statement,
@@ -886,7 +876,6 @@ db::result<std::vector<user>> db::get_fund_members(int64_t fund_id) {
 		}
 	);
 }
-
 db::result<std::vector<user>> db::get_fund_nonmembers(int64_t fund_id) {
 	return fetch_many<user>(
 		prepared->named.get_fund_nonmembers.statement,
@@ -911,7 +900,6 @@ db::error db::add_user_to_fund(int64_t fund_id, int64_t user_id) {
 		}
 	);
 }
-
 db::error db::remove_user_from_fund(int64_t fund_id, int64_t user_id) {
 	return execute(
 		prepared->named.remove_user_from_fund.statement,
@@ -935,7 +923,6 @@ db::result<std::vector<fund>> db::get_funds() {
 		}
 	);
 }
-
 db::error db::save_fund(fund& fund) {
 	if (!fund.is_persisted()) {
 		error err = execute(
@@ -974,7 +961,6 @@ db::result<std::vector<account>> db::get_accounts() {
 		}
 	);
 }
-
 db::error db::save_account(account& account) {
 	if (!account.is_persisted()) {
 		error err = execute(
@@ -1006,6 +992,26 @@ db::error db::save_account(account& account) {
 
 #pragma region Lifecycle
 
+static inline db::error classify_sqlite_open_error(int rc) {
+	switch (rc) {
+		case SQLITE_FULL:
+			return db::error::disk_full;
+		case SQLITE_NOMEM:
+			return db::error::out_of_memory;
+		case SQLITE_BUSY:
+		case SQLITE_LOCKED:
+		case SQLITE_READONLY:
+			return db::error::unavailable;
+		default:
+			FUNDOS_ASSERT(false, "unhandled sqlite3 result code"); // In production fall through to corrupted
+			[[fallthrough]];
+		case SQLITE_CORRUPT:
+		case SQLITE_NOTADB:
+		case SQLITE_IOERR:
+			return db::error::corrupted;
+	}
+}
+
 std::shared_ptr<db> db::open_file(std::string path) {
 	sqlite3* connection;
 	int rc = sqlite3_open(path.c_str(), &connection);
@@ -1025,26 +1031,6 @@ std::shared_ptr<db> db::open_memory() {
 		return std::make_shared<db>(classify_sqlite_open_error(rc));
 	}
 	return std::make_shared<db>(connection, owns_connection{});
-}
-
-static inline db::error classify_sqlite_open_error(int rc) {
-	switch (rc) {
-		case SQLITE_FULL:
-			return db::error::disk_full;
-		case SQLITE_NOMEM:
-			return db::error::out_of_memory;
-		case SQLITE_BUSY:
-		case SQLITE_LOCKED:
-		case SQLITE_READONLY:
-			return db::error::unavailable;
-		default:
-			FUNDOS_ASSERT(false, "unhandled sqlite3 result code"); // In production fall through to corrupted
-			[[fallthrough]];
-		case SQLITE_CORRUPT:
-		case SQLITE_NOTADB:
-		case SQLITE_IOERR:
-			return db::error::corrupted;
-	}
 }
 
 void db::prepare() {
