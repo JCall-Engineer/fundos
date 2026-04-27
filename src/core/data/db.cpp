@@ -1,7 +1,7 @@
 #include <array>
 #include <functional>
 #include "db.hpp"
-#include "assert.hpp"
+#include "platform.hpp"
 
 namespace fundos {
 

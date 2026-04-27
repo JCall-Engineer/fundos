@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include "assert.hpp"
+#include "platform.hpp"
 #include "percentage_locale.hpp"
 
 namespace fundos {

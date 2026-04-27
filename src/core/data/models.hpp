@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include "platform.hpp"
 #include "types/currency.hpp"
 #include "types/percentage.hpp"
 

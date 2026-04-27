@@ -11,3 +11,9 @@
 		std::abort(); \
 	}} while(0)
 #endif
+
+#if defined(_MSC_VER)
+	#define FUNDOS_UNREACHABLE() __assume(false)
+#else
+	#define FUNDOS_UNREACHABLE() __builtin_unreachable()
+#endif
