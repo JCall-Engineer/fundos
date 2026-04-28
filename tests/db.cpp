@@ -623,3 +623,432 @@ TEST(DbQuery, MetaLocales) {
 		EXPECT_EQ(p_locale.symbol_position,         custom_percentage.symbol_position);
 	}
 }
+
+// Helper: count rows in a table, optionally filtered
+static int count_rows(sqlite3* connection, const char* query) {
+	int count = 0;
+	sqlite3_exec(connection, query, [](void* data, int, char** cols, char**) {
+		*static_cast<int*>(data) = std::atoi(cols[0]);
+		return 0;
+	}, &count, nullptr);
+	return count;
+}
+
+TEST(DbQuery, SaveBudget_ReadBack) {
+	auto connection = mockSchema();
+	auto file = std::make_shared<db>(connection, db::owns_connection{});
+	ASSERT_TRUE(file->is_ready());
+
+	// Create funds via save_fund
+	fund emergency_savings; emergency_savings.name = "Emergency Savings";
+	fund food;              food.name              = "Food";
+	fund investments;       investments.name       = "Investments";
+	fund flex_spending;     flex_spending.name     = "Flex Spending";
+	fund rent;              rent.name              = "Rent";
+	ASSERT_EQ(file->save_fund(emergency_savings), db::error::none);
+	ASSERT_EQ(file->save_fund(food),              db::error::none);
+	ASSERT_EQ(file->save_fund(investments),       db::error::none);
+	ASSERT_EQ(file->save_fund(flex_spending),     db::error::none);
+	ASSERT_EQ(file->save_fund(rent),              db::error::none);
+
+	// Manually build initial budget state in SQL
+	// budget: "Default", overflow -> emergency_savings
+	// phase 0: percentage
+	//   target 0: flex_spending, 2500 bp, cap 100000, no overdraw
+	//   target 1: investments,   3000 bp, no cap,     no overdraw
+	// phase 1: fixed
+	//   target 0: food, 30000, cap 50000, allow overdraw
+	//   target 1: rent, 100000, cap 250000, no overdraw
+	sqlite3_exec(connection, R"sql(
+		INSERT INTO budgets (id, name, overflow_fund) VALUES (1, 'Default', )sql"
+		// Can't embed a variable in a raw string literal, so use exec with bind below
+	, nullptr, nullptr, nullptr);
+
+	// Use parameterized inserts for the budget row since overflow_fund is a variable id
+	{
+		sqlite3_stmt* stmt = nullptr;
+		sqlite3_prepare_v2(connection,
+			"INSERT INTO budgets (id, name, overflow_fund) VALUES (1, 'Default', ?)",
+			-1, &stmt, nullptr);
+		sqlite3_bind_int64(stmt, 1, emergency_savings.id());
+		sqlite3_step(stmt);
+		sqlite3_finalize(stmt);
+	}
+	sqlite3_exec(connection, R"sql(
+		INSERT INTO budget_phases (id, budget_id, position, kind) VALUES (1, 1, 0, 'percentage');
+		INSERT INTO budget_phases (id, budget_id, position, kind) VALUES (2, 1, 1, 'fixed');
+	)sql", nullptr, nullptr, nullptr);
+	{
+		sqlite3_stmt* stmt = nullptr;
+		sqlite3_prepare_v2(connection, R"sql(
+			INSERT INTO phase_targets (id, phase_id, position, fund_id, amount, cap, allow_overdraw)
+			VALUES
+				(1, 1, 0, ?, 2500,   100000, 0),
+				(2, 1, 1, ?, 3000,   NULL,   0),
+				(3, 2, 0, ?, 30000,  50000,  1),
+				(4, 2, 1, ?, 100000, 250000, 0)
+		)sql", -1, &stmt, nullptr);
+		sqlite3_bind_int64(stmt, 1, flex_spending.id());
+		sqlite3_bind_int64(stmt, 2, investments.id());
+		sqlite3_bind_int64(stmt, 3, food.id());
+		sqlite3_bind_int64(stmt, 4, rent.id());
+		sqlite3_step(stmt);
+		sqlite3_finalize(stmt);
+	}
+
+	// Verify get_budgets round-trip before any save
+	{
+		auto result = file->get_budgets();
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 1);
+
+		auto& budget = (*result.val)[0];
+		EXPECT_EQ(budget.id(),           1);
+		EXPECT_EQ(budget.name,           "Default");
+		EXPECT_EQ(budget.overflow_fund,  emergency_savings.id());
+		ASSERT_EQ(budget.phases.size(),  2);
+
+		auto phase_it = budget.phases.begin();
+
+		// phase 0: percentage
+		{
+			auto& phase_variant = *phase_it++;
+			auto* phase = std::get_if<budget_phase<percentage_target>>(&phase_variant);
+			ASSERT_NE(phase, nullptr);
+			EXPECT_EQ(phase->id(), 1);
+			ASSERT_EQ(phase->targets.size(), 2);
+
+			auto target_it = phase->targets.begin();
+			{
+				auto& target = *target_it++;
+				EXPECT_EQ(target.id(),           1);
+				EXPECT_EQ(target.fund_id,        flex_spending.id());
+				EXPECT_EQ(target.amount.basis_points, 2500);
+				ASSERT_TRUE(target.cap.has_value());
+				EXPECT_EQ(target.cap->minor_units, 100000);
+				EXPECT_EQ(target.allow_overdraw, false);
+			}
+			{
+				auto& target = *target_it++;
+				EXPECT_EQ(target.id(),           2);
+				EXPECT_EQ(target.fund_id,        investments.id());
+				EXPECT_EQ(target.amount.basis_points, 3000);
+				EXPECT_FALSE(target.cap.has_value());
+				EXPECT_EQ(target.allow_overdraw, false);
+			}
+		}
+
+		// phase 1: fixed
+		{
+			auto& phase_variant = *phase_it++;
+			auto* phase = std::get_if<budget_phase<fixed_target>>(&phase_variant);
+			ASSERT_NE(phase, nullptr);
+			EXPECT_EQ(phase->id(), 2);
+			ASSERT_EQ(phase->targets.size(), 2);
+
+			auto target_it = phase->targets.begin();
+			{
+				auto& target = *target_it++;
+				EXPECT_EQ(target.id(),              3);
+				EXPECT_EQ(target.fund_id,           food.id());
+				EXPECT_EQ(target.amount.minor_units, 30000);
+				ASSERT_TRUE(target.cap.has_value());
+				EXPECT_EQ(target.cap->minor_units,  50000);
+				EXPECT_EQ(target.allow_overdraw,    true);
+			}
+			{
+				auto& target = *target_it++;
+				EXPECT_EQ(target.id(),              4);
+				EXPECT_EQ(target.fund_id,           rent.id());
+				EXPECT_EQ(target.amount.minor_units, 100000);
+				ASSERT_TRUE(target.cap.has_value());
+				EXPECT_EQ(target.cap->minor_units,  250000);
+				EXPECT_EQ(target.allow_overdraw,    false);
+			}
+		}
+	}
+}
+
+TEST(DbQuery, SaveBudget_PartialUpdate) {
+	auto connection = mockSchema();
+	auto file = std::make_shared<db>(connection, db::owns_connection{});
+	ASSERT_TRUE(file->is_ready());
+
+	fund emergency_savings; emergency_savings.name = "Emergency Savings";
+	fund food;              food.name              = "Food";
+	fund investments;       investments.name       = "Investments";
+	fund flex_spending;     flex_spending.name     = "Flex Spending";
+	fund rent;              rent.name              = "Rent";
+	ASSERT_EQ(file->save_fund(emergency_savings), db::error::none);
+	ASSERT_EQ(file->save_fund(food),              db::error::none);
+	ASSERT_EQ(file->save_fund(investments),       db::error::none);
+	ASSERT_EQ(file->save_fund(flex_spending),     db::error::none);
+	ASSERT_EQ(file->save_fund(rent),              db::error::none);
+
+	{
+		sqlite3_stmt* stmt = nullptr;
+		sqlite3_prepare_v2(connection,
+			"INSERT INTO budgets (id, name, overflow_fund) VALUES (1, 'Default', ?)",
+			-1, &stmt, nullptr);
+		sqlite3_bind_int64(stmt, 1, emergency_savings.id());
+		sqlite3_step(stmt);
+		sqlite3_finalize(stmt);
+	}
+	sqlite3_exec(connection, R"sql(
+		INSERT INTO budget_phases (id, budget_id, position, kind) VALUES (1, 1, 0, 'percentage');
+		INSERT INTO budget_phases (id, budget_id, position, kind) VALUES (2, 1, 1, 'fixed');
+	)sql", nullptr, nullptr, nullptr);
+	{
+		sqlite3_stmt* stmt = nullptr;
+		sqlite3_prepare_v2(connection, R"sql(
+			INSERT INTO phase_targets (id, phase_id, position, fund_id, amount, cap, allow_overdraw)
+			VALUES
+				(1, 1, 0, ?, 2500,   100000, 0),
+				(2, 1, 1, ?, 3000,   NULL,   0),
+				(3, 2, 0, ?, 30000,  50000,  1),
+				(4, 2, 1, ?, 100000, 250000, 0)
+		)sql", -1, &stmt, nullptr);
+		sqlite3_bind_int64(stmt, 1, flex_spending.id());
+		sqlite3_bind_int64(stmt, 2, investments.id());
+		sqlite3_bind_int64(stmt, 3, food.id());
+		sqlite3_bind_int64(stmt, 4, rent.id());
+		sqlite3_step(stmt);
+		sqlite3_finalize(stmt);
+	}
+
+	auto get_result = file->get_budgets();
+	ASSERT_TRUE(get_result.ok());
+	ASSERT_EQ(get_result.val->size(), 1);
+	budget default_budget = (*get_result.val)[0];
+
+	int64_t original_budget_id  = default_budget.id();
+	int64_t original_pct_phase_id = 0;
+	int64_t original_flex_target_id = 0;
+
+	// Drop the fixed phase entirely, replace with fresh one at same position
+	{
+		auto& phase_variant = *default_budget.phases.begin();
+		auto* pct_phase = std::get_if<budget_phase<percentage_target>>(&phase_variant);
+		ASSERT_NE(pct_phase, nullptr);
+		original_pct_phase_id = pct_phase->id();
+
+		// Drop investments target (position 1), keep flex (position 0)
+		original_flex_target_id = pct_phase->targets.begin()->id();
+		pct_phase->targets.erase(std::next(pct_phase->targets.begin()));
+
+		percentage_target new_investments;
+		new_investments.fund_id        = investments.id();
+		new_investments.amount         = percentage{3500};
+		new_investments.cap            = std::nullopt;
+		new_investments.allow_overdraw = false;
+		pct_phase->targets.push_back(new_investments);
+	}
+
+	default_budget.phases.erase(std::next(default_budget.phases.begin())); // drop fixed phase
+
+	budget_phase<fixed_target> new_fixed_phase;
+
+	fixed_target new_food_target;
+	new_food_target.fund_id        = food.id();
+	new_food_target.amount         = currency{35000};
+	new_food_target.cap            = currency{55000};
+	new_food_target.allow_overdraw = true;
+	new_fixed_phase.targets.push_back(new_food_target);
+
+	fixed_target new_rent_target;
+	new_rent_target.fund_id        = rent.id();
+	new_rent_target.amount         = currency{110000};
+	new_rent_target.cap            = currency{260000};
+	new_rent_target.allow_overdraw = false;
+	new_fixed_phase.targets.push_back(new_rent_target);
+
+	default_budget.phases.push_back(new_fixed_phase);
+
+	ASSERT_EQ(file->save_budget(default_budget), db::error::none);
+
+	// Verify id stability for surviving rows
+	EXPECT_EQ(default_budget.id(), original_budget_id);
+	{
+		auto phase_it = default_budget.phases.begin();
+		auto* pct_phase = std::get_if<budget_phase<percentage_target>>(&*phase_it++);
+		ASSERT_NE(pct_phase, nullptr);
+		EXPECT_EQ(pct_phase->id(), original_pct_phase_id);
+		EXPECT_EQ(pct_phase->targets.begin()->id(), original_flex_target_id);
+
+		// New investments target: fresh non-zero id, not the old one
+		auto& new_investments = *std::next(pct_phase->targets.begin());
+		EXPECT_NE(new_investments.id(), 0);
+		EXPECT_NE(new_investments.id(), 2);
+
+		auto* fixed_phase = std::get_if<budget_phase<fixed_target>>(&*phase_it++);
+		ASSERT_NE(fixed_phase, nullptr);
+		EXPECT_NE(fixed_phase->id(), 0);
+		EXPECT_NE(fixed_phase->id(), 2);
+
+		for (auto& target : fixed_phase->targets) {
+			EXPECT_NE(target.id(), 0);
+		}
+	}
+
+	// Direct SQL: old rows gone, counts correct
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budgets"),       1);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budget_phases"), 2);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets"), 4);
+
+	EXPECT_EQ(count_rows(connection,
+		"SELECT COUNT(*) FROM budget_phases WHERE id = 1"), 1); // pct phase survived
+	EXPECT_EQ(count_rows(connection,
+		"SELECT COUNT(*) FROM phase_targets WHERE id = 1"), 1); // flex target survived
+	EXPECT_EQ(count_rows(connection,
+		"SELECT COUNT(*) FROM budget_phases WHERE id = 2"), 0); // old fixed phase gone
+	EXPECT_EQ(count_rows(connection,
+		"SELECT COUNT(*) FROM phase_targets WHERE id IN (2, 3, 4)"), 0); // old targets gone
+
+	EXPECT_EQ(count_rows(connection,
+		"SELECT COUNT(*) FROM budget_phases WHERE position = 0 AND kind = 'percentage'"), 1);
+	EXPECT_EQ(count_rows(connection,
+		"SELECT COUNT(*) FROM budget_phases WHERE position = 1 AND kind = 'fixed'"), 1);
+
+	// get_budgets round-trip
+	{
+		auto result = file->get_budgets();
+		ASSERT_TRUE(result.ok());
+		ASSERT_EQ(result.val->size(), 1);
+
+		auto& budget = (*result.val)[0];
+		EXPECT_EQ(budget.id(),          original_budget_id);
+		EXPECT_EQ(budget.name,          "Default");
+		EXPECT_EQ(budget.overflow_fund, emergency_savings.id());
+		ASSERT_EQ(budget.phases.size(), 2);
+
+		auto phase_it = budget.phases.begin();
+		{
+			auto* phase = std::get_if<budget_phase<percentage_target>>(&*phase_it++);
+			ASSERT_NE(phase, nullptr);
+			EXPECT_EQ(phase->id(), original_pct_phase_id);
+			ASSERT_EQ(phase->targets.size(), 2);
+
+			auto target_it = phase->targets.begin();
+			EXPECT_EQ(target_it->id(),                   original_flex_target_id);
+			EXPECT_EQ(target_it->fund_id,                flex_spending.id());
+			EXPECT_EQ(target_it->amount.basis_points,    2500);
+			ASSERT_TRUE(target_it->cap.has_value());
+			EXPECT_EQ(target_it->cap->minor_units,       100000);
+			EXPECT_EQ(target_it->allow_overdraw,         false);
+			++target_it;
+			EXPECT_EQ(target_it->fund_id,                investments.id());
+			EXPECT_EQ(target_it->amount.basis_points,    3500);
+			EXPECT_FALSE(target_it->cap.has_value());
+			EXPECT_EQ(target_it->allow_overdraw,         false);
+		}
+		{
+			auto* phase = std::get_if<budget_phase<fixed_target>>(&*phase_it++);
+			ASSERT_NE(phase, nullptr);
+			ASSERT_EQ(phase->targets.size(), 2);
+
+			auto target_it = phase->targets.begin();
+			EXPECT_EQ(target_it->fund_id,           food.id());
+			EXPECT_EQ(target_it->amount.minor_units, 35000);
+			ASSERT_TRUE(target_it->cap.has_value());
+			EXPECT_EQ(target_it->cap->minor_units,  55000);
+			EXPECT_EQ(target_it->allow_overdraw,    true);
+			++target_it;
+			EXPECT_EQ(target_it->fund_id,            rent.id());
+			EXPECT_EQ(target_it->amount.minor_units, 110000);
+			ASSERT_TRUE(target_it->cap.has_value());
+			EXPECT_EQ(target_it->cap->minor_units,   260000);
+			EXPECT_EQ(target_it->allow_overdraw,     false);
+		}
+	}
+}
+
+TEST(DbQuery, SaveBudget_RollbackOnError) {
+	auto connection = mockSchema();
+	auto file = std::make_shared<db>(connection, db::owns_connection{});
+	ASSERT_TRUE(file->is_ready());
+
+	fund emergency_savings; emergency_savings.name = "Emergency Savings";
+	fund flex_spending;     flex_spending.name     = "Flex Spending";
+	fund investments;       investments.name       = "Investments";
+	ASSERT_EQ(file->save_fund(emergency_savings), db::error::none);
+	ASSERT_EQ(file->save_fund(flex_spending),     db::error::none);
+	ASSERT_EQ(file->save_fund(investments),       db::error::none);
+
+	// Build a fresh budget with one percentage phase, three targets,
+	// last target references a nonexistent fund to trigger FK violation
+	budget bad_budget;
+	bad_budget.name          = "Bad Budget";
+	bad_budget.overflow_fund = emergency_savings.id();
+
+	budget_phase<percentage_target> phase;
+
+	percentage_target flex_target;
+	flex_target.fund_id        = flex_spending.id();
+	flex_target.amount         = percentage{2500};
+	flex_target.cap            = currency{100000};
+	flex_target.allow_overdraw = false;
+	phase.targets.push_back(flex_target);
+
+	percentage_target investments_target;
+	investments_target.fund_id        = investments.id();
+	investments_target.amount         = percentage{3000};
+	investments_target.cap            = std::nullopt;
+	investments_target.allow_overdraw = false;
+	phase.targets.push_back(investments_target);
+
+	percentage_target bad_target;
+	bad_target.fund_id        = 99999; // nonexistent fund
+	bad_target.amount         = percentage{500};
+	bad_target.cap            = std::nullopt;
+	bad_target.allow_overdraw = false;
+	phase.targets.push_back(bad_target);
+
+	bad_budget.phases.push_back(phase);
+
+	// Capture pre-save ids (all zero) for rollback verification
+	auto result = file->save_budget(bad_budget);
+	EXPECT_NE(result, db::error::none);
+
+	// All ids must be rolled back to zero
+	EXPECT_EQ(bad_budget.id(), 0);
+	{
+		auto& phase_variant = *bad_budget.phases.begin();
+		auto* saved_phase = std::get_if<budget_phase<percentage_target>>(&phase_variant);
+		ASSERT_NE(saved_phase, nullptr);
+		EXPECT_EQ(saved_phase->id(), 0);
+
+		auto target_it = saved_phase->targets.begin();
+		EXPECT_EQ(target_it->id(), 0); ++target_it;
+		EXPECT_EQ(target_it->id(), 0); ++target_it;
+		EXPECT_EQ(target_it->id(), 0);
+	}
+
+	// No partial rows in any table
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budgets"),       0);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budget_phases"), 0);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets"), 0);
+
+	// Fix the bad target and verify save succeeds
+	{
+		auto& phase_variant = *bad_budget.phases.begin();
+		auto* fixed_phase = std::get_if<budget_phase<percentage_target>>(&phase_variant);
+		fixed_phase->targets.back().fund_id = investments.id();
+	}
+
+	ASSERT_EQ(file->save_budget(bad_budget), db::error::none);
+	EXPECT_NE(bad_budget.id(), 0);
+	{
+		auto& phase_variant = *bad_budget.phases.begin();
+		auto* saved_phase = std::get_if<budget_phase<percentage_target>>(&phase_variant);
+		ASSERT_NE(saved_phase, nullptr);
+		EXPECT_NE(saved_phase->id(), 0);
+
+		for (auto& target : saved_phase->targets) {
+			EXPECT_NE(target.id(), 0);
+		}
+	}
+
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budgets"),       1);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budget_phases"), 1);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets"), 3);
+}

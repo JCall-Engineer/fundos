@@ -224,7 +224,7 @@ struct statements {
 	)sql" };
 
 	statement_slot get_budgets { .sql = R"sql(
-		SELECT id, name, overflow_fund FROM budgets
+		SELECT id, name, overflow_fund FROM budgets ORDER BY name
 	)sql" };
 	statement_slot insert_budget { .sql = R"sql(
 		INSERT INTO budgets (name, overflow_fund)
@@ -240,7 +240,7 @@ struct statements {
 	)sql" };
 
 	statement_slot get_phases { .sql = R"sql(
-		SELECT id, position, kind
+		SELECT id, kind
 		FROM budget_phases
 		WHERE budget_id = ?
 		ORDER BY position
@@ -252,11 +252,11 @@ struct statements {
 	statement_slot update_phase { .sql = R"sql(
 		UPDATE budget_phases
 		SET position = ?
-		WHERE id = ?
+		WHERE id = ? AND budget_id = ?
 	)sql" };
 
 	statement_slot get_targets { .sql = R"sql(
-		SELECT id, position, fund_id, amount, cap, allow_overdraw
+		SELECT id, fund_id, amount, cap, allow_overdraw
 		FROM phase_targets
 		WHERE phase_id = ?
 		ORDER BY position
@@ -268,7 +268,7 @@ struct statements {
 	statement_slot update_target { .sql = R"sql(
 		UPDATE phase_targets
 		SET position = ?, fund_id = ?, amount = ?, cap = ?, allow_overdraw = ?
-		WHERE id = ?
+		WHERE id = ? AND phase_id = ?
 	)sql" };
 
 	statement_slot filter_transactions { .sql = R"sql(
@@ -325,6 +325,29 @@ static inline std::optional<std::string> extract_optional_text(sqlite3_stmt* stm
 static inline void bind_optional_text(sqlite3_stmt* stmt, int index, const std::optional<std::string>& value) {
 	if (value) {
 		sqlite3_bind_text(stmt, index, value->c_str(), -1, SQLITE_STATIC);
+	} else {
+		sqlite3_bind_null(stmt, index);
+	}
+}
+
+template<typename T>
+static inline std::optional<int64_t> as_optional_int64(const std::optional<T>& value) {
+	if (!value) { return std::nullopt; }
+	return static_cast<int64_t>(*value);
+}
+template<typename T>
+static inline std::optional<T> as_optional(const std::optional<int64_t>& value) {
+	if (!value) { return std::nullopt; }
+	return T{*value};
+}
+
+static inline std::optional<int64_t> extract_optional_int64(sqlite3_stmt* stmt, int index) {
+	if (sqlite3_column_type(stmt, index) == SQLITE_NULL) { return std::nullopt; }
+	return sqlite3_column_int64(stmt, index);
+}
+static inline void bind_optional_int64(sqlite3_stmt* stmt, int index, const std::optional<int64_t>& value) {
+	if (value) {
+		sqlite3_bind_int64(stmt, index, *value);
 	} else {
 		sqlite3_bind_null(stmt, index);
 	}
@@ -990,8 +1013,82 @@ db::error db::save_account(account& account) {
 	}
 }
 
+static const char* fixed_phase_identifier = "fixed";
+static const char* percentage_phase_identifier = "percentage";
 db::result<std::vector<budget>> db::get_budgets() {
+	static auto ERROR = [](error err) { return result<std::vector<budget>> { .err = err }; };
 
+	auto budget_result = fetch_many<budget>(
+		prepared->named.get_budgets.statement,
+		[](sqlite3_stmt* stmt) {},
+		[](sqlite3_stmt* stmt) -> budget {
+			budget out;
+			out.id_           = sqlite3_column_int64(stmt, 0);
+			out.name          = extract_text        (stmt, 1);
+			out.overflow_fund = sqlite3_column_int64(stmt, 2);
+			return out;
+		}
+	);
+	if (budget_result.err != error::none) { return ERROR(budget_result.err); }
+	
+	std::vector<budget> &out = budget_result.val.value(); // fetch_many guarantees a value if no error
+	for (auto& budget : out) {
+		auto phase_result = fetch_many<any_budget_phase>(
+			prepared->named.get_phases.statement,
+			[&budget](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64(stmt, 1, budget.id_);
+			},
+			[](sqlite3_stmt* stmt) -> any_budget_phase {
+				std::string kind = extract_text(stmt, 1);
+				if (kind == fixed_phase_identifier) {
+					budget_phase<fixed_target> phase;
+					phase.id_ = sqlite3_column_int64(stmt, 0);
+					return phase;
+				}
+				FUNDOS_ASSERT(kind == percentage_phase_identifier, "unexpected phase kind");
+				budget_phase<percentage_target> phase;
+				phase.id_ = sqlite3_column_int64(stmt, 0);
+				return phase;
+			}
+		);
+		if (phase_result.err != error::none) { return ERROR(phase_result.err); }
+		error phase_error = error::none;
+		for (auto& phase : phase_result.val.value()) {
+			std::visit([&](auto& typed_phase) {
+				using TargetType = typename std::decay_t<decltype(typed_phase.targets)>::value_type;
+				auto target_result = fetch_many<TargetType>(
+					prepared->named.get_targets.statement,
+					[&typed_phase](sqlite3_stmt* stmt) {
+						sqlite3_bind_int64(stmt, 1, typed_phase.id_);
+					},
+					[](sqlite3_stmt* stmt) -> TargetType {
+						TargetType target;
+						target.id_     = sqlite3_column_int64(stmt, 0);
+						target.fund_id = sqlite3_column_int64(stmt, 1);
+						if constexpr (std::is_same_v<TargetType, fixed_target>) {
+							target.amount = currency{sqlite3_column_int64(stmt, 2)};
+						} else {
+							target.amount = percentage{(int32_t)sqlite3_column_int(stmt, 2)};
+						}
+						target.cap = as_optional<currency>(extract_optional_int64(stmt, 3));
+						target.allow_overdraw = sqlite3_column_int(stmt, 4);
+						return target;
+					}
+				);
+				if (target_result.err != error::none) {
+					phase_error = target_result.err;
+					return;
+				}
+				typed_phase.targets = std::list<TargetType>(
+					std::make_move_iterator(target_result.val.value().begin()),
+					std::make_move_iterator(target_result.val.value().end())
+				);
+				budget.phases.push_back(std::move(typed_phase));
+			}, phase);
+			if (phase_error != db::error::none) { return ERROR(phase_error); }
+		}
+	}
+	return result<std::vector<budget>>{ .val = std::move(out) };
 }
 db::error db::save_budget(budget& budget) {
 	return transaction([&](std::vector<std::function<void()>>& rollback) -> error {
@@ -1097,8 +1194,13 @@ db::error db::save_budget(budget& budget) {
 				result = execute(prepared->named.update_phase.statement, [&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int(stmt, 1, pos);
 					sqlite3_bind_int64(stmt, 2, phase_managed->id_);
+					sqlite3_bind_int64(stmt, 3, budget.id_);
 				});
 				if (result != error::none) { return true; }
+				if (sqlite3_changes(connection) != 1) {
+					result = error::internal;
+					return true;
+				}
 			} else {
 				result = execute(prepared->named.insert_phase.statement, [&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int64(stmt, 1, budget.id_);
@@ -1127,30 +1229,27 @@ db::error db::save_budget(budget& budget) {
 		auto upsert_target = [&](int pos, auto* target, int64_t phase_id, int64_t amount) -> bool {
 			if (target->is_persisted()) {
 				result = execute(prepared->named.update_target.statement, [&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int  (stmt, 1, pos);
-					sqlite3_bind_int64(stmt, 2, target->fund_id);
-					sqlite3_bind_int64(stmt, 3, amount);
-					if (target->cap.has_value()) {
-					sqlite3_bind_int64(stmt, 4, target->cap.value().minor_units);
-					} else {
-					sqlite3_bind_null (stmt, 4);
-					}
-					sqlite3_bind_int  (stmt, 5, target->allow_overdraw);
-					sqlite3_bind_int64(stmt, 6, target->id_);
+					sqlite3_bind_int   (stmt, 1, pos);
+					sqlite3_bind_int64 (stmt, 2, target->fund_id);
+					sqlite3_bind_int64 (stmt, 3, amount);
+					bind_optional_int64(stmt, 4, as_optional_int64(target->cap));
+					sqlite3_bind_int   (stmt, 5, target->allow_overdraw);
+					sqlite3_bind_int64 (stmt, 6, target->id_);
+					sqlite3_bind_int64 (stmt, 7, phase_id);
 				});
 				if (result != error::none) { return true; }
+				if (sqlite3_changes(connection) != 1) {
+					result = error::internal;
+					return true;
+				}
 			} else {
 				result = execute(prepared->named.insert_target.statement, [&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int64(stmt, 1, phase_id);
-					sqlite3_bind_int  (stmt, 2, pos);
-					sqlite3_bind_int64(stmt, 3, target->fund_id);
-					sqlite3_bind_int64(stmt, 4, amount);
-					if (target->cap.has_value()) {
-					sqlite3_bind_int64(stmt, 5, target->cap.value().minor_units);
-					} else {
-					sqlite3_bind_null (stmt, 5);
-					}
-					sqlite3_bind_int  (stmt, 6, target->allow_overdraw);
+					sqlite3_bind_int64 (stmt, 1, phase_id);
+					sqlite3_bind_int   (stmt, 2, pos);
+					sqlite3_bind_int64 (stmt, 3, target->fund_id);
+					sqlite3_bind_int64 (stmt, 4, amount);
+					bind_optional_int64(stmt, 5, as_optional_int64(target->cap));
+					sqlite3_bind_int   (stmt, 6, target->allow_overdraw);
 				});
 				if (result != error::none) { return true; }
 				target->id_ = sqlite3_last_insert_rowid(connection);
@@ -1162,7 +1261,7 @@ db::error db::save_budget(budget& budget) {
 		// We are "finding" errors as we save phases
 		auto phase_err = budget.find(
 			[&](int pos, budget_phase<fixed_target>* phase) -> bool {
-				if (upsert_phase(pos, phase, "fixed")) { return true; }
+				if (upsert_phase(pos, phase, fixed_phase_identifier)) { return true; }
 
 				result = delete_orphaned_targets(phase->id_, collect_target_ids(phase));
 				if (result != error::none) { return true; }
@@ -1176,7 +1275,7 @@ db::error db::save_budget(budget& budget) {
 				return false;
 			},
 			[&](int pos, budget_phase<percentage_target>* phase) -> bool {
-				if (upsert_phase(pos, phase, "percentage")) { return true; }
+				if (upsert_phase(pos, phase, percentage_phase_identifier)) { return true; }
 
 				result = delete_orphaned_targets(phase->id_, collect_target_ids(phase));
 				if (result != error::none) { return true; }
