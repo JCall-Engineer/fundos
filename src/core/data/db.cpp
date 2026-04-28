@@ -71,6 +71,7 @@ CREATE INDEX idx_budget_phases_budget_id ON budget_phases(budget_id);
 CREATE TABLE phase_targets (
 	id                INTEGER PRIMARY KEY,
 	phase_id          INTEGER NOT NULL REFERENCES budget_phases(id) ON DELETE CASCADE,
+	position          INTEGER NOT NULL,
 	fund_id           INTEGER NOT NULL REFERENCES funds(id),
 	amount            INTEGER NOT NULL,
 	cap               INTEGER DEFAULT NULL,
@@ -222,7 +223,7 @@ struct statements {
 	)sql" };
 
 	statement_slot get_budgets { .sql = R"sql(
-		SELECT * FROM budgets
+		SELECT id, name, overflow_fund FROM budgets
 	)sql" };
 	statement_slot insert_budget { .sql = R"sql(
 		INSERT INTO budgets (name, overflow_fund)
@@ -238,7 +239,7 @@ struct statements {
 	)sql" };
 
 	statement_slot get_phases { .sql = R"sql(
-		SELECT *
+		SELECT id, position, kind
 		FROM budget_phases
 		WHERE budget_id = ?
 		ORDER BY position
@@ -249,29 +250,24 @@ struct statements {
 	)sql" };
 	statement_slot update_phase { .sql = R"sql(
 		UPDATE budget_phases
-		SET position = ?, kind = ?
+		SET position = ?
 		WHERE id = ?
-	)sql" };
-	statement_slot delete_phase { .sql = R"sql(
-		DELETE FROM budget_phases WHERE id = ?
 	)sql" };
 
 	statement_slot get_targets { .sql = R"sql(
-		SELECT *
+		SELECT id, position, fund_id, amount, cap, allow_overdraw
 		FROM phase_targets
 		WHERE phase_id = ?
+		ORDER BY position
 	)sql" };
 	statement_slot insert_target { .sql = R"sql(
-		INSERT INTO phase_targets (phase_id, fund_id, amount, cap, allow_overdraw)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO phase_targets (phase_id, position, fund_id, amount, cap, allow_overdraw)
+		VALUES (?, ?, ?, ?, ?, ?)
 	)sql" };
 	statement_slot update_target { .sql = R"sql(
 		UPDATE phase_targets
-		SET fund_id = ?, amount = ?, cap = ?, allow_overdraw = ?
+		SET position = ?, fund_id = ?, amount = ?, cap = ?, allow_overdraw = ?
 		WHERE id = ?
-	)sql" };
-	statement_slot delete_target { .sql = R"sql(
-		DELETE FROM phase_targets WHERE id = ?
 	)sql" };
 
 	statement_slot filter_transactions { .sql = R"sql(
@@ -413,14 +409,19 @@ db::result<std::vector<T>> db::fetch_many(sqlite3_stmt* stmt, executor bind, ext
 // error::corrupted being returned to skip COMMIT/ROLLBACK on a closed connection.     |
 // Do not silently swallow errors from execute/fetch_one/fetch_many inside work().     |
 //-------------------------------------------------------------------------------------+
-db::error db::transaction(std::function<error()> work) {
+db::error db::transaction(std::function<error(std::vector<std::function<void()>>&)> work) {
 	if (!is_ready()) { return error::not_ready; }
 	int rc = sqlite3_exec(connection, "BEGIN", nullptr, nullptr, nullptr);
 	if (rc != SQLITE_OK) {
 		get_sqlite3_error();
 		return classify_sqlite_runtime_error(rc);
 	}
-	error result = work();
+	std::vector<std::function<void()>> rollback;
+	error result = work(rollback);
+	if (result != error::none) {
+		// undo in reverse order for correctness (debatable if necessary)
+		for (auto it = rollback.rbegin(); it != rollback.rend(); ++it) { (*it)(); }
+	}
 	switch (result) {
 		case error::none:
 			rc = sqlite3_exec(connection, "COMMIT", nullptr, nullptr, nullptr);
@@ -604,7 +605,7 @@ db::error db::set_currency_locale_preset(const currency_locale::slot& slot) {
 	return set_meta(locale_meta.currency_locale_key, slot.identifier);
 }
 db::error db::set_currency_locale(const currency_locale::info& locale) {
-	return transaction([&]() -> error {
+	return transaction([&](std::vector<std::function<void()>>& rollback) -> error {
 		error result = set_meta(locale_meta.currency_locale_key, locale_meta.custom_sentinel_val);
 		if (result != error::none) { return result; }
 
@@ -688,7 +689,7 @@ db::error db::set_percentage_locale_preset(const percentage_locale::slot& slot) 
 	return set_meta(locale_meta.percentage_locale_key, slot.identifier);
 }
 db::error db::set_percentage_locale(const percentage_locale::info& locale) {
-	return transaction([&]() -> error {
+	return transaction([&](std::vector<std::function<void()>>& rollback) -> error {
 		error result = set_meta(locale_meta.percentage_locale_key, locale_meta.custom_sentinel_val);
 		if (result != error::none) { return result; }
 
@@ -986,6 +987,212 @@ db::error db::save_account(account& account) {
 			}
 		);
 	}
+}
+
+db::result<std::vector<budget>> db::get_budgets() {
+
+}
+db::error db::save_budget(budget& budget) {
+	return transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+		error result;
+
+		// Update budget
+		if (!budget.is_persisted()) {
+			result = execute(
+				prepared->named.insert_budget.statement,
+				[&](sqlite3_stmt* stmt) {
+					bind_text(stmt, 1, budget.name);
+					sqlite3_bind_int64(stmt, 2, budget.overflow_fund);
+				}
+			);
+			if (result != error::none) { return result; }
+			budget.id_= sqlite3_last_insert_rowid(connection);
+			rollback.push_back([&budget]() { budget.id_ = 0; });
+		} else {
+			result = execute(
+				prepared->named.update_budget.statement,
+				[&](sqlite3_stmt* stmt) {
+					bind_text(stmt, 1, budget.name);
+					sqlite3_bind_int64(stmt, 2, budget.overflow_fund);
+					sqlite3_bind_int64(stmt, 3, budget.id_);
+				}
+			);
+			if (result != error::none) { return result; }
+		}
+
+		// Delete phases not found in budget anymore
+		{
+			std::vector<int64_t> preserve_ids;
+			budget.each([&preserve_ids](int pos, any_budget_phase* phase) -> bool {
+				std::visit([&](auto& typed_phase) {
+					if (typed_phase.is_persisted()) {
+						preserve_ids.push_back(typed_phase.id_);
+					}
+				}, *phase);
+				return false;
+			});
+
+			std::string delete_phases_sql = "DELETE FROM budget_phases WHERE budget_id = ?";
+			if (!preserve_ids.empty()) {
+				delete_phases_sql += " AND id NOT IN(";
+				for (size_t i = 0; i < preserve_ids.size(); ++i) {
+					delete_phases_sql += i == 0 ? "?" : ", ?";
+				}
+				delete_phases_sql += ")";
+			}
+
+			sqlite3_stmt* delete_phases_stmt = nullptr;
+			int rc = sqlite3_prepare_v2(
+				connection,
+				delete_phases_sql.c_str(),
+				-1,
+				&delete_phases_stmt,
+				nullptr
+			);
+			if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
+			result = execute(delete_phases_stmt, [&](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64(stmt, 1, budget.id_);
+				for (size_t i = 0; i < preserve_ids.size(); ++i) {
+					sqlite3_bind_int64(stmt, i + 2, preserve_ids[i]);
+				}
+			});
+			sqlite3_finalize(delete_phases_stmt);
+			if (result != error::none) { return result; }
+		}
+
+		// Deletes targets not found in a phase anymore
+		auto delete_orphaned_targets = [&](int64_t phase_id, const std::vector<int64_t>& preserve_ids) -> error {
+			std::string sql = "DELETE FROM phase_targets WHERE phase_id = ?";
+			if (!preserve_ids.empty()) {
+				sql += " AND id NOT IN(";
+				for (size_t i = 0; i < preserve_ids.size(); ++i) {
+					sql += i == 0 ? "?" : ", ?";
+				}
+				sql += ")";
+			}
+
+			sqlite3_stmt* delete_targets_stmt = nullptr;
+			int rc = sqlite3_prepare_v2(
+				connection,
+				sql.c_str(),
+				-1,
+				&delete_targets_stmt,
+				nullptr
+			);
+			if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
+			error result = execute(delete_targets_stmt, [&](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64(stmt, 1, phase_id);
+				for (size_t i = 0; i < preserve_ids.size(); ++i) {
+					sqlite3_bind_int64(stmt, i + 2, preserve_ids[i]);
+				}
+			});
+			sqlite3_finalize(delete_targets_stmt);
+			return result;
+		};
+
+		// Return value is for the budget::find api, return true on error
+		auto upsert_phase = [&](int pos, db_managed* phase_managed, const char* kind) -> bool {
+			if (phase_managed->is_persisted()) {
+				result = execute(prepared->named.update_phase.statement, [&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int(stmt, 1, pos);
+					sqlite3_bind_int64(stmt, 2, phase_managed->id_);
+				});
+				if (result != error::none) { return true; }
+			} else {
+				result = execute(prepared->named.insert_phase.statement, [&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64(stmt, 1, budget.id_);
+					sqlite3_bind_int  (stmt, 2, pos);
+					bind_text         (stmt, 3, kind);
+				});
+				if (result != error::none) { return true; }
+				phase_managed->id_ = sqlite3_last_insert_rowid(connection);
+				rollback.push_back([phase_managed]() { phase_managed->id_ = 0; });
+			}
+			return false;
+		};
+
+		// TIL: since c++14 lambdas with auto parameters are templated functions
+		static auto collect_target_ids = [](auto* phase) -> std::vector<int64_t> {
+			std::vector<int64_t> preserve_ids;
+			phase->each([&preserve_ids](int pos, auto* target) {
+				if (target->is_persisted()) {
+					preserve_ids.push_back(target->id_);
+				}
+			});
+			return preserve_ids;
+		};
+
+		// Since auto* target makes this templated we can access common properties
+		auto upsert_target = [&](int pos, auto* target, int64_t phase_id, int64_t amount) -> bool {
+			if (target->is_persisted()) {
+				result = execute(prepared->named.update_target.statement, [&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int  (stmt, 1, pos);
+					sqlite3_bind_int64(stmt, 2, target->fund_id);
+					sqlite3_bind_int64(stmt, 3, amount);
+					if (target->cap.has_value()) {
+						sqlite3_bind_int64(stmt, 4, target->cap.value().minor_units);
+					} else {
+						sqlite3_bind_null (stmt, 4);
+					}
+					sqlite3_bind_int  (stmt, 5, target->allow_overdraw);
+					sqlite3_bind_int64(stmt, 6, target->id_);
+				});
+				if (result != error::none) { return true; }
+			} else {
+				result = execute(prepared->named.insert_target.statement, [&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64(stmt, 1, phase_id);
+					sqlite3_bind_int  (stmt, 2, pos);
+					sqlite3_bind_int64(stmt, 3, target->fund_id);
+					sqlite3_bind_int64(stmt, 4, amount);
+					if (target->cap.has_value()) {
+						sqlite3_bind_int64(stmt, 5, target->cap.value().minor_units);
+					} else {
+						sqlite3_bind_null (stmt, 5);
+					}
+					sqlite3_bind_int  (stmt, 6, target->allow_overdraw);
+				});
+				if (result != error::none) { return true; }
+				target->id_ = sqlite3_last_insert_rowid(connection);
+				rollback.push_back([target]() { target->id_ = 0; });
+			}
+			return false;
+		};
+
+		// We are "finding" errors as we save phases
+		auto phase_err = budget.find(
+			[&](int pos, budget_phase<fixed_target>* phase) -> bool {
+				if (upsert_phase(pos, phase, "fixed")) { return true; }
+
+				result = delete_orphaned_targets(phase->id_, collect_target_ids(phase));
+				if (result != error::none) { return true; }
+
+				// "finding" errors as we save targets
+				auto target_err = phase->find([&](int pos, fixed_target* target) -> bool {
+					return upsert_target(pos, target, phase->id_, target->amount.minor_units);
+				});
+				// Exit phase iterator on error
+				if (target_err != nullptr) { return true; }
+				return false;
+			},
+			[&](int pos, budget_phase<percentage_target>* phase) -> bool {
+				if (upsert_phase(pos, phase, "percentage")) { return true; }
+
+				result = delete_orphaned_targets(phase->id_, collect_target_ids(phase));
+				if (result != error::none) { return true; }
+
+				// "finding" errors as we save targets
+				auto target_err = phase->find([&](int pos, percentage_target* target) -> bool {
+					return upsert_target(pos, target, phase->id_, target->amount.basis_points);
+				});
+				// Exit phase iterator on error
+				if (target_err != nullptr) { return true; }
+				return false;
+			}
+		);
+		// Exit transaction on error
+		if (phase_err != nullptr) { return result; }
+		return error::none;
+	});
 }
 
 #pragma endregion

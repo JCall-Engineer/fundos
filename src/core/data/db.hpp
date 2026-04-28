@@ -122,7 +122,7 @@ private:
 	template<typename T>
 	result<std::vector<T>> fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract);
 
-	error transaction(std::function<error()> work);
+	error transaction(std::function<error(std::vector<std::function<void()>>&)> work);
 
 	result<std::string> get_meta(std::string key);
 	error               set_meta(std::string key, std::string value);
@@ -159,6 +159,9 @@ public:
 	result<std::vector<user>>    get_fund_nonmembers(int64_t fund_id);
 	error                        add_user_to_fund(int64_t fund_id, int64_t user_id);
 	error                        remove_user_from_fund(int64_t fund_id, int64_t user_id);
+
+	result<std::vector<budget>>  get_budgets();
+	error                        save_budget(budget&);
 
 #pragma endregion
 
