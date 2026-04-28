@@ -52,7 +52,6 @@ struct allocation : db_managed {
 };
 
 struct fixed_target : db_managed {
-	int64_t phase_id;
 	int64_t fund_id;
 	currency amount;
 	std::optional<currency> cap;
@@ -60,7 +59,6 @@ struct fixed_target : db_managed {
 };
 
 struct percentage_target : db_managed {
-	int64_t phase_id;
 	int64_t fund_id;
 	percentage amount;
 	std::optional<currency> cap;
@@ -77,7 +75,6 @@ enum class phase_kind : uint8_t {
 
 template<PhaseTarget TargetType>
 struct budget_phase : db_managed {
-	int64_t budget_id;
 	std::list<TargetType> targets;
 
 	phase_kind kind() const {

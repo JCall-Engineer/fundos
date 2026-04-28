@@ -76,6 +76,7 @@ CREATE TABLE phase_targets (
 	amount            INTEGER NOT NULL,
 	cap               INTEGER DEFAULT NULL,
 	allow_overdraw    INTEGER NOT NULL DEFAULT 0 CHECK(allow_overdraw IN (0, 1))
+	UNIQUE(phase_id, position)
 );
 CREATE INDEX idx_phase_targets_phase_id ON phase_targets(phase_id);
 CREATE INDEX idx_phase_targets_fund_id ON phase_targets(fund_id);
