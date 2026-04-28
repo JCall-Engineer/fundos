@@ -1131,9 +1131,9 @@ db::error db::save_budget(budget& budget) {
 					sqlite3_bind_int64(stmt, 2, target->fund_id);
 					sqlite3_bind_int64(stmt, 3, amount);
 					if (target->cap.has_value()) {
-						sqlite3_bind_int64(stmt, 4, target->cap.value().minor_units);
+					sqlite3_bind_int64(stmt, 4, target->cap.value().minor_units);
 					} else {
-						sqlite3_bind_null (stmt, 4);
+					sqlite3_bind_null (stmt, 4);
 					}
 					sqlite3_bind_int  (stmt, 5, target->allow_overdraw);
 					sqlite3_bind_int64(stmt, 6, target->id_);
@@ -1146,9 +1146,9 @@ db::error db::save_budget(budget& budget) {
 					sqlite3_bind_int64(stmt, 3, target->fund_id);
 					sqlite3_bind_int64(stmt, 4, amount);
 					if (target->cap.has_value()) {
-						sqlite3_bind_int64(stmt, 5, target->cap.value().minor_units);
+					sqlite3_bind_int64(stmt, 5, target->cap.value().minor_units);
 					} else {
-						sqlite3_bind_null (stmt, 5);
+					sqlite3_bind_null (stmt, 5);
 					}
 					sqlite3_bind_int  (stmt, 6, target->allow_overdraw);
 				});
