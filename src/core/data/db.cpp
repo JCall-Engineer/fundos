@@ -40,8 +40,7 @@ CREATE TABLE accounts (
 	name          TEXT NOT NULL,
 	closed_at     TEXT,
 	bank_ref      TEXT,
-	import_source TEXT,
-	UNIQUE(bank_ref, import_source)
+	UNIQUE(bank_ref)
 );
 
 CREATE TABLE account_members (
@@ -75,7 +74,7 @@ CREATE TABLE phase_targets (
 	fund_id           INTEGER NOT NULL REFERENCES funds(id),
 	amount            INTEGER NOT NULL,
 	cap               INTEGER DEFAULT NULL,
-	allow_overdraw    INTEGER NOT NULL DEFAULT 0 CHECK(allow_overdraw IN (0, 1))
+	allow_overdraw    INTEGER NOT NULL DEFAULT 0 CHECK(allow_overdraw IN (0, 1)),
 	UNIQUE(phase_id, position)
 );
 CREATE INDEX idx_phase_targets_phase_id ON phase_targets(phase_id);
@@ -85,11 +84,16 @@ CREATE TABLE transactions (
 	id              INTEGER PRIMARY KEY,
 	account_id      INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
 	amount          INTEGER NOT NULL,
-	date            TEXT NOT NULL,
+	date            INTEGER NOT NULL,
 	memo            TEXT NOT NULL,
-	bank_ref        TEXT,
-	import_source   TEXT,
-	UNIQUE(account_id, bank_ref, import_source)
+	fitid           TEXT,
+	corrects_fitid  TEXT,
+	correct_action  TEXT CHECK(correct_action IN ('replace', 'delete')),
+	corrects_id     INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
+	superseded_by   INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
+	CHECK((corrects_fitid IS NULL) = (correct_action IS NULL)), -- correct_action requires corrects_fitid and vice versa
+	CHECK(corrects_id IS NULL OR corrects_fitid IS NOT NULL),   -- corrects_id can only be set if corrects_fitid is also set
+	UNIQUE(account_id, fitid)
 );
 CREATE INDEX idx_transactions_account_id ON transactions(account_id);
 
@@ -133,12 +137,12 @@ struct statements {
 	)sql" };
 
 	statement_slot get_account_memberships { .sql = R"sql(
-		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_ref, accounts.import_source
+		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_ref
 		FROM accounts JOIN account_members ON account_members.account_id = accounts.id
 		WHERE account_members.user_id = ? AND accounts.closed_at IS NULL
 	)sql" };
 	statement_slot get_account_nonmemberships { .sql = R"sql(
-		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_ref, accounts.import_source
+		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_ref
 		FROM accounts LEFT JOIN account_members ON account_members.account_id = accounts.id AND account_members.user_id = ?
 		WHERE account_members.account_id IS NULL AND accounts.closed_at IS NULL
 	)sql" };
@@ -207,19 +211,19 @@ struct statements {
 	)sql" };
 
 	statement_slot get_accounts { .sql = R"sql(
-		SELECT id, name, closed_at, bank_ref, import_source FROM accounts
+		SELECT id, name, closed_at, bank_ref FROM accounts
 	)sql" };
 	statement_slot get_account_balance { .sql = R"sql(
 		SELECT COALESCE(SUM(amount), 0) FROM transactions
 		WHERE account_id = ?
 	)sql" };
 	statement_slot insert_account { .sql = R"sql(
-		INSERT INTO accounts (name, bank_ref, import_source)
-		VALUES (?, ?, ?)
+		INSERT INTO accounts (name, bank_ref)
+		VALUES (?, ?)
 	)sql" };
 	statement_slot update_account { .sql = R"sql(
 		UPDATE accounts
-		SET name = ?, closed_at = ?, bank_ref = ?, import_source = ?
+		SET name = ?, closed_at = ?, bank_ref = ?
 		WHERE id = ?
 	)sql" };
 
@@ -277,12 +281,12 @@ struct statements {
 		AND date BETWEEN ? AND ?
 	)sql" };
 	statement_slot insert_transaction { .sql = R"sql(
-		INSERT INTO transactions (account_id, amount, date, memo, bank_ref, import_source)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO transactions (account_id, amount, date, memo, fitid)
+		VALUES (?, ?, ?, ?, ?)
 	)sql" };
 	statement_slot update_transaction { .sql = R"sql(
 		UPDATE transactions
-		SET bank_ref = ?, import_source = ?
+		SET fitid = ?
 		WHERE id = ?
 	)sql" };
 
@@ -314,6 +318,7 @@ union db_prepared_statements {
 static inline std::string extract_text(sqlite3_stmt* stmt, int index) {
 	return reinterpret_cast<const char*>(sqlite3_column_text(stmt, index));
 }
+static inline void bind_text(sqlite3_stmt* stmt, int index, const char*) = delete; // prevent footgun: implicit copy of raw c strings
 static inline void bind_text(sqlite3_stmt* stmt, int index, const std::string& value) {
 	sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_STATIC);
 }
@@ -786,7 +791,6 @@ db::result<std::vector<account>> db::get_account_memberships(int64_t user_id) {
 			row.name          = extract_text         (stmt, 1);
 			row.closed_at     = extract_optional_text(stmt, 2);
 			row.bank_ref      = extract_optional_text(stmt, 3);
-			row.import_source = extract_optional_text(stmt, 4);
 			return row;
 		}
 	);
@@ -803,7 +807,6 @@ db::result<std::vector<account>> db::get_account_nonmemberships(int64_t user_id)
 			row.name          = extract_text         (stmt, 1);
 			row.closed_at     = extract_optional_text(stmt, 2);
 			row.bank_ref      = extract_optional_text(stmt, 3);
-			row.import_source = extract_optional_text(stmt, 4);
 			return row;
 		}
 	);
@@ -981,7 +984,6 @@ db::result<std::vector<account>> db::get_accounts() {
 			row.name          = extract_text         (stmt, 1);
 			row.closed_at     = extract_optional_text(stmt, 2);
 			row.bank_ref      = extract_optional_text(stmt, 3);
-			row.import_source = extract_optional_text(stmt, 4);
 			return row;
 		}
 	);
@@ -993,7 +995,6 @@ db::error db::save_account(account& account) {
 			[&](sqlite3_stmt* stmt) {
 				bind_text         (stmt, 1, account.name);
 				bind_optional_text(stmt, 2, account.bank_ref);
-				bind_optional_text(stmt, 3, account.import_source);
 			}
 		);
 		if (err != error::none) { return err; }
@@ -1006,15 +1007,14 @@ db::error db::save_account(account& account) {
 				bind_text         (stmt, 1, account.name);
 				bind_optional_text(stmt, 2, account.closed_at);
 				bind_optional_text(stmt, 3, account.bank_ref);
-				bind_optional_text(stmt, 4, account.import_source);
-				sqlite3_bind_int64(stmt, 5, account.id_);
+				sqlite3_bind_int64(stmt, 4, account.id_);
 			}
 		);
 	}
 }
 
-static const char* fixed_phase_identifier = "fixed";
-static const char* percentage_phase_identifier = "percentage";
+static const std::string fixed_phase_identifier = "fixed";
+static const std::string percentage_phase_identifier = "percentage";
 db::result<std::vector<budget>> db::get_budgets() {
 	static auto ERROR = [](error err) { return result<std::vector<budget>> { .err = err }; };
 
@@ -1189,7 +1189,7 @@ db::error db::save_budget(budget& budget) {
 		};
 
 		// Return value is for the budget::find api, return true on error
-		auto upsert_phase = [&](int pos, db_managed* phase_managed, const char* kind) -> bool {
+		auto upsert_phase = [&](int pos, db_managed* phase_managed, const std::string& kind) -> bool {
 			if (phase_managed->is_persisted()) {
 				result = execute(prepared->named.update_phase.statement, [&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int(stmt, 1, pos);

@@ -1,10 +1,12 @@
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <list>
 #include <optional>
 #include <string>
 #include <variant>
 #include "platform.hpp"
+#include "types/datetime.hpp"
 #include "types/currency.hpp"
 #include "types/percentage.hpp"
 
@@ -33,16 +35,23 @@ struct account : db_managed {
 	std::string name;
 	std::optional<std::string> closed_at;
 	std::optional<std::string> bank_ref;
-	std::optional<std::string> import_source;
 };
 
 struct transaction : db_managed {
+	enum class correct_action {
+		replaces,
+		deletes,
+	};
+
 	int64_t account_id;
 	currency amount;
-	std::string date;
+	datetime date;
 	std::string memo;
-	std::optional<std::string> bank_ref;
-	std::optional<std::string> import_source;
+	std::optional<std::string> fitid;
+	std::optional<std::string> corrects_fitid;
+	std::optional<correct_action> correct_action;
+	std::optional<int64_t> corrects_id;
+	std::optional<int64_t> superseded_by;
 };
 
 struct allocation : db_managed {

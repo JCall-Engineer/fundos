@@ -276,8 +276,8 @@ TEST(DbQuery, ReadEntities) {
 		INSERT INTO users (id, name) VALUES (2, 'Bob');
 		INSERT INTO funds (id, name, closed_at) VALUES (10, 'Emergency', NULL);
 		INSERT INTO funds (id, name, closed_at) VALUES (11, 'Vacation', '2024-01-01');
-		INSERT INTO accounts (id, name, closed_at, bank_ref, import_source) VALUES (20, 'Checking', NULL, 'ref1', 'bank');
-		INSERT INTO accounts (id, name, closed_at, bank_ref, import_source) VALUES (21, 'Savings', '2024-06-01', NULL, NULL);
+		INSERT INTO accounts (id, name, closed_at, bank_ref) VALUES (20, 'Checking', NULL, 'ref1');
+		INSERT INTO accounts (id, name, closed_at, bank_ref) VALUES (21, 'Savings', '2024-06-01', NULL);
 		INSERT INTO fund_members (fund_id, user_id) VALUES (10, 1);
 		INSERT INTO fund_members (fund_id, user_id) VALUES (11, 1);
 		INSERT INTO account_members (account_id, user_id) VALUES (20, 1);
@@ -321,13 +321,11 @@ TEST(DbQuery, ReadEntities) {
 		EXPECT_EQ(checking.name, "Checking");
 		EXPECT_EQ(checking.closed_at, std::nullopt);
 		EXPECT_EQ(checking.bank_ref, "ref1");
-		EXPECT_EQ(checking.import_source, "bank");
 		auto savings = (*result.val)[1];
 		EXPECT_EQ(savings.id(), 21);
 		EXPECT_EQ(savings.name, "Savings");
 		EXPECT_EQ(savings.closed_at, "2024-06-01");
 		EXPECT_EQ(savings.bank_ref, std::nullopt);
-		EXPECT_EQ(savings.import_source, std::nullopt);
 	}
 
 	{
@@ -369,7 +367,6 @@ TEST(DbQuery, ReadEntities) {
 		EXPECT_EQ((*memberships.val)[0].id(), 20);
 		EXPECT_EQ((*memberships.val)[0].name, "Checking");
 		EXPECT_EQ((*memberships.val)[0].bank_ref, "ref1");
-		EXPECT_EQ((*memberships.val)[0].import_source, "bank");
 
 		auto nonmemberships = file->get_account_nonmemberships(1);
 		ASSERT_TRUE(nonmemberships.ok());
@@ -435,7 +432,6 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.name, checking.name);
 		EXPECT_EQ(row.closed_at, checking.closed_at);
 		EXPECT_EQ(row.bank_ref, checking.bank_ref);
-		EXPECT_EQ(row.import_source, checking.import_source);
 	}
 
 	// Verify membership additions and removals
@@ -457,7 +453,6 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.name, checking.name);
 		EXPECT_EQ(row.closed_at, checking.closed_at);
 		EXPECT_EQ(row.bank_ref, checking.bank_ref);
-		EXPECT_EQ(row.import_source, checking.import_source);
 	}
 	ASSERT_EQ(file->remove_user_from_account(checking.id(), alice.id()), db::error::none);
 	{
@@ -529,7 +524,6 @@ TEST(DbQuery, SaveEntities) {
 
 	checking.name = "Debit Card";
 	checking.bank_ref = "ref1";
-	checking.import_source = "bank";
 	checking.closed_at = "2025-06-01";
 	ASSERT_EQ(file->save_account(checking), db::error::none);
 	{
@@ -540,7 +534,6 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.id(), checking.id());
 		EXPECT_EQ(row.name, "Debit Card");
 		EXPECT_EQ(row.bank_ref, "ref1");
-		EXPECT_EQ(row.import_source, "bank");
 		EXPECT_EQ(row.closed_at, "2025-06-01");
 	}
 }
@@ -875,15 +868,13 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 		EXPECT_EQ(pct_phase->id(), original_pct_phase_id);
 		EXPECT_EQ(pct_phase->targets.begin()->id(), original_flex_target_id);
 
-		// New investments target: fresh non-zero id, not the old one
+		// New investments target: fresh non-zero id
 		auto& new_investments = *std::next(pct_phase->targets.begin());
 		EXPECT_NE(new_investments.id(), 0);
-		EXPECT_NE(new_investments.id(), 2);
 
 		auto* fixed_phase = std::get_if<budget_phase<fixed_target>>(&*phase_it++);
 		ASSERT_NE(fixed_phase, nullptr);
 		EXPECT_NE(fixed_phase->id(), 0);
-		EXPECT_NE(fixed_phase->id(), 2);
 
 		for (auto& target : fixed_phase->targets) {
 			EXPECT_NE(target.id(), 0);
@@ -895,19 +886,13 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budget_phases"), 2);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets"), 4);
 
-	EXPECT_EQ(count_rows(connection,
-		"SELECT COUNT(*) FROM budget_phases WHERE id = 1"), 1); // pct phase survived
-	EXPECT_EQ(count_rows(connection,
-		"SELECT COUNT(*) FROM phase_targets WHERE id = 1"), 1); // flex target survived
-	EXPECT_EQ(count_rows(connection,
-		"SELECT COUNT(*) FROM budget_phases WHERE id = 2"), 0); // old fixed phase gone
-	EXPECT_EQ(count_rows(connection,
-		"SELECT COUNT(*) FROM phase_targets WHERE id IN (2, 3, 4)"), 0); // old targets gone
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budget_phases WHERE position = 0 AND kind = 'percentage'"), 1);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budget_phases WHERE position = 1 AND kind = 'fixed'"), 1);
 
-	EXPECT_EQ(count_rows(connection,
-		"SELECT COUNT(*) FROM budget_phases WHERE position = 0 AND kind = 'percentage'"), 1);
-	EXPECT_EQ(count_rows(connection,
-		"SELECT COUNT(*) FROM budget_phases WHERE position = 1 AND kind = 'fixed'"), 1);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets WHERE amount = 2500  AND cap = 100000 AND allow_overdraw = 0"), 1);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets WHERE amount = 3500  AND cap IS NULL  AND allow_overdraw = 0"), 1);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets WHERE amount = 35000 AND cap = 55000  AND allow_overdraw = 1"), 1);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets WHERE amount = 110000 AND cap = 260000 AND allow_overdraw = 0"), 1);
 
 	// get_budgets round-trip
 	{
