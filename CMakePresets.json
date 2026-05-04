@@ -51,6 +51,7 @@
 		},
 		{
 			"name": "windows-debug",
+			"generator": "Visual Studio 18 2026",
 			"binaryDir": "${sourceDir}/out/build/windows-debug",
 			"cacheVariables": {
 				"FUNDOS_PLATFORM": "desktop",
@@ -62,6 +63,7 @@
 		},
 		{
 			"name": "windows-release",
+			"generator": "Visual Studio 18 2026",
 			"binaryDir": "${sourceDir}/out/build/windows-release",
 			"cacheVariables": {
 				"FUNDOS_PLATFORM": "desktop",
