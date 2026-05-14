@@ -36,11 +36,11 @@ CREATE INDEX idx_fund_members_fund_id ON fund_members(fund_id);
 CREATE INDEX idx_fund_members_user_id ON fund_members(user_id);
 
 CREATE TABLE accounts (
-	id            INTEGER PRIMARY KEY,
-	name          TEXT NOT NULL,
-	closed_at     TEXT,
-	bank_ref      TEXT,
-	UNIQUE(bank_ref)
+	id              INTEGER PRIMARY KEY,
+	name            TEXT NOT NULL,
+	closed_at       TEXT,
+	bank_account_id TEXT,
+	UNIQUE(bank_account_id)
 );
 
 CREATE TABLE account_members (
@@ -91,11 +91,26 @@ CREATE TABLE transactions (
 	correct_action  TEXT CHECK(correct_action IN ('replace', 'delete')),
 	corrects_id     INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
 	superseded_by   INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
-	CHECK((corrects_fitid IS NULL) = (correct_action IS NULL)), -- correct_action requires corrects_fitid and vice versa
-	CHECK(corrects_id IS NULL OR corrects_fitid IS NOT NULL),   -- corrects_id can only be set if corrects_fitid is also set
+	CHECK((correct_action IS NULL) = (corrects_fitid IS NULL AND corrects_id IS NULL)) -- correct_action requires one of fitid or id, and corrections require an action
 	UNIQUE(account_id, fitid)
 );
 CREATE INDEX idx_transactions_account_id ON transactions(account_id);
+
+CREATE TABLE balance_checkpoints (
+	id                INTEGER PRIMARY KEY,
+	account_id        INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+	amount            INTEGER NOT NULL,
+	date              INTEGER NOT NULL
+);
+CREATE INDEX idx_balance_checkpoints_account_id ON balance_checkpoints(account_id);
+
+CREATE TABLE balance_checkpoint_transactions (
+	checkpoint_id  INTEGER NOT NULL REFERENCES balance_checkpoints(id) ON DELETE RESTRICT,
+	transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
+	PRIMARY KEY (checkpoint_id, transaction_id)
+);
+CREATE INDEX idx_bct_checkpoint_id  ON balance_checkpoint_transactions(checkpoint_id);
+CREATE INDEX idx_bct_transaction_id ON balance_checkpoint_transactions(transaction_id);
 
 CREATE TABLE allocations (
 	id             INTEGER PRIMARY KEY,
@@ -137,12 +152,12 @@ struct statements {
 	)sql" };
 
 	statement_slot get_account_memberships { .sql = R"sql(
-		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_ref
+		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_account_id
 		FROM accounts JOIN account_members ON account_members.account_id = accounts.id
 		WHERE account_members.user_id = ? AND accounts.closed_at IS NULL
 	)sql" };
 	statement_slot get_account_nonmemberships { .sql = R"sql(
-		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_ref
+		SELECT accounts.id, accounts.name, accounts.closed_at, accounts.bank_account_id
 		FROM accounts LEFT JOIN account_members ON account_members.account_id = accounts.id AND account_members.user_id = ?
 		WHERE account_members.account_id IS NULL AND accounts.closed_at IS NULL
 	)sql" };
@@ -211,19 +226,19 @@ struct statements {
 	)sql" };
 
 	statement_slot get_accounts { .sql = R"sql(
-		SELECT id, name, closed_at, bank_ref FROM accounts
+		SELECT id, name, closed_at, bank_account_id FROM accounts
 	)sql" };
 	statement_slot get_account_balance { .sql = R"sql(
 		SELECT COALESCE(SUM(amount), 0) FROM transactions
 		WHERE account_id = ?
 	)sql" };
 	statement_slot insert_account { .sql = R"sql(
-		INSERT INTO accounts (name, bank_ref)
+		INSERT INTO accounts (name, bank_account_id)
 		VALUES (?, ?)
 	)sql" };
 	statement_slot update_account { .sql = R"sql(
 		UPDATE accounts
-		SET name = ?, closed_at = ?, bank_ref = ?
+		SET name = ?, closed_at = ?, bank_account_id = ?
 		WHERE id = ?
 	)sql" };
 
@@ -787,10 +802,10 @@ db::result<std::vector<account>> db::get_account_memberships(int64_t user_id) {
 		},
 		[](sqlite3_stmt* stmt) -> account {
 			account row;
-			row.id_           = sqlite3_column_int64 (stmt, 0);
-			row.name          = extract_text         (stmt, 1);
-			row.closed_at     = extract_optional_text(stmt, 2);
-			row.bank_ref      = extract_optional_text(stmt, 3);
+			row.id_             = sqlite3_column_int64 (stmt, 0);
+			row.name            = extract_text         (stmt, 1);
+			row.closed_at       = extract_optional_text(stmt, 2);
+			row.bank_account_id = extract_optional_text(stmt, 3);
 			return row;
 		}
 	);
@@ -803,10 +818,10 @@ db::result<std::vector<account>> db::get_account_nonmemberships(int64_t user_id)
 		},
 		[](sqlite3_stmt* stmt) -> account {
 			account row;
-			row.id_           = sqlite3_column_int64 (stmt, 0);
-			row.name          = extract_text         (stmt, 1);
-			row.closed_at     = extract_optional_text(stmt, 2);
-			row.bank_ref      = extract_optional_text(stmt, 3);
+			row.id_             = sqlite3_column_int64 (stmt, 0);
+			row.name            = extract_text         (stmt, 1);
+			row.closed_at       = extract_optional_text(stmt, 2);
+			row.bank_account_id = extract_optional_text(stmt, 3);
 			return row;
 		}
 	);
@@ -980,10 +995,10 @@ db::result<std::vector<account>> db::get_accounts() {
 		[](sqlite3_stmt*) {},
 		[](sqlite3_stmt* stmt) -> account {
 			account row;
-			row.id_           = sqlite3_column_int64 (stmt, 0);
-			row.name          = extract_text         (stmt, 1);
-			row.closed_at     = extract_optional_text(stmt, 2);
-			row.bank_ref      = extract_optional_text(stmt, 3);
+			row.id_             = sqlite3_column_int64 (stmt, 0);
+			row.name            = extract_text         (stmt, 1);
+			row.closed_at       = extract_optional_text(stmt, 2);
+			row.bank_account_id = extract_optional_text(stmt, 3);
 			return row;
 		}
 	);
@@ -994,7 +1009,7 @@ db::error db::save_account(account& account) {
 			prepared->named.insert_account.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text         (stmt, 1, account.name);
-				bind_optional_text(stmt, 2, account.bank_ref);
+				bind_optional_text(stmt, 2, account.bank_account_id);
 			}
 		);
 		if (err != error::none) { return err; }
@@ -1006,7 +1021,7 @@ db::error db::save_account(account& account) {
 			[&](sqlite3_stmt* stmt) {
 				bind_text         (stmt, 1, account.name);
 				bind_optional_text(stmt, 2, account.closed_at);
-				bind_optional_text(stmt, 3, account.bank_ref);
+				bind_optional_text(stmt, 3, account.bank_account_id);
 				sqlite3_bind_int64(stmt, 4, account.id_);
 			}
 		);
@@ -1291,6 +1306,38 @@ db::error db::save_budget(budget& budget) {
 		);
 		// Exit transaction on error
 		if (phase_err != nullptr) { return result; }
+		return error::none;
+	});
+}
+
+db::error db::resolve_corrections() {
+	static const char* update_corrections_sql = R"sql(
+UPDATE transactions
+SET superseded_by = (
+	SELECT corrections.id
+	FROM transactions AS corrections
+	WHERE corrections.corrects_fitid = transactions.fitid
+	AND corrections.account_id = transactions.account_id
+)
+WHERE fitid IS NOT NULL
+AND superseded_by IS NULL;
+
+UPDATE transactions
+SET corrects_id = (
+	SELECT originals.id
+	FROM transactions AS originals
+	WHERE originals.fitid = transactions.corrects_fitid
+	AND originals.account_id = transactions.account_id
+)
+WHERE corrects_fitid IS NOT NULL
+AND corrects_id IS NULL;
+)sql";
+	return transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+		int rc = sqlite3_exec(connection, update_corrections_sql, nullptr, nullptr, nullptr);
+		if (SQLITE_OK != rc) {
+			get_sqlite3_error();
+			return classify_sqlite_runtime_error(rc);
+		}
 		return error::none;
 	});
 }

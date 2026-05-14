@@ -34,7 +34,7 @@ struct fund : db_managed {
 struct account : db_managed {
 	std::string name;
 	std::optional<std::string> closed_at;
-	std::optional<std::string> bank_ref;
+	std::optional<std::string> bank_account_id;
 };
 
 struct transaction : db_managed {

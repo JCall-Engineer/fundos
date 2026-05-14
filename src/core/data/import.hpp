@@ -28,7 +28,9 @@ enum class warning : uint8_t {
 
 struct result {
 	struct bank_account {
-		std::string ref;
+		std::string acct_id;
+		currency balance;
+		datetime as_of;
 		std::vector<transaction> transactions;
 	};
 	error err = error::none;

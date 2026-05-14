@@ -163,6 +163,8 @@ public:
 	result<std::vector<budget>>  get_budgets();
 	error                        save_budget(budget&);
 
+	error                        resolve_corrections();
+
 #pragma endregion
 
 private:

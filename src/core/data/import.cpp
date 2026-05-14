@@ -222,7 +222,10 @@ void import_transaction(parse_context& context, std::vector<transaction>& transa
 		switch (in.type) {
 			case ofx_token::type::opening_tag: {
 				ofx_token value = extract_token(context);
-				if (value.type != ofx_token::type::leaf_value) { context.output.error(error::malformed); return; }
+				if (value.type != ofx_token::type::leaf_value) {
+					context.output.error(error::malformed);
+					return;
+				}
 				if (in.text == MEMO_TAG || (in.text == NAME_TAG && transaction.memo.empty())) {
 					transaction.memo = value.text;
 				} else if (in.text == FITID_TAG) {
@@ -315,7 +318,54 @@ void import_transactions(parse_context& context, result::bank_account& account, 
 	context.output.error(error::malformed);
 }
 
+static const std::string_view BALANCE_VALUE  = "BALAMT";
+static const std::string_view AS_OF_VALUE    = "DTASOF";
+void import_ledger(parse_context& context, result::bank_account& account, std::string_view close_on) {
+	ofx_token in = extract_token(context);
+	std::optional<currency> parsed_amount;
+	std::optional<datetime> parsed_as_of;
+	while (in.type != ofx_token::type::eof) {
+		switch (in.type) {
+			case ofx_token::type::opening_tag: {
+				ofx_token value = extract_token(context);
+				if (value.type != ofx_token::type::leaf_value) {
+					context.output.error(error::malformed);
+					return;
+				}
+				if (in.text == BALANCE_VALUE) {
+					parsed_amount = currency::from_string(value.text, context.locale);
+					if (!parsed_amount) {
+						context.output.warn(warning::bad_amount);
+						break;
+					}
+					account.balance = *parsed_amount;
+				} else if (in.text == AS_OF_VALUE) {
+					parsed_as_of = parse_ofx_datetime(value.text);
+					if (!parsed_as_of) {
+						context.output.warn(warning::bad_date);
+						break;
+					}
+					account.as_of = *parsed_as_of;
+				}
+				break;
+			}
+			case ofx_token::type::closing_tag:
+				if (in.text != close_on) { break; }
+				if (!parsed_amount) {
+					context.output.warn(warning::missing_amount);
+				}
+				if (!parsed_as_of) {
+					context.output.warn(warning::missing_date);
+				}
+				return;
+		}
+		in = extract_token(context);
+	}
+	context.output.error(error::malformed);
+}
+
 static const std::string_view ACCTID_TAG     = "ACCTID";
+static const std::string_view LEDGER_TAG     = "LEDGERBAL";
 static const std::string_view TXLIST_WRAPPER = "BANKTRANLIST";
 void import_bank(parse_context& context, std::string_view close_on) {
 	ofx_token in = extract_token(context);
@@ -329,15 +379,18 @@ void import_bank(parse_context& context, std::string_view close_on) {
 						context.output.error(error::malformed);
 						return;
 					}
-					account.ref = in.text;
+					account.acct_id = in.text;
 				} else if (in.text == TXLIST_WRAPPER) {
 					import_transactions(context, account, TXLIST_WRAPPER);
+					if (!context.output.ok()) { return; }
+				} else if (in.text == LEDGER_TAG) {
+					import_ledger(context, account, LEDGER_TAG);
 					if (!context.output.ok()) { return; }
 				}
 				break;
 			case ofx_token::type::closing_tag:
 				if (in.text == close_on) {
-					if (account.ref == "") {
+					if (account.acct_id.empty()) {
 						context.output.warn(warning::missing_acctid);
 					} else {
 						context.output.accounts.push_back(std::move(account));
