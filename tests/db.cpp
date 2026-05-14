@@ -276,8 +276,8 @@ TEST(DbQuery, ReadEntities) {
 		INSERT INTO users (id, name) VALUES (2, 'Bob');
 		INSERT INTO funds (id, name, closed_at) VALUES (10, 'Emergency', NULL);
 		INSERT INTO funds (id, name, closed_at) VALUES (11, 'Vacation', '2024-01-01');
-		INSERT INTO accounts (id, name, closed_at, bank_ref) VALUES (20, 'Checking', NULL, 'ref1');
-		INSERT INTO accounts (id, name, closed_at, bank_ref) VALUES (21, 'Savings', '2024-06-01', NULL);
+		INSERT INTO accounts (id, name, closed_at, bank_account_id) VALUES (20, 'Checking', NULL, 'ref1');
+		INSERT INTO accounts (id, name, closed_at, bank_account_id) VALUES (21, 'Savings', '2024-06-01', NULL);
 		INSERT INTO fund_members (fund_id, user_id) VALUES (10, 1);
 		INSERT INTO fund_members (fund_id, user_id) VALUES (11, 1);
 		INSERT INTO account_members (account_id, user_id) VALUES (20, 1);
@@ -320,12 +320,12 @@ TEST(DbQuery, ReadEntities) {
 		EXPECT_EQ(checking.id(), 20);
 		EXPECT_EQ(checking.name, "Checking");
 		EXPECT_EQ(checking.closed_at, std::nullopt);
-		EXPECT_EQ(checking.bank_ref, "ref1");
+		EXPECT_EQ(checking.bank_account_id, "ref1");
 		auto savings = (*result.val)[1];
 		EXPECT_EQ(savings.id(), 21);
 		EXPECT_EQ(savings.name, "Savings");
 		EXPECT_EQ(savings.closed_at, "2024-06-01");
-		EXPECT_EQ(savings.bank_ref, std::nullopt);
+		EXPECT_EQ(savings.bank_account_id, std::nullopt);
 	}
 
 	{
@@ -366,7 +366,7 @@ TEST(DbQuery, ReadEntities) {
 		ASSERT_EQ(memberships.val->size(), 1);
 		EXPECT_EQ((*memberships.val)[0].id(), 20);
 		EXPECT_EQ((*memberships.val)[0].name, "Checking");
-		EXPECT_EQ((*memberships.val)[0].bank_ref, "ref1");
+		EXPECT_EQ((*memberships.val)[0].bank_account_id, "ref1");
 
 		auto nonmemberships = file->get_account_nonmemberships(1);
 		ASSERT_TRUE(nonmemberships.ok());
@@ -431,7 +431,7 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.id(), checking.id());
 		EXPECT_EQ(row.name, checking.name);
 		EXPECT_EQ(row.closed_at, checking.closed_at);
-		EXPECT_EQ(row.bank_ref, checking.bank_ref);
+		EXPECT_EQ(row.bank_account_id, checking.bank_account_id);
 	}
 
 	// Verify membership additions and removals
@@ -452,7 +452,7 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.id(), checking.id());
 		EXPECT_EQ(row.name, checking.name);
 		EXPECT_EQ(row.closed_at, checking.closed_at);
-		EXPECT_EQ(row.bank_ref, checking.bank_ref);
+		EXPECT_EQ(row.bank_account_id, checking.bank_account_id);
 	}
 	ASSERT_EQ(file->remove_user_from_account(checking.id(), alice.id()), db::error::none);
 	{
@@ -523,7 +523,7 @@ TEST(DbQuery, SaveEntities) {
 	}
 
 	checking.name = "Debit Card";
-	checking.bank_ref = "ref1";
+	checking.bank_account_id = "ref1";
 	checking.closed_at = "2025-06-01";
 	ASSERT_EQ(file->save_account(checking), db::error::none);
 	{
@@ -533,7 +533,7 @@ TEST(DbQuery, SaveEntities) {
 		auto& row = (*result.val)[0];
 		EXPECT_EQ(row.id(), checking.id());
 		EXPECT_EQ(row.name, "Debit Card");
-		EXPECT_EQ(row.bank_ref, "ref1");
+		EXPECT_EQ(row.bank_account_id, "ref1");
 		EXPECT_EQ(row.closed_at, "2025-06-01");
 	}
 }
