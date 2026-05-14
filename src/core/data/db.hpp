@@ -112,17 +112,17 @@ private:
 	using extractor = std::function<T(sqlite3_stmt*)>;
 
 	// insert/update/delete
-	error execute(sqlite3_stmt* stmt, executor bind);
+	error sql_execute(sqlite3_stmt* stmt, executor bind);
 
 	// single row or no result
 	template<typename T>
-	result<T> fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extract);
+	result<T> sql_fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extract);
 
 	// multiple rows
 	template<typename T>
-	result<std::vector<T>> fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract);
+	result<std::vector<T>> sql_fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract);
 
-	error transaction(std::function<error(std::vector<std::function<void()>>&)> work);
+	error sql_transaction(std::function<error(std::vector<std::function<void()>>&)> work);
 
 	result<std::string> get_meta(std::string key);
 	error               set_meta(std::string key, std::string value);

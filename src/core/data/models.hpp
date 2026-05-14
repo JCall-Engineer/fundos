@@ -38,7 +38,7 @@ struct account : db_managed {
 };
 
 struct transaction : db_managed {
-	enum class correct_action {
+	enum class correction_type {
 		replaces,
 		deletes,
 	};
@@ -49,7 +49,7 @@ struct transaction : db_managed {
 	std::string memo;
 	std::optional<std::string> fitid;
 	std::optional<std::string> corrects_fitid;
-	std::optional<correct_action> correct_action;
+	std::optional<correction_type> correct_action;
 	std::optional<int64_t> corrects_id;
 	std::optional<int64_t> superseded_by;
 };

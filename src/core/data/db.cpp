@@ -397,7 +397,7 @@ db::error db::classify_sqlite_runtime_error(int rc) {
 	}
 }
 
-db::error db::execute(sqlite3_stmt* stmt, executor bind) {
+db::error db::sql_execute(sqlite3_stmt* stmt, executor bind) {
 	if (!is_ready()) { return db::error::not_ready; }
 	bind(stmt);
 	int rc = sqlite3_step(stmt);
@@ -410,7 +410,7 @@ db::error db::execute(sqlite3_stmt* stmt, executor bind) {
 }
 
 template<typename T>
-db::result<T> db::fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
+db::result<T> db::sql_fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
 	if (!is_ready()) { return result<T> { .err = db::error::not_ready }; }
 	bind(stmt);
 	int rc = sqlite3_step(stmt);
@@ -432,7 +432,7 @@ db::result<T> db::fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extr
 }
 
 template<typename T>
-db::result<std::vector<T>> db::fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
+db::result<std::vector<T>> db::sql_fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
 	if (!is_ready()) { return result<std::vector<T>> { .err = db::error::not_ready }; }
 	bind(stmt);
 	int rc;
@@ -453,7 +453,7 @@ db::result<std::vector<T>> db::fetch_many(sqlite3_stmt* stmt, executor bind, ext
 // error::corrupted being returned to skip COMMIT/ROLLBACK on a closed connection.     |
 // Do not silently swallow errors from execute/fetch_one/fetch_many inside work().     |
 //-------------------------------------------------------------------------------------+
-db::error db::transaction(std::function<error(std::vector<std::function<void()>>&)> work) {
+db::error db::sql_transaction(std::function<error(std::vector<std::function<void()>>&)> work) {
 	if (!is_ready()) { return error::not_ready; }
 	int rc = sqlite3_exec(connection, "BEGIN", nullptr, nullptr, nullptr);
 	if (rc != SQLITE_OK) {
@@ -488,7 +488,7 @@ db::error db::transaction(std::function<error(std::vector<std::function<void()>>
 }
 
 db::result<std::string> db::get_meta(std::string key) {
-	return fetch_one<std::string>(
+	return sql_fetch_one<std::string>(
 		prepared->named.get_meta.statement,
 		[&](sqlite3_stmt* stmt) {
 			bind_text(stmt, 1, key);
@@ -499,7 +499,7 @@ db::result<std::string> db::get_meta(std::string key) {
 	);
 }
 db::error db::set_meta(std::string key, std::string value) {
-	return execute(
+	return sql_execute(
 		prepared->named.set_meta.statement,
 		[&](sqlite3_stmt* stmt) {
 			bind_text(stmt, 1, key);
@@ -649,7 +649,7 @@ db::error db::set_currency_locale_preset(const currency_locale::slot& slot) {
 	return set_meta(locale_meta.currency_locale_key, slot.identifier);
 }
 db::error db::set_currency_locale(const currency_locale::info& locale) {
-	return transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
 		error result = set_meta(locale_meta.currency_locale_key, locale_meta.custom_sentinel_val);
 		if (result != error::none) { return result; }
 
@@ -733,7 +733,7 @@ db::error db::set_percentage_locale_preset(const percentage_locale::slot& slot) 
 	return set_meta(locale_meta.percentage_locale_key, slot.identifier);
 }
 db::error db::set_percentage_locale(const percentage_locale::info& locale) {
-	return transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
 		error result = set_meta(locale_meta.percentage_locale_key, locale_meta.custom_sentinel_val);
 		if (result != error::none) { return result; }
 
@@ -753,7 +753,7 @@ db::error db::set_percentage_locale(const percentage_locale::info& locale) {
 }
 
 db::result<std::vector<user>> db::get_users() {
-	return fetch_many<user>(
+	return sql_fetch_many<user>(
 		prepared->named.get_users.statement,
 		[](sqlite3_stmt*) {},
 		[](sqlite3_stmt* stmt) -> user {
@@ -766,7 +766,7 @@ db::result<std::vector<user>> db::get_users() {
 }
 db::error db::save_user(user& user) {
 	if (!user.is_persisted()) {
-		error err = execute(
+		error err = sql_execute(
 			prepared->named.insert_user.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text(stmt, 1, user.name);
@@ -776,7 +776,7 @@ db::error db::save_user(user& user) {
 		user.id_= sqlite3_last_insert_rowid(connection);
 		return error::none;
 	} else {
-		return execute(
+		return sql_execute(
 			prepared->named.update_user.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text         (stmt, 1, user.name);
@@ -786,7 +786,7 @@ db::error db::save_user(user& user) {
 	}
 }
 db::error db::delete_user(int64_t user_id) {
-	return execute(
+	return sql_execute(
 		prepared->named.delete_user.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, user_id);
@@ -795,7 +795,7 @@ db::error db::delete_user(int64_t user_id) {
 }
 
 db::result<std::vector<account>> db::get_account_memberships(int64_t user_id) {
-	return fetch_many<account>(
+	return sql_fetch_many<account>(
 		prepared->named.get_account_memberships.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, user_id);
@@ -811,7 +811,7 @@ db::result<std::vector<account>> db::get_account_memberships(int64_t user_id) {
 	);
 }
 db::result<std::vector<account>> db::get_account_nonmemberships(int64_t user_id) {
-	return fetch_many<account>(
+	return sql_fetch_many<account>(
 		prepared->named.get_account_nonmemberships.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, user_id);
@@ -828,7 +828,7 @@ db::result<std::vector<account>> db::get_account_nonmemberships(int64_t user_id)
 }
 
 db::result<std::vector<user>> db::get_account_members(int64_t account_id) {
-	return fetch_many<user>(
+	return sql_fetch_many<user>(
 		prepared->named.get_account_members.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, account_id);
@@ -842,7 +842,7 @@ db::result<std::vector<user>> db::get_account_members(int64_t account_id) {
 	);
 }
 db::result<std::vector<user>> db::get_account_nonmembers(int64_t account_id) {
-	return fetch_many<user>(
+	return sql_fetch_many<user>(
 		prepared->named.get_account_nonmembers.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, account_id);
@@ -857,7 +857,7 @@ db::result<std::vector<user>> db::get_account_nonmembers(int64_t account_id) {
 }
 
 db::error db::add_user_to_account(int64_t account_id, int64_t user_id) {
-	return execute(
+	return sql_execute(
 		prepared->named.add_user_to_account.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, account_id);
@@ -866,7 +866,7 @@ db::error db::add_user_to_account(int64_t account_id, int64_t user_id) {
 	);
 }
 db::error db::remove_user_from_account(int64_t account_id, int64_t user_id) {
-	return execute(
+	return sql_execute(
 		prepared->named.remove_user_from_account.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, account_id);
@@ -876,7 +876,7 @@ db::error db::remove_user_from_account(int64_t account_id, int64_t user_id) {
 }
 
 db::result<std::vector<fund>> db::get_fund_memberships(int64_t user_id) {
-	return fetch_many<fund>(
+	return sql_fetch_many<fund>(
 		prepared->named.get_fund_memberships.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, user_id);
@@ -891,7 +891,7 @@ db::result<std::vector<fund>> db::get_fund_memberships(int64_t user_id) {
 	);
 }
 db::result<std::vector<fund>> db::get_fund_nonmemberships(int64_t user_id) {
-	return fetch_many<fund>(
+	return sql_fetch_many<fund>(
 		prepared->named.get_fund_nonmemberships.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, user_id);
@@ -906,7 +906,7 @@ db::result<std::vector<fund>> db::get_fund_nonmemberships(int64_t user_id) {
 	);
 }
 db::result<std::vector<user>> db::get_fund_members(int64_t fund_id) {
-	return fetch_many<user>(
+	return sql_fetch_many<user>(
 		prepared->named.get_fund_members.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, fund_id);
@@ -920,7 +920,7 @@ db::result<std::vector<user>> db::get_fund_members(int64_t fund_id) {
 	);
 }
 db::result<std::vector<user>> db::get_fund_nonmembers(int64_t fund_id) {
-	return fetch_many<user>(
+	return sql_fetch_many<user>(
 		prepared->named.get_fund_nonmembers.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, fund_id);
@@ -935,7 +935,7 @@ db::result<std::vector<user>> db::get_fund_nonmembers(int64_t fund_id) {
 }
 
 db::error db::add_user_to_fund(int64_t fund_id, int64_t user_id) {
-	return execute(
+	return sql_execute(
 		prepared->named.add_user_to_fund.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, fund_id);
@@ -944,7 +944,7 @@ db::error db::add_user_to_fund(int64_t fund_id, int64_t user_id) {
 	);
 }
 db::error db::remove_user_from_fund(int64_t fund_id, int64_t user_id) {
-	return execute(
+	return sql_execute(
 		prepared->named.remove_user_from_fund.statement,
 		[&](sqlite3_stmt* stmt) {
 			sqlite3_bind_int64(stmt, 1, fund_id);
@@ -954,7 +954,7 @@ db::error db::remove_user_from_fund(int64_t fund_id, int64_t user_id) {
 }
 
 db::result<std::vector<fund>> db::get_funds() {
-	return fetch_many<fund>(
+	return sql_fetch_many<fund>(
 		prepared->named.get_funds.statement,
 		[](sqlite3_stmt*) {},
 		[](sqlite3_stmt* stmt) -> fund {
@@ -968,7 +968,7 @@ db::result<std::vector<fund>> db::get_funds() {
 }
 db::error db::save_fund(fund& fund) {
 	if (!fund.is_persisted()) {
-		error err = execute(
+		error err = sql_execute(
 			prepared->named.insert_fund.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text(stmt, 1, fund.name);
@@ -978,7 +978,7 @@ db::error db::save_fund(fund& fund) {
 		fund.id_= sqlite3_last_insert_rowid(connection);
 		return error::none;
 	} else {
-		return execute(
+		return sql_execute(
 			prepared->named.update_fund.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text         (stmt, 1, fund.name);
@@ -990,7 +990,7 @@ db::error db::save_fund(fund& fund) {
 }
 
 db::result<std::vector<account>> db::get_accounts() {
-	return fetch_many<account>(
+	return sql_fetch_many<account>(
 		prepared->named.get_accounts.statement,
 		[](sqlite3_stmt*) {},
 		[](sqlite3_stmt* stmt) -> account {
@@ -1005,7 +1005,7 @@ db::result<std::vector<account>> db::get_accounts() {
 }
 db::error db::save_account(account& account) {
 	if (!account.is_persisted()) {
-		error err = execute(
+		error err = sql_execute(
 			prepared->named.insert_account.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text         (stmt, 1, account.name);
@@ -1016,7 +1016,7 @@ db::error db::save_account(account& account) {
 		account.id_= sqlite3_last_insert_rowid(connection);
 		return error::none;
 	} else {
-		return execute(
+		return sql_execute(
 			prepared->named.update_account.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text         (stmt, 1, account.name);
@@ -1033,7 +1033,7 @@ static const std::string percentage_phase_identifier = "percentage";
 db::result<std::vector<budget>> db::get_budgets() {
 	static auto ERROR = [](error err) { return result<std::vector<budget>> { .err = err }; };
 
-	auto budget_result = fetch_many<budget>(
+	auto budget_result = sql_fetch_many<budget>(
 		prepared->named.get_budgets.statement,
 		[](sqlite3_stmt* stmt) {},
 		[](sqlite3_stmt* stmt) -> budget {
@@ -1048,7 +1048,7 @@ db::result<std::vector<budget>> db::get_budgets() {
 	
 	std::vector<budget> &out = budget_result.val.value(); // fetch_many guarantees a value if no error
 	for (auto& budget : out) {
-		auto phase_result = fetch_many<any_budget_phase>(
+		auto phase_result = sql_fetch_many<any_budget_phase>(
 			prepared->named.get_phases.statement,
 			[&budget](sqlite3_stmt* stmt) {
 				sqlite3_bind_int64(stmt, 1, budget.id_);
@@ -1071,7 +1071,7 @@ db::result<std::vector<budget>> db::get_budgets() {
 		for (auto& phase : phase_result.val.value()) {
 			std::visit([&](auto& typed_phase) {
 				using TargetType = typename std::decay_t<decltype(typed_phase.targets)>::value_type;
-				auto target_result = fetch_many<TargetType>(
+				auto target_result = sql_fetch_many<TargetType>(
 					prepared->named.get_targets.statement,
 					[&typed_phase](sqlite3_stmt* stmt) {
 						sqlite3_bind_int64(stmt, 1, typed_phase.id_);
@@ -1106,12 +1106,12 @@ db::result<std::vector<budget>> db::get_budgets() {
 	return result<std::vector<budget>>{ .val = std::move(out) };
 }
 db::error db::save_budget(budget& budget) {
-	return transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
 		error result;
 
 		// Update budget
 		if (!budget.is_persisted()) {
-			result = execute(
+			result = sql_execute(
 				prepared->named.insert_budget.statement,
 				[&](sqlite3_stmt* stmt) {
 					bind_text(stmt, 1, budget.name);
@@ -1122,7 +1122,7 @@ db::error db::save_budget(budget& budget) {
 			budget.id_= sqlite3_last_insert_rowid(connection);
 			rollback.push_back([&budget]() { budget.id_ = 0; });
 		} else {
-			result = execute(
+			result = sql_execute(
 				prepared->named.update_budget.statement,
 				[&](sqlite3_stmt* stmt) {
 					bind_text(stmt, 1, budget.name);
@@ -1163,7 +1163,7 @@ db::error db::save_budget(budget& budget) {
 				nullptr
 			);
 			if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
-			result = execute(delete_phases_stmt, [&](sqlite3_stmt* stmt) {
+			result = sql_execute(delete_phases_stmt, [&](sqlite3_stmt* stmt) {
 				sqlite3_bind_int64(stmt, 1, budget.id_);
 				for (size_t i = 0; i < preserve_ids.size(); ++i) {
 					sqlite3_bind_int64(stmt, i + 2, preserve_ids[i]);
@@ -1193,7 +1193,7 @@ db::error db::save_budget(budget& budget) {
 				nullptr
 			);
 			if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
-			error result = execute(delete_targets_stmt, [&](sqlite3_stmt* stmt) {
+			error result = sql_execute(delete_targets_stmt, [&](sqlite3_stmt* stmt) {
 				sqlite3_bind_int64(stmt, 1, phase_id);
 				for (size_t i = 0; i < preserve_ids.size(); ++i) {
 					sqlite3_bind_int64(stmt, i + 2, preserve_ids[i]);
@@ -1206,7 +1206,7 @@ db::error db::save_budget(budget& budget) {
 		// Return value is for the budget::find api, return true on error
 		auto upsert_phase = [&](int pos, db_managed* phase_managed, const std::string& kind) -> bool {
 			if (phase_managed->is_persisted()) {
-				result = execute(prepared->named.update_phase.statement, [&](sqlite3_stmt* stmt) {
+				result = sql_execute(prepared->named.update_phase.statement, [&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int(stmt, 1, pos);
 					sqlite3_bind_int64(stmt, 2, phase_managed->id_);
 					sqlite3_bind_int64(stmt, 3, budget.id_);
@@ -1217,7 +1217,7 @@ db::error db::save_budget(budget& budget) {
 					return true;
 				}
 			} else {
-				result = execute(prepared->named.insert_phase.statement, [&](sqlite3_stmt* stmt) {
+				result = sql_execute(prepared->named.insert_phase.statement, [&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int64(stmt, 1, budget.id_);
 					sqlite3_bind_int  (stmt, 2, pos);
 					bind_text         (stmt, 3, kind);
@@ -1243,7 +1243,7 @@ db::error db::save_budget(budget& budget) {
 		// Since auto* target makes this templated we can access common properties
 		auto upsert_target = [&](int pos, auto* target, int64_t phase_id, int64_t amount) -> bool {
 			if (target->is_persisted()) {
-				result = execute(prepared->named.update_target.statement, [&](sqlite3_stmt* stmt) {
+				result = sql_execute(prepared->named.update_target.statement, [&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int   (stmt, 1, pos);
 					sqlite3_bind_int64 (stmt, 2, target->fund_id);
 					sqlite3_bind_int64 (stmt, 3, amount);
@@ -1258,7 +1258,7 @@ db::error db::save_budget(budget& budget) {
 					return true;
 				}
 			} else {
-				result = execute(prepared->named.insert_target.statement, [&](sqlite3_stmt* stmt) {
+				result = sql_execute(prepared->named.insert_target.statement, [&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int64 (stmt, 1, phase_id);
 					sqlite3_bind_int   (stmt, 2, pos);
 					sqlite3_bind_int64 (stmt, 3, target->fund_id);
@@ -1332,7 +1332,7 @@ SET corrects_id = (
 WHERE corrects_fitid IS NOT NULL
 AND corrects_id IS NULL;
 )sql";
-	return transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
 		int rc = sqlite3_exec(connection, update_corrections_sql, nullptr, nullptr, nullptr);
 		if (SQLITE_OK != rc) {
 			get_sqlite3_error();

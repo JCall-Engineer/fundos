@@ -251,9 +251,9 @@ void import_transaction(parse_context& context, std::vector<transaction>& transa
 				} else if (in.text == CORRECT_ACTION_TAG) {
 					upper(strip(value.text));
 					if (value.text == CORRECT_REPLACE) {
-						transaction.correct_action = transaction::correct_action::replaces;
+						transaction.correct_action = transaction::correction_type::replaces;
 					} else if (value.text == CORRECT_DELETE) {
-						transaction.correct_action = transaction::correct_action::deletes;
+						transaction.correct_action = transaction::correction_type::deletes;
 					} else {
 						context.output.warn(warning::bad_correction);
 						context.output.warn(warning::skipped_transaction);
@@ -282,7 +282,7 @@ void import_transaction(parse_context& context, std::vector<transaction>& transa
 					context.output.warn(warning::skipped_transaction);
 					return;
 				}
-				bool is_delete = transaction.correct_action == transaction::correct_action::deletes;
+				bool is_delete = transaction.correct_action == transaction::correction_type::deletes;
 				if (!pending_amount && !is_delete) {
 					context.output.warn(warning::missing_amount);
 					context.output.warn(warning::skipped_transaction);
