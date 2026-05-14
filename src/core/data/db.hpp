@@ -165,6 +165,8 @@ public:
 
 	error                        resolve_corrections();
 
+	db::error                    save_transaction(transaction& transaction);
+
 #pragma endregion
 
 private:

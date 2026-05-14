@@ -296,12 +296,12 @@ struct statements {
 		AND date BETWEEN ? AND ?
 	)sql" };
 	statement_slot insert_transaction { .sql = R"sql(
-		INSERT INTO transactions (account_id, amount, date, memo, fitid)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO transactions (account_id, amount, date, memo, fitid, corrects_fitid, correct_action)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	)sql" };
 	statement_slot update_transaction { .sql = R"sql(
 		UPDATE transactions
-		SET fitid = ?
+		SET amount = ?, date = ?, memo = ?, fitid = ?, corrects_fitid = ?, correct_action = ?
 		WHERE id = ?
 	)sql" };
 
@@ -1340,6 +1340,48 @@ AND corrects_id IS NULL;
 		}
 		return error::none;
 	});
+}
+
+static constexpr size_t num_correct_actions = 2;
+static const enum_string_map<transaction::correction_type, num_correct_actions> transaction_correction_map = {{
+	{ transaction::correction_type::deletes,   "delete" },
+	{ transaction::correction_type::replaces,  "replace" },
+}};
+db::error db::save_transaction(transaction& transaction) {
+	std::optional<std::string> correct_action_string = transaction.correct_action.has_value()
+		? enum_to_string(transaction_correction_map, *transaction.correct_action)
+		: std::nullopt;
+
+	if (!transaction.is_persisted()) {
+		error err = sql_execute(
+			prepared->named.insert_transaction.statement,
+			[&](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64(stmt, 1, transaction.account_id);
+				sqlite3_bind_int64(stmt, 2, transaction.amount.minor_units);
+				sqlite3_bind_int64(stmt, 3, transaction.date.milliseconds_since_epoch);
+				bind_text         (stmt, 4, transaction.memo);
+				bind_optional_text(stmt, 5, transaction.fitid);
+				bind_optional_text(stmt, 6, transaction.corrects_fitid);
+				bind_optional_text(stmt, 7, correct_action_string);
+			}
+		);
+		if (err != error::none) { return err; }
+		transaction.id_= sqlite3_last_insert_rowid(connection);
+		return error::none;
+	} else {
+		return sql_execute(
+			prepared->named.update_transaction.statement,
+			[&](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64(stmt, 1, transaction.amount.minor_units);
+				sqlite3_bind_int64(stmt, 2, transaction.date.milliseconds_since_epoch);
+				bind_text         (stmt, 3, transaction.memo);
+				bind_optional_text(stmt, 4, transaction.fitid);
+				bind_optional_text(stmt, 5, transaction.corrects_fitid);
+				bind_optional_text(stmt, 6, correct_action_string);
+				sqlite3_bind_int64(stmt, 7, transaction.id_);
+			}
+		);
+	}
 }
 
 #pragma endregion
