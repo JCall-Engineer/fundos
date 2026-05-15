@@ -209,6 +209,57 @@ struct budget : db_managed {
 
 		phases.splice(before_it, phases, phase_it);
 	}
+
+	//--------------------------------------------------------------------------------------+
+	// This is **THE** FundOS function. The heart of it all. The magic.                     |
+	// I would like to mark this const, but I don't because that require me to duplicate    |
+	// find/each either here or in a const version of their respective functions            |
+	// apply() is still guaranteed to not modify the budget                                 |
+	//--------------------------------------------------------------------------------------+
+	inline std::vector<allocation> apply(const transaction& transaction) {
+		// unordered_map operator[] default constructs currency{} on non-existent keys
+		std::unordered_map<int64_t, currency> allocations;
+		currency remainder = transaction.amount;
+
+		each([&remainder, &allocations](int, budget_phase<fixed_target>* phase) -> void {
+			phase->each([&](int, fixed_target* target) -> void {
+				if (remainder >= target->amount || target->allow_overdraw) {
+					allocations[target->fund_id] += target->amount;
+					remainder -= target->amount;
+				} else if (remainder.minor_units > 0) {
+					allocations[target->fund_id] += remainder;
+					remainder.minor_units = 0;
+				}
+			});
+		}, [&remainder, &allocations](int, budget_phase<percentage_target>* phase) -> void {
+			currency phase_balance = remainder.minor_units < 0 ? currency{0} : remainder;
+			phase->each([&](int, percentage_target* target) -> void {
+				currency amount = target->amount.scale(phase_balance);
+				if (remainder >= amount || target->allow_overdraw) {
+					allocations[target->fund_id] += amount;
+					remainder -= amount;
+				} else if (remainder.minor_units > 0) {
+					allocations[target->fund_id] += remainder;
+					remainder.minor_units = 0;
+				}
+			});
+		});
+
+		if (remainder.minor_units != 0) {
+			allocations[overflow_fund] += remainder;
+		}
+
+		std::vector<allocation> result;
+		result.reserve(allocations.size());
+		for (const auto& [fund_id, amount] : allocations) {
+			allocation allocation;
+			allocation.transaction_id = transaction.id();
+			allocation.fund_id = fund_id;
+			allocation.amount = amount;
+			result.push_back(allocation);
+		}
+		return result;
+	}
 };
 
 }; // fundos
