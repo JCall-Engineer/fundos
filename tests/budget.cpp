@@ -24,6 +24,8 @@ constexpr int64_t FUND_SAVINGS = 3;
 constexpr int64_t FUND_LONGTERM_SPENDING = 4;
 constexpr int64_t FUND_OVERFLOW = 99;
 
+static const std::unordered_map<int64_t, currency> NO_BALANCE = {};
+
 static inline budget SingleFixedPhase(bool allow_overdraw) {
 	budget budget;
 	budget.overflow_fund = FUND_OVERFLOW;
@@ -43,7 +45,7 @@ TEST(BudgetApply, SingleFixedPhase_NotEnough_NoOverdraw) {
 	budget budget = SingleFixedPhase(false);
 	transaction transaction;
 	transaction.amount = currency{30000}; // $300
-	auto allocations = budget.apply(transaction);
+	auto allocations = budget.apply(transaction, NO_BALANCE);
 	AssertAllocationsMatch(allocations, {
 		{FUND_GROCERIES, currency{30000}}
 	});
@@ -53,7 +55,7 @@ TEST(BudgetApply, SingleFixedPhase_NotEnough_WithOverdraw) {
 	budget budget = SingleFixedPhase(true);
 	transaction transaction;
 	transaction.amount = currency{30000}; // $300
-	auto allocations = budget.apply(transaction);
+	auto allocations = budget.apply(transaction, NO_BALANCE);
 	AssertAllocationsMatch(allocations, {
 		{FUND_GROCERIES, currency{50000}},
 		{FUND_OVERFLOW, currency{-20000}}
@@ -64,7 +66,7 @@ TEST(BudgetApply, SingleFixedPhase_MoreThanEnough) {
 	budget budget = SingleFixedPhase(false);
 	transaction transaction;
 	transaction.amount = currency{60000}; // $600
-	auto allocations = budget.apply(transaction);
+	auto allocations = budget.apply(transaction, NO_BALANCE);
 	AssertAllocationsMatch(allocations, {
 		{FUND_GROCERIES, currency{50000}},
 		{FUND_OVERFLOW, currency{10000}}
@@ -91,7 +93,7 @@ TEST(BudgetApply, SinglePercentagePhase_Under100) {
 	budget.phases.push_back(phase);
 	transaction transaction;
 	transaction.amount = currency{10000}; // $100
-	auto allocations = budget.apply(transaction);
+	auto allocations = budget.apply(transaction, NO_BALANCE);
 	AssertAllocationsMatch(allocations, {
 		{FUND_SAVINGS, currency{2500}},
 		{FUND_LONGTERM_SPENDING, currency{3333}},
@@ -119,7 +121,7 @@ TEST(BudgetApply, SinglePercentagePhase_Over100_NoOverdraw) {
 	budget.phases.push_back(phase);
 	transaction transaction;
 	transaction.amount = currency{10000}; // $100
-	auto allocations = budget.apply(transaction);
+	auto allocations = budget.apply(transaction, NO_BALANCE);
 	AssertAllocationsMatch(allocations, {
 		{FUND_SAVINGS, currency{7500}},
 		{FUND_LONGTERM_SPENDING, currency{2500}}
@@ -146,7 +148,7 @@ TEST(BudgetApply, SinglePercentagePhase_Over100_WithOverdraw) {
 	budget.phases.push_back(phase);
 	transaction transaction;
 	transaction.amount = currency{10000}; // $100
-	auto allocations = budget.apply(transaction);
+	auto allocations = budget.apply(transaction, NO_BALANCE);
 	AssertAllocationsMatch(allocations, {
 		{FUND_SAVINGS, currency{7500}},
 		{FUND_LONGTERM_SPENDING, currency{3333}},
@@ -164,6 +166,7 @@ budget MultiPhase() {
 		fixed_target groceries_target;
 		groceries_target.fund_id = FUND_GROCERIES;
 		groceries_target.amount = currency{50000}; // $500
+		groceries_target.cap = currency{100000}; // $1k
 		groceries_target.allow_overdraw = true;
 		first_phase.targets.push_back(groceries_target);
 
@@ -182,9 +185,9 @@ budget MultiPhase() {
 		percentage_target lts_target;
 		lts_target.fund_id = FUND_LONGTERM_SPENDING;
 		lts_target.amount = percentage{2500}; // 25%
+		lts_target.cap = currency{1000000}; // $10k
 		lts_target.allow_overdraw = false;
 		second_phase.targets.push_back(lts_target);
-
 
 		budget.phases.push_back(second_phase);
 	}
@@ -195,6 +198,7 @@ budget MultiPhase() {
 		fixed_target rent_target;
 		rent_target.fund_id = FUND_RENT;
 		rent_target.amount = currency{150000}; // $1500
+		rent_target.cap = currency{300000}; // $3k
 		rent_target.allow_overdraw = true;
 		third_phase.targets.push_back(rent_target);
 
@@ -208,7 +212,7 @@ TEST(BudgetApply, MultiPhase_Underallocated) {
 	budget budget = MultiPhase();
 	transaction transaction;
 	transaction.amount = currency{200000}; // $2k
-	auto allocations = budget.apply(transaction);
+	auto allocations = budget.apply(transaction, NO_BALANCE);
 	AssertAllocationsMatch(allocations, {
 		{FUND_GROCERIES, currency{50000}},
 		{FUND_SAVINGS, currency{49995}},
@@ -222,12 +226,32 @@ TEST(BudgetApply, MultiPhase_Overallocated) {
 	budget budget = MultiPhase();
 	transaction transaction;
 	transaction.amount = currency{500000}; // $5k
-	auto allocations = budget.apply(transaction);
+	auto allocations = budget.apply(transaction, NO_BALANCE);
 	AssertAllocationsMatch(allocations, {
 		{FUND_GROCERIES, currency{50000}},
 		{FUND_SAVINGS, currency{149985}},
 		{FUND_LONGTERM_SPENDING, currency{112500}},
 		{FUND_RENT, currency{150000}},
 		{FUND_OVERFLOW, currency{37515}}
+	});
+}
+
+static const std::unordered_map<int64_t, currency> NEAR_CAP_BALANCE = {
+	{FUND_GROCERIES, currency{75000}},
+	{FUND_LONGTERM_SPENDING, currency{950000}},
+	{FUND_RENT, currency{190000}},
+};
+
+TEST(BudgetApply, MultiPhase_OverCaps) {
+	budget budget = MultiPhase();
+	transaction transaction;
+	transaction.amount = currency{500000}; // $5k
+	auto allocations = budget.apply(transaction, NEAR_CAP_BALANCE);
+	AssertAllocationsMatch(allocations, {
+		{FUND_GROCERIES, currency{25000}},
+		{FUND_SAVINGS, currency{158317}},
+		{FUND_LONGTERM_SPENDING, currency{50000}},
+		{FUND_RENT, currency{110000}},
+		{FUND_OVERFLOW, currency{156683}}
 	});
 }

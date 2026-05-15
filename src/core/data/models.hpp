@@ -216,32 +216,40 @@ struct budget : db_managed {
 	// find/each either here or in a const version of their respective functions            |
 	// apply() is still guaranteed to not modify the budget                                 |
 	//--------------------------------------------------------------------------------------+
-	inline std::vector<allocation> apply(const transaction& transaction) {
+	inline std::vector<allocation> apply(const transaction& transaction, const std::unordered_map<int64_t, currency>& current_balances) {
 		// unordered_map operator[] default constructs currency{} on non-existent keys
 		std::unordered_map<int64_t, currency> allocations;
 		currency remainder = transaction.amount;
+		auto allocate = [&](const auto& target, currency allocated) -> void {
+			if (target->cap) {
+				currency current = current_balances.contains(target->fund_id)
+					? current_balances.at(target->fund_id)
+					: currency{0};
+				current += allocations.contains(target->fund_id)
+					? allocations.at(target->fund_id)
+					: currency{0};
 
-		each([&remainder, &allocations](int, budget_phase<fixed_target>* phase) -> void {
+				currency room = std::max(currency{0}, *target->cap - current);
+				allocated = std::min(allocated, room);
+			}
+
+			if (remainder >= allocated || target->allow_overdraw) {
+				allocations[target->fund_id] += allocated;
+				remainder -= allocated;
+			} else if (remainder.minor_units > 0) {
+				allocations[target->fund_id] += remainder;
+				remainder.minor_units = 0;
+			}
+		};
+
+		each([&](int, budget_phase<fixed_target>* phase) -> void {
 			phase->each([&](int, fixed_target* target) -> void {
-				if (remainder >= target->amount || target->allow_overdraw) {
-					allocations[target->fund_id] += target->amount;
-					remainder -= target->amount;
-				} else if (remainder.minor_units > 0) {
-					allocations[target->fund_id] += remainder;
-					remainder.minor_units = 0;
-				}
+				allocate(target, target->amount);
 			});
-		}, [&remainder, &allocations](int, budget_phase<percentage_target>* phase) -> void {
+		}, [&](int, budget_phase<percentage_target>* phase) -> void {
 			currency phase_balance = remainder.minor_units < 0 ? currency{0} : remainder;
 			phase->each([&](int, percentage_target* target) -> void {
-				currency amount = target->amount.scale(phase_balance);
-				if (remainder >= amount || target->allow_overdraw) {
-					allocations[target->fund_id] += amount;
-					remainder -= amount;
-				} else if (remainder.minor_units > 0) {
-					allocations[target->fund_id] += remainder;
-					remainder.minor_units = 0;
-				}
+				allocate(target, target->amount.scale(phase_balance));
 			});
 		});
 
