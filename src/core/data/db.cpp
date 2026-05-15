@@ -448,11 +448,11 @@ db::result<std::vector<T>> db::sql_fetch_many(sqlite3_stmt* stmt, executor bind,
 	return result<std::vector<T>> { .val = rows };
 }
 
-//-------------------------------------------------------------------------------------+
-// work() must propagate all errors immediately — transaction() relies on              |
-// error::corrupted being returned to skip COMMIT/ROLLBACK on a closed connection.     |
-// Do not silently swallow errors from execute/fetch_one/fetch_many inside work().     |
-//-------------------------------------------------------------------------------------+
+//--------------------------------------------------------------------------------------+
+// work() must propagate all errors immediately — transaction() relies on               |
+// error::corrupted being returned to skip COMMIT/ROLLBACK on a closed connection.      |
+// Do not silently swallow errors from execute/fetch_one/fetch_many inside work().      |
+//--------------------------------------------------------------------------------------+
 db::error db::sql_transaction(std::function<error(std::vector<std::function<void()>>&)> work) {
 	if (!is_ready()) { return error::not_ready; }
 	int rc = sqlite3_exec(connection, "BEGIN", nullptr, nullptr, nullptr);
@@ -508,14 +508,14 @@ db::error db::set_meta(std::string key, std::string value) {
 	);
 }
 
-//-------------------------------------------------------------------------------------+
-// Extractors are intentionally duplicated per query function rather than shared.      |
-// Column indices are determined by each SQL statement's SELECT order, which is        |
-// not guaranteed to remain consistent across queries even for the same model type.    |
-// Sharing extractors would couple unrelated queries and risk silent data corruption   |
-// if any statement's column order ever diverges. Treat each extractor as local        |
-// to its query and verify column indices against the SQL when making changes.         |
-//-------------------------------------------------------------------------------------+
+//--------------------------------------------------------------------------------------+
+// Extractors are intentionally duplicated per query function rather than shared.       |
+// Column indices are determined by each SQL statement's SELECT order, which is         |
+// not guaranteed to remain consistent across queries even for the same model type.     |
+// Sharing extractors would couple unrelated queries and risk silent data corruption    |
+// if any statement's column order ever diverges. Treat each extractor as local         |
+// to its query and verify column indices against the SQL when making changes.          |
+//--------------------------------------------------------------------------------------+
 struct locale_register {
 	const std::string percentage_locale_key = "percentage_locale";
 	const std::string currency_locale_key   = "currency_locale";
