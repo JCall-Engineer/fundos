@@ -4,7 +4,7 @@
 namespace fundos {
 
 struct datetime {
-	int64_t milliseconds_since_epoch;
+	int64_t milliseconds_since_epoch = 0;
 
 	// Convert operator allows this to be used like a true primitive type
 	constexpr explicit operator int64_t() const { return milliseconds_since_epoch; }

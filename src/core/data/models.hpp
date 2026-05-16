@@ -28,12 +28,12 @@ struct user : db_managed {
 
 struct fund : db_managed {
 	std::string name;
-	std::optional<std::string> closed_at;
+	std::optional<datetime> closed_at;
 };
 
 struct account : db_managed {
 	std::string name;
-	std::optional<std::string> closed_at;
+	std::optional<datetime> closed_at;
 	std::optional<std::string> bank_account_id;
 };
 
@@ -43,7 +43,7 @@ struct transaction : db_managed {
 		deletes,
 	};
 
-	int64_t account_id;
+	int64_t account_id = 0;
 	currency amount;
 	datetime date;
 	std::string memo;
@@ -55,23 +55,23 @@ struct transaction : db_managed {
 };
 
 struct allocation : db_managed {
-	int64_t transaction_id;
-	int64_t fund_id;
+	int64_t transaction_id = 0;
+	int64_t fund_id = 0;
 	currency amount;
 };
 
 struct fixed_target : db_managed {
-	int64_t fund_id;
+	int64_t fund_id = 0;
 	currency amount;
 	std::optional<currency> cap;
-	bool allow_overdraw;
+	bool allow_overdraw = false;
 };
 
 struct percentage_target : db_managed {
-	int64_t fund_id;
+	int64_t fund_id = 0;
 	percentage amount;
 	std::optional<currency> cap;
-	bool allow_overdraw;
+	bool allow_overdraw = false;
 };
 
 template<typename T>
@@ -138,7 +138,7 @@ using any_budget_phase = std::variant<
 
 struct budget : db_managed {
 	std::string name;
-	int64_t overflow_fund;
+	int64_t overflow_fund = 0;
 	std::list<any_budget_phase> phases;
 
 	inline any_budget_phase* find(std::function<bool(int, any_budget_phase*)> on_phase) {

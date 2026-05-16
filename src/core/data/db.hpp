@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 #include "sqlite3.h"
@@ -33,6 +34,8 @@ public:
 		out_of_memory,   // potentially transient error
 		disk_full,       // potentially transient error
 		constraint,      // either a FOREIGN KEY or UNIQUE violation
+		bad_request,     // incorrect API usage
+		rejected,        // data does not satisfy preconditions
 		internal,        // an unexpected situation that would abort a debug build
 	};
 
@@ -111,6 +114,18 @@ private:
 	template<typename T>
 	using extractor = std::function<T(sqlite3_stmt*)>;
 
+	// delete where id not in
+	struct delete_except_params {
+		std::string_view table;
+		std::string_view filter_column;
+		int64_t filter_value;
+		std::span<const int64_t> preserve_ids;
+	};
+	error sql_delete_except(const delete_except_params&);
+
+	// "select COUNT(*) where id IN" checks
+	error sql_count_check(const std::string& sql, size_t expected, executor bind);
+
 	// insert/update/delete
 	error sql_execute(sqlite3_stmt* stmt, executor bind);
 
@@ -166,6 +181,7 @@ public:
 	error                        resolve_corrections();
 
 	db::error                    save_transaction(transaction& transaction);
+	db::error                    allocate_transaction(std::vector<allocation>& allocations);
 
 #pragma endregion
 

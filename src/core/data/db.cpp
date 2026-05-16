@@ -1,5 +1,7 @@
 #include <array>
+#include <format>
 #include <functional>
+#include <unordered_set>
 #include "db.hpp"
 #include "platform.hpp"
 
@@ -24,7 +26,7 @@ CREATE TABLE users (
 CREATE TABLE funds (
 	id        INTEGER PRIMARY KEY,
 	name      TEXT NOT NULL,
-	closed_at TEXT
+	closed_at INTEGER
 );
 
 CREATE TABLE fund_members (
@@ -38,7 +40,7 @@ CREATE INDEX idx_fund_members_user_id ON fund_members(user_id);
 CREATE TABLE accounts (
 	id              INTEGER PRIMARY KEY,
 	name            TEXT NOT NULL,
-	closed_at       TEXT,
+	closed_at       INTEGER,
 	bank_account_id TEXT,
 	UNIQUE(bank_account_id)
 );
@@ -304,6 +306,9 @@ struct statements {
 		SET amount = ?, date = ?, memo = ?, fitid = ?, corrects_fitid = ?, correct_action = ?
 		WHERE id = ?
 	)sql" };
+	statement_slot get_transaction_amount { .sql = R"sql(
+		SELECT amount FROM transactions WHERE id = ?
+	)sql" };
 
 	statement_slot filter_allocations { .sql = R"sql(
 		SELECT allocations.*, transactions.date FROM allocations
@@ -314,6 +319,11 @@ struct statements {
 	statement_slot insert_allocation { .sql = R"sql(
 		INSERT INTO allocations (transaction_id, fund_id, amount)
 		VALUES (?, ?, ?)
+	)sql" };
+	statement_slot update_allocation { .sql = R"sql(
+		UPDATE allocations
+		SET fund_id = ?, amount = ?
+		WHERE id = ?
 	)sql" };
 	//statement_slot name { .sql = R"sql()sql" };
 };
@@ -395,6 +405,50 @@ db::error db::classify_sqlite_runtime_error(int rc) {
 			FUNDOS_ASSERT(false, "unhandled sqlite3 step result code");
 			return db::error::internal;
 	}
+}
+
+db::error db::sql_count_check(const std::string& sql, size_t expected, executor bind) {
+	sqlite3_stmt* stmt = nullptr;
+	int rc = sqlite3_prepare_v2(connection, sql.c_str(), -1, &stmt, nullptr);
+	if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
+	auto result = sql_fetch_one<int64_t>(
+		stmt,
+		bind, [](sqlite3_stmt* stmt) -> int64_t {
+			return sqlite3_column_int64(stmt, 0);
+		}
+	);
+	sqlite3_finalize(stmt);
+
+	if (result.err != error::none) { return result.err; }
+	if (result.not_found()) { return error::internal; }
+	if (!result.val) { return error::internal; }
+	if (*result.val != expected) { return error::rejected; }
+	return error::none;
+}
+
+db::error db::sql_delete_except(const db::delete_except_params& params) {
+	std::string sql = std::format("DELETE FROM {} WHERE {} = ?", params.table, params.filter_column);
+
+	if (!params.preserve_ids.empty()) {
+		sql += " AND id NOT IN(";
+		for (size_t i = 0; i < params.preserve_ids.size(); ++i) {
+			sql += i == 0 ? "?" : ", ?";
+		}
+		sql += ")";
+	}
+
+	sqlite3_stmt* stmt = nullptr;
+	int rc = sqlite3_prepare_v2(connection, sql.c_str(), -1, &stmt, nullptr);
+	if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
+
+	error result = sql_execute(stmt, [&](sqlite3_stmt* stmt) {
+		sqlite3_bind_int64(stmt, 1, params.filter_value);
+		for (size_t i = 0; i < params.preserve_ids.size(); ++i) {
+			sqlite3_bind_int64(stmt, i + 2, params.preserve_ids[i]);
+		}
+	});
+	sqlite3_finalize(stmt);
+	return result;
 }
 
 db::error db::sql_execute(sqlite3_stmt* stmt, executor bind) {
@@ -649,7 +703,7 @@ db::error db::set_currency_locale_preset(const currency_locale::slot& slot) {
 	return set_meta(locale_meta.currency_locale_key, slot.identifier);
 }
 db::error db::set_currency_locale(const currency_locale::info& locale) {
-	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+	return sql_transaction([&](std::vector<std::function<void()>>&) -> error {
 		error result = set_meta(locale_meta.currency_locale_key, locale_meta.custom_sentinel_val);
 		if (result != error::none) { return result; }
 
@@ -733,7 +787,7 @@ db::error db::set_percentage_locale_preset(const percentage_locale::slot& slot) 
 	return set_meta(locale_meta.percentage_locale_key, slot.identifier);
 }
 db::error db::set_percentage_locale(const percentage_locale::info& locale) {
-	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+	return sql_transaction([&](std::vector<std::function<void()>>&) -> error {
 		error result = set_meta(locale_meta.percentage_locale_key, locale_meta.custom_sentinel_val);
 		if (result != error::none) { return result; }
 
@@ -802,10 +856,10 @@ db::result<std::vector<account>> db::get_account_memberships(int64_t user_id) {
 		},
 		[](sqlite3_stmt* stmt) -> account {
 			account row;
-			row.id_             = sqlite3_column_int64 (stmt, 0);
-			row.name            = extract_text         (stmt, 1);
-			row.closed_at       = extract_optional_text(stmt, 2);
-			row.bank_account_id = extract_optional_text(stmt, 3);
+			row.id_             =                       sqlite3_column_int64  (stmt, 0);
+			row.name            =                       extract_text          (stmt, 1);
+			row.closed_at       = as_optional<datetime>(extract_optional_int64(stmt, 2));
+			row.bank_account_id =                       extract_optional_text (stmt, 3);
 			return row;
 		}
 	);
@@ -818,10 +872,10 @@ db::result<std::vector<account>> db::get_account_nonmemberships(int64_t user_id)
 		},
 		[](sqlite3_stmt* stmt) -> account {
 			account row;
-			row.id_             = sqlite3_column_int64 (stmt, 0);
-			row.name            = extract_text         (stmt, 1);
-			row.closed_at       = extract_optional_text(stmt, 2);
-			row.bank_account_id = extract_optional_text(stmt, 3);
+			row.id_             =                       sqlite3_column_int64  (stmt, 0);
+			row.name            =                       extract_text          (stmt, 1);
+			row.closed_at       = as_optional<datetime>(extract_optional_int64(stmt, 2));
+			row.bank_account_id =                       extract_optional_text (stmt, 3);
 			return row;
 		}
 	);
@@ -883,9 +937,9 @@ db::result<std::vector<fund>> db::get_fund_memberships(int64_t user_id) {
 		},
 		[](sqlite3_stmt* stmt) -> fund {
 			fund row;
-			row.id_       = sqlite3_column_int64 (stmt, 0);
-			row.name      = extract_text         (stmt, 1);
-			row.closed_at = extract_optional_text(stmt, 2);
+			row.id_       =                       sqlite3_column_int64  (stmt, 0);
+			row.name      =                       extract_text          (stmt, 1);
+			row.closed_at = as_optional<datetime>(extract_optional_int64(stmt, 2));
 			return row;
 		}
 	);
@@ -898,9 +952,9 @@ db::result<std::vector<fund>> db::get_fund_nonmemberships(int64_t user_id) {
 		},
 		[](sqlite3_stmt* stmt) -> fund {
 			fund row;
-			row.id_       = sqlite3_column_int64 (stmt, 0);
-			row.name      = extract_text         (stmt, 1);
-			row.closed_at = extract_optional_text(stmt, 2);
+			row.id_       =                       sqlite3_column_int64  (stmt, 0);
+			row.name      =                       extract_text          (stmt, 1);
+			row.closed_at = as_optional<datetime>(extract_optional_int64(stmt, 2));
 			return row;
 		}
 	);
@@ -959,9 +1013,9 @@ db::result<std::vector<fund>> db::get_funds() {
 		[](sqlite3_stmt*) {},
 		[](sqlite3_stmt* stmt) -> fund {
 			fund row;
-			row.id_       = sqlite3_column_int64 (stmt, 0);
-			row.name      = extract_text         (stmt, 1);
-			row.closed_at = extract_optional_text(stmt, 2);
+			row.id_       =                       sqlite3_column_int64  (stmt, 0);
+			row.name      =                       extract_text          (stmt, 1);
+			row.closed_at = as_optional<datetime>(extract_optional_int64(stmt, 2));
 			return row;
 		}
 	);
@@ -981,9 +1035,9 @@ db::error db::save_fund(fund& fund) {
 		return sql_execute(
 			prepared->named.update_fund.statement,
 			[&](sqlite3_stmt* stmt) {
-				bind_text         (stmt, 1, fund.name);
-				bind_optional_text(stmt, 2, fund.closed_at);
-				sqlite3_bind_int64(stmt, 3, fund.id_);
+				bind_text          (stmt, 1, fund.name);
+				bind_optional_int64(stmt, 2, as_optional_int64(fund.closed_at));
+				sqlite3_bind_int64 (stmt, 3, fund.id_);
 			}
 		);
 	}
@@ -995,10 +1049,10 @@ db::result<std::vector<account>> db::get_accounts() {
 		[](sqlite3_stmt*) {},
 		[](sqlite3_stmt* stmt) -> account {
 			account row;
-			row.id_             = sqlite3_column_int64 (stmt, 0);
-			row.name            = extract_text         (stmt, 1);
-			row.closed_at       = extract_optional_text(stmt, 2);
-			row.bank_account_id = extract_optional_text(stmt, 3);
+			row.id_             =                       sqlite3_column_int64  (stmt, 0);
+			row.name            =                       extract_text          (stmt, 1);
+			row.closed_at       = as_optional<datetime>(extract_optional_int64(stmt, 2));
+			row.bank_account_id =                       extract_optional_text (stmt, 3);
 			return row;
 		}
 	);
@@ -1019,10 +1073,10 @@ db::error db::save_account(account& account) {
 		return sql_execute(
 			prepared->named.update_account.statement,
 			[&](sqlite3_stmt* stmt) {
-				bind_text         (stmt, 1, account.name);
-				bind_optional_text(stmt, 2, account.closed_at);
-				bind_optional_text(stmt, 3, account.bank_account_id);
-				sqlite3_bind_int64(stmt, 4, account.id_);
+				bind_text          (stmt, 1, account.name);
+				bind_optional_int64(stmt, 2, as_optional_int64(account.closed_at));
+				bind_optional_text (stmt, 3, account.bank_account_id);
+				sqlite3_bind_int64 (stmt, 4, account.id_);
 			}
 		);
 	}
@@ -1145,62 +1199,23 @@ db::error db::save_budget(budget& budget) {
 				return false;
 			});
 
-			std::string delete_phases_sql = "DELETE FROM budget_phases WHERE budget_id = ?";
-			if (!preserve_ids.empty()) {
-				delete_phases_sql += " AND id NOT IN(";
-				for (size_t i = 0; i < preserve_ids.size(); ++i) {
-					delete_phases_sql += i == 0 ? "?" : ", ?";
-				}
-				delete_phases_sql += ")";
-			}
-
-			sqlite3_stmt* delete_phases_stmt = nullptr;
-			int rc = sqlite3_prepare_v2(
-				connection,
-				delete_phases_sql.c_str(),
-				-1,
-				&delete_phases_stmt,
-				nullptr
-			);
-			if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
-			result = sql_execute(delete_phases_stmt, [&](sqlite3_stmt* stmt) {
-				sqlite3_bind_int64(stmt, 1, budget.id_);
-				for (size_t i = 0; i < preserve_ids.size(); ++i) {
-					sqlite3_bind_int64(stmt, i + 2, preserve_ids[i]);
-				}
+			result = sql_delete_except({
+				.table = "budget_phases",
+				.filter_column = "budget_id",
+				.filter_value = budget.id_,
+				.preserve_ids = preserve_ids,
 			});
-			sqlite3_finalize(delete_phases_stmt);
 			if (result != error::none) { return result; }
 		}
 
 		// Deletes targets not found in a phase anymore
 		auto delete_orphaned_targets = [&](int64_t phase_id, const std::vector<int64_t>& preserve_ids) -> error {
-			std::string sql = "DELETE FROM phase_targets WHERE phase_id = ?";
-			if (!preserve_ids.empty()) {
-				sql += " AND id NOT IN(";
-				for (size_t i = 0; i < preserve_ids.size(); ++i) {
-					sql += i == 0 ? "?" : ", ?";
-				}
-				sql += ")";
-			}
-
-			sqlite3_stmt* delete_targets_stmt = nullptr;
-			int rc = sqlite3_prepare_v2(
-				connection,
-				sql.c_str(),
-				-1,
-				&delete_targets_stmt,
-				nullptr
-			);
-			if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
-			error result = sql_execute(delete_targets_stmt, [&](sqlite3_stmt* stmt) {
-				sqlite3_bind_int64(stmt, 1, phase_id);
-				for (size_t i = 0; i < preserve_ids.size(); ++i) {
-					sqlite3_bind_int64(stmt, i + 2, preserve_ids[i]);
-				}
+			return sql_delete_except({
+				.table = "phase_targets",
+				.filter_column = "phase_id",
+				.filter_value = phase_id,
+				.preserve_ids = preserve_ids,
 			});
-			sqlite3_finalize(delete_targets_stmt);
-			return result;
 		};
 
 		// Return value is for the budget::find api, return true on error
@@ -1332,7 +1347,7 @@ SET corrects_id = (
 WHERE corrects_fitid IS NOT NULL
 AND corrects_id IS NULL;
 )sql";
-	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+	return sql_transaction([&](std::vector<std::function<void()>>&) -> error {
 		int rc = sqlite3_exec(connection, update_corrections_sql, nullptr, nullptr, nullptr);
 		if (SQLITE_OK != rc) {
 			get_sqlite3_error();
@@ -1382,6 +1397,141 @@ db::error db::save_transaction(transaction& transaction) {
 			}
 		);
 	}
+}
+
+db::error db::allocate_transaction(std::vector<allocation>& allocations) {
+	if (allocations.empty()) { return error::bad_request; }
+	int64_t transaction_id = allocations[0].transaction_id;
+	std::vector<int64_t> preserve_ids;
+
+	{
+		// Validate the transaction
+		if (transaction_id == 0) { return error::bad_request; }
+		auto transaction_result = sql_fetch_one<currency>(
+			prepared->named.get_transaction_amount.statement,
+			[&transaction_id](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64(stmt, 1, transaction_id);
+			},
+			[](sqlite3_stmt* stmt) -> currency {
+				return {sqlite3_column_int64(stmt, 0)};
+			}
+		);
+		if (transaction_result.err != error::none) { return transaction_result.err; }
+		if (transaction_result.not_found()) { return error::rejected; }
+		if (!transaction_result.val) { return error::internal; }
+
+		currency total = *transaction_result.val;
+		currency sum = {0};
+
+		// Validate the funds
+		std::unordered_set<int64_t> seen_funds;
+		std::string allocation_finder_sql = R"sql(
+			SELECT COUNT(*)
+			FROM allocations
+			WHERE transaction_id = ?
+			AND id IN (
+		)sql";
+		std::string fund_finder_sql = R"sql(
+			SELECT COUNT(*)
+			FROM funds
+			WHERE closed_at IS NULL
+			AND id IN (
+		)sql";
+
+		for (const auto& allocation : allocations) {
+			if (allocation.transaction_id != transaction_id) {
+				return error::bad_request;
+			}
+
+			if (allocation.fund_id == 0) {
+				return error::bad_request;
+			}
+
+			// Gather ids to preserve in upsert and build sql to validate allocations belong the correct transaction
+			if (allocation.is_persisted()) {
+				allocation_finder_sql += preserve_ids.empty() ? "?" : ", ?";
+				preserve_ids.push_back(allocation.id_);
+			}
+
+			// Build sql to validate that funds exist and are not closed
+			fund_finder_sql += seen_funds.empty() ? "?" : ", ?";
+
+			if (seen_funds.contains(allocation.fund_id)) {
+				return error::bad_request;
+			}
+			seen_funds.insert(allocation.fund_id);
+
+			sum += allocation.amount;
+		}
+		if (sum != total) {
+			return error::rejected;
+		}
+		fund_finder_sql += ")";
+		allocation_finder_sql += ")";
+
+		// Make sure funds exist and are not closed
+		error result = sql_count_check(
+			fund_finder_sql,
+			allocations.size(),
+			[&](sqlite3_stmt* stmt) {
+				for (size_t i = 0; i < allocations.size(); ++i) {
+					sqlite3_bind_int64(stmt, i + 1, allocations[i].fund_id);
+				}
+			}
+		);
+		if (result != error::none) { return result; }
+
+		// Make sure persisted allocations exist and do not belong to a different transaction
+		if (!preserve_ids.empty()) {
+			result = sql_count_check(
+				allocation_finder_sql,
+				preserve_ids.size(),
+				[&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64(stmt, 1, transaction_id);
+					for (size_t i = 0; i < preserve_ids.size(); ++i) {
+						sqlite3_bind_int64(stmt, i + 2, preserve_ids[i]);
+					}
+				}
+			);
+			if (result != error::none) { return result; }
+		}
+	}
+
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+		error result = sql_delete_except({
+			.table = "allocations",
+			.filter_column = "transaction_id",
+			.filter_value = transaction_id,
+			.preserve_ids = preserve_ids,
+		});
+		if (result != error::none) { return result; }
+
+		for (auto& allocation : allocations) {
+			if (allocation.is_persisted()) {
+				result = sql_execute(prepared->named.update_allocation.statement, [&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64 (stmt, 1, allocation.fund_id);
+					sqlite3_bind_int64 (stmt, 2, allocation.amount.minor_units);
+					sqlite3_bind_int64 (stmt, 3, allocation.id_);
+				});
+				if (result != error::none) { return result; }
+				if (sqlite3_changes(connection) != 1) {
+					return error::internal;
+				}
+			} else {
+				result = sql_execute(prepared->named.insert_allocation.statement, [&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64 (stmt, 1, transaction_id);
+					sqlite3_bind_int64 (stmt, 2, allocation.fund_id);
+					sqlite3_bind_int64 (stmt, 3, allocation.amount.minor_units);
+				});
+				if (result != error::none) { return result; }
+				allocation.id_ = sqlite3_last_insert_rowid(connection);
+				auto* ptr = &allocation; // We need a persistent reference that outlives the transaction call
+				rollback.push_back([ptr]() { ptr->id_ = 0; });
+			}
+		}
+
+		return error::none;
+	});
 }
 
 #pragma endregion

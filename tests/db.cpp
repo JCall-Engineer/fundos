@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <chrono>
+#include <format>
 
 #include "data/db.hpp"
 using namespace fundos;
@@ -269,19 +271,26 @@ sqlite3* mockSchema() {
 	return connection; // file is destroyed, connection still exists
 }
 
+static constexpr datetime CLOSED_AT = {
+	std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::sys_days{std::chrono::year{2024} / std::chrono::June / 1}
+		.time_since_epoch()
+	).count()
+};
+
 TEST(DbQuery, ReadEntities) {
 	auto connection = mockSchema();
-	sqlite3_exec(connection, R"sql(
+	sqlite3_exec(connection, std::format(R"sql(
 		INSERT INTO users (id, name) VALUES (1, 'Alice');
 		INSERT INTO users (id, name) VALUES (2, 'Bob');
 		INSERT INTO funds (id, name, closed_at) VALUES (10, 'Emergency', NULL);
-		INSERT INTO funds (id, name, closed_at) VALUES (11, 'Vacation', '2024-01-01');
+		INSERT INTO funds (id, name, closed_at) VALUES (11, 'Vacation', {});
 		INSERT INTO accounts (id, name, closed_at, bank_account_id) VALUES (20, 'Checking', NULL, 'ref1');
-		INSERT INTO accounts (id, name, closed_at, bank_account_id) VALUES (21, 'Savings', '2024-06-01', NULL);
+		INSERT INTO accounts (id, name, closed_at, bank_account_id) VALUES (21, 'Savings', {}, NULL);
 		INSERT INTO fund_members (fund_id, user_id) VALUES (10, 1);
 		INSERT INTO fund_members (fund_id, user_id) VALUES (11, 1);
 		INSERT INTO account_members (account_id, user_id) VALUES (20, 1);
-	)sql", nullptr, nullptr, nullptr);
+	)sql", CLOSED_AT.milliseconds_since_epoch, CLOSED_AT.milliseconds_since_epoch).c_str(), nullptr, nullptr, nullptr);
 
 	auto file = std::make_shared<db>(connection, db::owns_connection{});
 	ASSERT_EQ(file->is_ready(), true);
@@ -309,7 +318,7 @@ TEST(DbQuery, ReadEntities) {
 		auto vacation = (*result.val)[1];
 		EXPECT_EQ(vacation.id(), 11);
 		EXPECT_EQ(vacation.name, "Vacation");
-		EXPECT_EQ(vacation.closed_at, "2024-01-01");
+		EXPECT_EQ(vacation.closed_at, CLOSED_AT);
 	}
 
 	{
@@ -324,7 +333,7 @@ TEST(DbQuery, ReadEntities) {
 		auto savings = (*result.val)[1];
 		EXPECT_EQ(savings.id(), 21);
 		EXPECT_EQ(savings.name, "Savings");
-		EXPECT_EQ(savings.closed_at, "2024-06-01");
+		EXPECT_EQ(savings.closed_at, CLOSED_AT);
 		EXPECT_EQ(savings.bank_account_id, std::nullopt);
 	}
 
@@ -510,7 +519,7 @@ TEST(DbQuery, SaveEntities) {
 	}
 
 	emergency.name = "Rainy Day";
-	emergency.closed_at = "2024-06-01";
+	emergency.closed_at = CLOSED_AT;
 	ASSERT_EQ(file->save_fund(emergency), db::error::none);
 	{
 		auto result = file->get_funds();
@@ -519,12 +528,12 @@ TEST(DbQuery, SaveEntities) {
 		auto& row = (*result.val)[0];
 		EXPECT_EQ(row.id(), emergency.id());
 		EXPECT_EQ(row.name, "Rainy Day");
-		EXPECT_EQ(row.closed_at, "2024-06-01");
+		EXPECT_EQ(row.closed_at, CLOSED_AT);
 	}
 
 	checking.name = "Debit Card";
 	checking.bank_account_id = "ref1";
-	checking.closed_at = "2025-06-01";
+	checking.closed_at = CLOSED_AT;
 	ASSERT_EQ(file->save_account(checking), db::error::none);
 	{
 		auto result = file->get_accounts();
@@ -534,7 +543,7 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.id(), checking.id());
 		EXPECT_EQ(row.name, "Debit Card");
 		EXPECT_EQ(row.bank_account_id, "ref1");
-		EXPECT_EQ(row.closed_at, "2025-06-01");
+		EXPECT_EQ(row.closed_at, CLOSED_AT);
 	}
 }
 
@@ -1036,4 +1045,245 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budgets"),       1);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budget_phases"), 1);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets"), 3);
+}
+
+struct test_context {
+	std::shared_ptr<db> file;
+	fund groceries;
+	account checking;
+	transaction txn;
+};
+
+static void seed(test_context& ctx) {
+	ctx.groceries.name = "Groceries";
+	ctx.file->save_fund(ctx.groceries);
+
+	ctx.checking.name = "Checking";
+	ctx.file->save_account(ctx.checking);
+
+	ctx.txn.account_id = ctx.checking.id();
+	ctx.txn.amount = currency{10000}; // $100
+	ctx.txn.date = datetime{0};
+	ctx.txn.memo = "Test";
+	ctx.file->save_transaction(ctx.txn);
+}
+
+TEST(DbQuery, SaveTransaction) {
+	auto connection = mockSchema();
+	test_context ctx = test_context{
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	seed(ctx);
+	ASSERT_NE(ctx.groceries.id(), 0);
+	ASSERT_NE(ctx.checking.id(), 0);
+	ASSERT_NE(ctx.txn.id(), 0);
+
+}
+
+TEST(DbQuery, AllocateTransaction_SingleAllocation) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	seed(ctx);
+	ASSERT_NE(ctx.groceries.id(), 0);
+	ASSERT_NE(ctx.txn.id(), 0);
+
+	allocation alloc;
+	alloc.transaction_id = ctx.txn.id();
+	alloc.fund_id = ctx.groceries.id();
+	alloc.amount = currency{10000};
+
+	std::vector<allocation> allocations = { alloc };
+	ASSERT_EQ(ctx.file->allocate_transaction(allocations), db::error::none);
+	EXPECT_NE(allocations[0].id(), 0);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM allocations"), 1);
+}
+
+TEST(DbQuery, AllocateTransaction_MultipleAllocations) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	fund rent; rent.name = "Rent";
+	ctx.file->save_fund(rent);
+	seed(ctx);
+	ASSERT_NE(ctx.groceries.id(), 0);
+	ASSERT_NE(rent.id(), 0);
+	ASSERT_NE(ctx.txn.id(), 0);
+
+	allocation alloc1;
+	alloc1.transaction_id = ctx.txn.id();
+	alloc1.fund_id = ctx.groceries.id();
+	alloc1.amount = currency{6000};
+
+	allocation alloc2;
+	alloc2.transaction_id = ctx.txn.id();
+	alloc2.fund_id = rent.id();
+	alloc2.amount = currency{4000};
+
+	std::vector<allocation> allocations = { alloc1, alloc2 };
+	ASSERT_EQ(ctx.file->allocate_transaction(allocations), db::error::none);
+	EXPECT_NE(allocations[0].id(), 0);
+	EXPECT_NE(allocations[1].id(), 0);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM allocations"), 2);
+}
+
+TEST(DbQuery, AllocateTransaction_UpdateExisting) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	fund rent; rent.name = "Rent";
+	ctx.file->save_fund(rent);
+	seed(ctx);
+	ASSERT_NE(ctx.groceries.id(), 0);
+	ASSERT_NE(rent.id(), 0);
+	ASSERT_NE(ctx.txn.id(), 0);
+
+	allocation alloc;
+	alloc.transaction_id = ctx.txn.id();
+	alloc.fund_id = ctx.groceries.id();
+	alloc.amount = currency{10000};
+	std::vector<allocation> allocations = { alloc };
+	ASSERT_EQ(ctx.file->allocate_transaction(allocations), db::error::none);
+	ASSERT_NE(allocations[0].id(), 0);
+	int64_t original_id = allocations[0].id();
+
+	// Update amount on the existing allocation
+	allocations[0].fund_id = rent.id(); // same sum, different fund
+	ASSERT_EQ(ctx.file->allocate_transaction(allocations), db::error::none);
+	EXPECT_EQ(allocations[0].id(), original_id);
+	std::string query = std::format("SELECT COUNT(*) FROM allocations WHERE fund_id = {}", rent.id());
+	EXPECT_EQ(count_rows(connection, query.c_str()), 1);
+}
+
+TEST(DbQuery, AllocateTransaction_Empty) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	seed(ctx);
+
+	std::vector<allocation> allocations;
+	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+}
+
+TEST(DbQuery, AllocateTransaction_ZeroTransactionId) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	seed(ctx);
+
+	allocation alloc;
+	alloc.fund_id = ctx.groceries.id();
+	alloc.amount = currency{10000};
+	std::vector<allocation> allocations = { alloc };
+	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+}
+
+TEST(DbQuery, AllocateTransaction_MismatchedTransactionIds) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	fund rent; rent.name = "Rent";
+	ctx.file->save_fund(rent);
+	seed(ctx);
+
+	allocation alloc1;
+	alloc1.transaction_id = ctx.txn.id();
+	alloc1.fund_id = ctx.groceries.id();
+	alloc1.amount = currency{6000};
+
+	allocation alloc2;
+	alloc2.transaction_id = ctx.txn.id() + 1;
+	alloc2.fund_id = rent.id();
+	alloc2.amount = currency{4000};
+
+	std::vector<allocation> allocations = { alloc1, alloc2 };
+	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+}
+
+TEST(DbQuery, AllocateTransaction_DuplicateFund) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	seed(ctx);
+
+	allocation alloc1;
+	alloc1.transaction_id = ctx.txn.id();
+	alloc1.fund_id = ctx.groceries.id();
+	alloc1.amount = currency{6000};
+
+	allocation alloc2;
+	alloc2.transaction_id = ctx.txn.id();
+	alloc2.fund_id = ctx.groceries.id();
+	alloc2.amount = currency{4000};
+
+	std::vector<allocation> allocations = { alloc1, alloc2 };
+	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+}
+
+TEST(DbQuery, AllocateTransaction_ZeroFundId) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	seed(ctx);
+
+	allocation alloc;
+	alloc.transaction_id = ctx.txn.id();
+	alloc.amount = currency{10000};
+	std::vector<allocation> allocations = { alloc };
+	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+}
+
+TEST(DbQuery, AllocateTransaction_WrongSum) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	seed(ctx);
+
+	allocation alloc;
+	alloc.transaction_id = ctx.txn.id();
+	alloc.fund_id = ctx.groceries.id();
+	alloc.amount = currency{9999};
+	std::vector<allocation> allocations = { alloc };
+	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::rejected);
+}
+
+TEST(DbQuery, AllocateTransaction_NonexistentTransaction) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	seed(ctx);
+
+	allocation alloc;
+	alloc.transaction_id = 99999;
+	alloc.fund_id = ctx.groceries.id();
+	alloc.amount = currency{10000};
+	std::vector<allocation> allocations = { alloc };
+	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::rejected);
+}
+
+TEST(DbQuery, AllocateTransaction_ClosedFund) {
+	auto connection = mockSchema();
+	test_context ctx = {
+		.file = std::make_shared<db>(connection, db::owns_connection{})
+	};
+	seed(ctx);
+	ctx.groceries.closed_at = CLOSED_AT;
+	ASSERT_EQ(ctx.file->save_fund(ctx.groceries), db::error::none);
+
+	allocation alloc;
+	alloc.transaction_id = ctx.txn.id();
+	alloc.fund_id = ctx.groceries.id();
+	alloc.amount = currency{10000};
+	std::vector<allocation> allocations = { alloc };
+	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::rejected);
 }
