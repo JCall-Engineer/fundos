@@ -79,11 +79,23 @@ private:
 	}
 
 public:
+	/// Opens or creates a database file at the given path.
 	static std::shared_ptr<db> open_file(std::string);
+
+	/// Creates a private in-memory database.
 	static std::shared_ptr<db> open_memory();
-	explicit db(error);                      // nothing opens
-	explicit db(sqlite3*);                   // borrows, no close
-	explicit db(sqlite3*, owns_connection);  // owns, closes on dtor
+
+	/// Opens in a permanently errored state; used by factory functions to return a failed-but-valid db object.
+	/// Prefer open_file() or open_memory() over this.
+	explicit db(error);
+
+	/// Borrows an existing sqlite3 connection; caller responsible for lifetime, no sqlite3_close on destruction.
+	explicit db(sqlite3*);
+
+	/// Takes ownership of an existing connection; sqlite3_close is called on destruction.
+	explicit db(sqlite3*, owns_connection);
+
+	/// Cleans up prepared statements. Calls sqlite3_close iff owns_connection
 	~db();
 
 	// no copy, no move — connection lifetime is explicit
@@ -97,6 +109,10 @@ public:
 
 #pragma region Query methods
 
+	/// Three-state return type for query operations.
+	/// - ok() + value: record found.
+	/// - ok() + no value (not_found()): query succeeded but no matching record exists.
+	/// - !ok(): a db::error is set; value is empty.
 	template<typename T>
 	struct result {
 		error err = error::none;
@@ -152,13 +168,25 @@ public:
 	error                           set_percentage_locale(const percentage_locale::info&);
 
 	result<std::vector<user>>    get_users();
+
+	/// Inserts or updates the given user.
+	/// If id is zero, inserts and sets id on the object.
+	/// If id is nonzero, updates the existing record.
 	error                        save_user(user&);
 	error                        delete_user(int64_t user_id);
 
 	result<std::vector<account>> get_accounts();
+
+	/// Inserts or updates the given account.
+	/// If id is zero, inserts and sets id on the object.
+	/// If id is nonzero, updates the existing record.
 	error                        save_account(account&);
 
 	result<std::vector<fund>>    get_funds();
+
+	/// Inserts or updates the given fund.
+	/// If id is zero, inserts and sets id on the object.
+	/// If id is nonzero, updates the existing record.
 	error                        save_fund(fund&);
 
 	result<std::vector<account>> get_account_memberships(int64_t user_id);
@@ -176,11 +204,36 @@ public:
 	error                        remove_user_from_fund(int64_t fund_id, int64_t user_id);
 
 	result<std::vector<budget>>  get_budgets();
+
+	/// Inserts or updates the budget and performs a deep save of its phases and targets.
+	/// If id is zero, inserts and sets id on the object.
+	/// If id is nonzero, updates the existing record.
 	error                        save_budget(budget&);
 
+	/// Resolves correction links between transactions after an OFX import.
+	/// - Sets superseded_by on original transactions that have been corrected.
+	/// - Sets corrects_id on correction transactions that reference a known fitid.
+	/// Should be called after each OFX import.
 	error                        resolve_corrections();
 
+	/// Inserts or updates the given transaction.
+	/// If id is zero, inserts and sets id on the object.
+	/// If id is nonzero, updates the existing record.
 	db::error                    save_transaction(transaction& transaction);
+
+	/// Replaces the allocations for a transaction atomically.
+	/// - Existing allocations not present in the vector are deleted.
+	/// - Persisted allocations are updated.
+	/// - New allocations are inserted.
+	/// Sets id on inserted allocations; clears id on rollback.
+	/// @note Allocation amounts must sum exactly to the transaction amount.
+	/// @note All allocations must reference the same transaction_id.
+	/// @note Fund ids must be unique within the vector; funds must exist and not be closed.
+	/// @note Persisted allocations must belong to the given transaction.
+	/// @param allocations The complete intended allocation set for the transaction; must be non-empty.
+	/// @return bad_request if empty, transaction_id is zero, fund_ids are duplicated or zero, or allocations span multiple transactions.
+	/// @return rejected if amounts do not sum to the transaction amount, or the transaction does not exist.
+	/// @return constraint, unavailable, or other db::error on storage failure.
 	db::error                    allocate_transaction(std::vector<allocation>& allocations);
 
 #pragma endregion
@@ -191,6 +244,14 @@ private:
 	void prepare();
 
 public:
+	/// Applies any pending schema migrations and prepares query statements.
+	/// Must be called after open_file() or open_memory() if get_status().needs_migration() is true;
+	/// query methods return not_ready until migration succeeds.
+	/// Safe to call when the schema is already current; returns none immediately.
+	/// On success, sets schema_status to migrated and the db becomes ready for queries.
+	/// @return none if already current or migration succeeded.
+	/// @return corrupted if schema drift or a constraint violation is detected; connection is closed.
+	/// @return other db::error on storage failure.
 	error migrate();
 };
 

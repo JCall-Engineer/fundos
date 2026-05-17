@@ -408,6 +408,7 @@ db::error db::classify_sqlite_runtime_error(int rc) {
 }
 
 db::error db::sql_count_check(const std::string& sql, size_t expected, executor bind) {
+	if (!is_ready()) { return db::error::not_ready; }
 	sqlite3_stmt* stmt = nullptr;
 	int rc = sqlite3_prepare_v2(connection, sql.c_str(), -1, &stmt, nullptr);
 	if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
@@ -427,6 +428,7 @@ db::error db::sql_count_check(const std::string& sql, size_t expected, executor 
 }
 
 db::error db::sql_delete_except(const db::delete_except_params& params) {
+	if (!is_ready()) { return db::error::not_ready; }
 	std::string sql = std::format("DELETE FROM {} WHERE {} = ?", params.table, params.filter_column);
 
 	if (!params.preserve_ids.empty()) {
