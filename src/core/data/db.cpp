@@ -1190,7 +1190,7 @@ db::error db::save_budget(budget& budget) {
 		// Delete phases not found in budget anymore
 		{
 			std::vector<int64_t> preserve_ids;
-			budget.each([&preserve_ids](int pos, any_budget_phase* phase) -> bool {
+			budget.each_phase([&preserve_ids](int pos, any_budget_phase* phase) -> bool {
 				std::visit([&](auto& typed_phase) {
 					if (typed_phase.is_persisted()) {
 						preserve_ids.push_back(typed_phase.id_);
@@ -1247,7 +1247,7 @@ db::error db::save_budget(budget& budget) {
 		// TIL: since c++14 lambdas with auto parameters are templated functions
 		static auto collect_target_ids = [](auto* phase) -> std::vector<int64_t> {
 			std::vector<int64_t> preserve_ids;
-			phase->each([&preserve_ids](int pos, auto* target) {
+			phase->each_target([&preserve_ids](int pos, auto* target) {
 				if (target->is_persisted()) {
 					preserve_ids.push_back(target->id_);
 				}
@@ -1289,7 +1289,7 @@ db::error db::save_budget(budget& budget) {
 		};
 
 		// We are "finding" errors as we save phases
-		auto phase_err = budget.find(
+		auto phase_err = budget.find_phase(
 			[&](int pos, budget_phase<fixed_target>* phase) -> bool {
 				if (upsert_phase(pos, phase, fixed_phase_identifier)) { return true; }
 
@@ -1297,7 +1297,7 @@ db::error db::save_budget(budget& budget) {
 				if (result != error::none) { return true; }
 
 				// "finding" errors as we save targets
-				auto target_err = phase->find([&](int pos, fixed_target* target) -> bool {
+				auto target_err = phase->find_target([&](int pos, fixed_target* target) -> bool {
 					return upsert_target(pos, target, phase->id_, target->amount.minor_units);
 				});
 				// Exit phase iterator on error
@@ -1311,7 +1311,7 @@ db::error db::save_budget(budget& budget) {
 				if (result != error::none) { return true; }
 
 				// "finding" errors as we save targets
-				auto target_err = phase->find([&](int pos, percentage_target* target) -> bool {
+				auto target_err = phase->find_target([&](int pos, percentage_target* target) -> bool {
 					return upsert_target(pos, target, phase->id_, target->amount.basis_points);
 				});
 				// Exit phase iterator on error
