@@ -87,6 +87,7 @@ CREATE TABLE transactions (
 	account_id      INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
 	amount          INTEGER NOT NULL,
 	date            INTEGER NOT NULL,
+	cleared         INTEGER,
 	memo            TEXT NOT NULL,
 	fitid           TEXT,
 	corrects_fitid  TEXT,
@@ -298,12 +299,12 @@ struct statements {
 		AND date BETWEEN ? AND ?
 	)sql" };
 	statement_slot insert_transaction { .sql = R"sql(
-		INSERT INTO transactions (account_id, amount, date, memo, fitid, corrects_fitid, correct_action)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO transactions (account_id, amount, date, cleared, memo, fitid, corrects_fitid, correct_action)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	)sql" };
 	statement_slot update_transaction { .sql = R"sql(
 		UPDATE transactions
-		SET amount = ?, date = ?, memo = ?, fitid = ?, corrects_fitid = ?, correct_action = ?
+		SET amount = ?, date = ?, cleared = ?, memo = ?, fitid = ?, corrects_fitid = ?, correct_action = ?
 		WHERE id = ?
 	)sql" };
 	statement_slot get_transaction_amount { .sql = R"sql(
@@ -1373,13 +1374,14 @@ db::error db::save_transaction(transaction& transaction) {
 		error err = sql_execute(
 			prepared->named.insert_transaction.statement,
 			[&](sqlite3_stmt* stmt) {
-				sqlite3_bind_int64(stmt, 1, transaction.account_id);
-				sqlite3_bind_int64(stmt, 2, transaction.amount.minor_units);
-				sqlite3_bind_int64(stmt, 3, transaction.date.milliseconds_since_epoch);
-				bind_text         (stmt, 4, transaction.memo);
-				bind_optional_text(stmt, 5, transaction.fitid);
-				bind_optional_text(stmt, 6, transaction.corrects_fitid);
-				bind_optional_text(stmt, 7, correct_action_string);
+				sqlite3_bind_int64 (stmt, 1, transaction.account_id);
+				sqlite3_bind_int64 (stmt, 2, transaction.amount.minor_units);
+				sqlite3_bind_int64 (stmt, 3, transaction.date.milliseconds_since_epoch);
+				bind_optional_int64(stmt, 4, as_optional_int64(transaction.cleared));
+				bind_text          (stmt, 5, transaction.memo);
+				bind_optional_text (stmt, 6, transaction.fitid);
+				bind_optional_text (stmt, 7, transaction.corrects_fitid);
+				bind_optional_text (stmt, 8, correct_action_string);
 			}
 		);
 		if (err != error::none) { return err; }
@@ -1389,13 +1391,14 @@ db::error db::save_transaction(transaction& transaction) {
 		return sql_execute(
 			prepared->named.update_transaction.statement,
 			[&](sqlite3_stmt* stmt) {
-				sqlite3_bind_int64(stmt, 1, transaction.amount.minor_units);
-				sqlite3_bind_int64(stmt, 2, transaction.date.milliseconds_since_epoch);
-				bind_text         (stmt, 3, transaction.memo);
-				bind_optional_text(stmt, 4, transaction.fitid);
-				bind_optional_text(stmt, 5, transaction.corrects_fitid);
-				bind_optional_text(stmt, 6, correct_action_string);
-				sqlite3_bind_int64(stmt, 7, transaction.id_);
+				sqlite3_bind_int64 (stmt, 1, transaction.amount.minor_units);
+				sqlite3_bind_int64 (stmt, 2, transaction.date.milliseconds_since_epoch);
+				bind_optional_int64(stmt, 3, as_optional_int64(transaction.cleared));
+				bind_text          (stmt, 4, transaction.memo);
+				bind_optional_text (stmt, 5, transaction.fitid);
+				bind_optional_text (stmt, 6, transaction.corrects_fitid);
+				bind_optional_text (stmt, 7, correct_action_string);
+				sqlite3_bind_int64 (stmt, 8, transaction.id_);
 			}
 		);
 	}

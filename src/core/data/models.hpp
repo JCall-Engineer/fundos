@@ -46,6 +46,7 @@ struct transaction : db_managed {
 	int64_t account_id = 0;
 	currency amount;
 	datetime date;
+	std::optional<datetime> cleared;
 	std::string memo;
 	std::optional<std::string> fitid;
 	std::optional<std::string> corrects_fitid;

@@ -246,6 +246,7 @@ void import_transaction(parse_context& context, std::vector<transaction>& transa
 						return;
 					}
 					transaction.date = *parsed;
+					transaction.cleared = *parsed;
 				} else if (in.text == CORRECT_FITID_TAG) {
 					transaction.corrects_fitid = value.text;
 				} else if (in.text == CORRECT_ACTION_TAG) {

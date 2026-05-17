@@ -4,6 +4,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 #include "sqlite3.h"
 #include "models.hpp"
@@ -125,7 +126,7 @@ public:
 private:
 	error classify_sqlite_runtime_error(int rc);
 
-	typedef std::function<void(sqlite3_stmt*)> executor;
+	using executor = std::function<void(sqlite3_stmt*)>;
 
 	template<typename T>
 	using extractor = std::function<T(sqlite3_stmt*)>;
