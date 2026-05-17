@@ -17,9 +17,13 @@ concept SignedScalar = requires(Scalar value, int64_t factor) {
 	{ Scalar{factor} };                            // allow initialization from a raw int type
 };
 
-// In domain: values range from [0, 1], but this struct doesn't inherently limit to those values except for string conversions and multiplication operator provided
+/// Represents a percentage as basis points (1 basis point = 0.01%).
+/// Values are not inherently limited to [0, 1]; string conversions and scale() assume that range.
 struct percentage {
-	int32_t basis_points = 0; // 0.01%
+	/// 1 basis point = 0.01%
+	int32_t basis_points = 0;
+
+	/// Returns 100% as a percentage (10000 basis points).
 	static constexpr percentage whole() { return percentage{10000}; }
 
 	static std::optional<percentage> from_string(const std::string& text) {
@@ -40,9 +44,13 @@ struct percentage {
 	constexpr percentage& operator-=(const percentage& rhs) { basis_points -= rhs.basis_points; return *this; }
 	// Therefore consumers must rely on the more explicit scale() or extracting/mutating basis_points directly
 
-	// Split on percentage::whole() keeps high * basis_points within int64_t for ratio <= percentage::whole()
+	/// Multiplies value by this percentage without overflow, provided the percentage is within [0, 1].
+	/// @note Accepts by const& as S is not guaranteed by SignedScalar to be trivially copyable.
+	/// @param value The value to scale; asserts this percentage is within [0, 1] to prevent integer overflow.
+	/// @return value scaled by this percentage.
 	template<SignedScalar S>
-	constexpr S scale(const S& value) const { // S may not be trivially copyable (it most likely is but it's not guaranteed by SignedScalar)
+	constexpr S scale(const S& value) const {
+		// Split on percentage::whole() keeps high * basis_points within int64_t for ratio <= percentage::whole()
 		constexpr int64_t split = whole().basis_points;
 		FUNDOS_ASSERT(basis_points >= 0 && basis_points <= split, "scale() risks overflow for percentages outside [0, 1]");
 
@@ -62,10 +70,12 @@ struct percentage {
 
 } // fundos
 
+/// Constructs a percentage from a whole number (e.g. 50_percent = 50%).
 constexpr fundos::percentage operator""_percent(unsigned long long percent) {
 	return fundos::percentage{static_cast<int32_t>(percent) * 100};
 }
 
+/// Constructs a percentage from a decimal (e.g. 0.5_percent = 0.5%).
 constexpr fundos::percentage operator""_percent(long double percent) {
 	return fundos::percentage{static_cast<int32_t>(percent * 100.0L)};
 }

@@ -10,7 +10,8 @@ std::optional<int64_t> parse_currency(const std::string& text, const currency_lo
 std::string format_currency(int64_t minor_units, const currency_locale::info& locale);
 
 struct currency {
-	int64_t minor_units = 0; // cents, pence, yen, etc
+	/// The amount in minor units: cents, pence, yen, etc.
+	int64_t minor_units = 0;
 
 	static std::optional<currency> from_string(const std::string& text, const currency_locale::info& locale) {
 		auto parsed = parse_currency(text, locale);
