@@ -1,0 +1,2 @@
+lib/sqlite3/sqlite3.c linguist-vendored=true
+lib/sqlite3/sqlite3.h linguist-vendored=true
