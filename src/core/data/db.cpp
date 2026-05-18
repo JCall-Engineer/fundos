@@ -1350,13 +1350,22 @@ SET corrects_id = (
 WHERE corrects_fitid IS NOT NULL
 AND corrects_id IS NULL;
 )sql";
-	return sql_transaction([&](std::vector<std::function<void()>>&) -> error {
-		int rc = sqlite3_exec(connection, update_corrections_sql, nullptr, nullptr, nullptr);
-		if (SQLITE_OK != rc) {
-			get_sqlite3_error();
-			return classify_sqlite_runtime_error(rc);
-		}
-		return error::none;
+	int rc = sqlite3_exec(connection, update_corrections_sql, nullptr, nullptr, nullptr);
+	if (SQLITE_OK != rc) {
+		get_sqlite3_error();
+		return classify_sqlite_runtime_error(rc);
+	}
+	return error::none;
+}
+
+db::error db::prepare_import(import::pending_import& pending) {
+
+}
+
+db::error db::perform_import(import::pending_import& pending) {
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+
+		return resolve_corrections();
 	});
 }
 
@@ -1537,6 +1546,14 @@ db::error db::allocate_transaction(std::vector<allocation>& allocations) {
 
 		return error::none;
 	});
+}
+
+db::result<db::transaction_history> db::account_history(int64_t account_id, datetime after, datetime before) {
+
+}
+
+db::result<db::allocation_history> db::fund_history(int64_t fund_id, datetime after, datetime before) {
+
 }
 
 #pragma endregion

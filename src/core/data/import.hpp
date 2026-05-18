@@ -27,19 +27,13 @@ enum class warning : uint8_t {
 };
 
 struct result {
-	struct bank_account {
-		std::string acct_id;
-		currency balance;
-		datetime as_of;
-		std::vector<transaction> transactions;
-	};
 	error err = error::none;
-	std::vector<bank_account> accounts;
+	pending_import data;
 	std::array<int32_t, (size_t)warning::NUM_WARNINGS> warning_counts = {};
 
 	result() = default;
 	result(error error) { err = error; }
-	void error(error e) { err = e; accounts.clear(); }
+	void error(error e) { err = e; data.accounts.clear(); }
 	void warn(warning w) { ++warning_counts[(size_t)w]; }
 
 	bool ok() const { return err == error::none; }
@@ -47,4 +41,4 @@ struct result {
 
 result import_ofx(const std::string& filepath, const currency_locale::info& locale);
 
-}; // fundos::import
+} // fundos::import

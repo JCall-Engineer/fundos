@@ -211,16 +211,31 @@ public:
 	/// If id is nonzero, updates the existing record.
 	error                        save_budget(budget&);
 
+private:
 	/// Resolves correction links between transactions after an OFX import.
 	/// - Sets superseded_by on original transactions that have been corrected.
 	/// - Sets corrects_id on correction transactions that reference a known fitid.
 	/// Should be called after each OFX import.
 	error                        resolve_corrections();
 
+public:
 	/// Inserts or updates the given transaction.
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
-	db::error                    save_transaction(transaction& transaction);
+	error                        save_transaction(transaction& transaction);
+
+	/// Populates candidates and initializes match and saving on each imported_transaction.
+	error                        prepare_import(import::pending_import& pending);
+
+	/// Commits each imported_transaction in the pending import.
+	/// The committed record is assembled from multiple sources rather than saving verbatim:
+	///   - id — taken from  match if not null
+	///   - fitid, corrects_fitid, correct_action, cleared, amount — taken from importing
+	///   - date, memo — taken from saving
+	/// Definitive matches (is_definitive_match() == true) are treated as updates; others as inserts.
+	/// @note Callers must not modify fitid, corrects_fitid, correct_action, cleared, or amount on saving.
+	/// @note Callers must not bypass set_match() to alter definitive matches.
+	error                        perform_import(import::pending_import& pending);
 
 	/// Replaces the allocations for a transaction atomically.
 	/// - Existing allocations not present in the vector are deleted.
@@ -235,7 +250,30 @@ public:
 	/// @return bad_request if empty, transaction_id is zero, fund_ids are duplicated or zero, or allocations span multiple transactions.
 	/// @return rejected if amounts do not sum to the transaction amount, or the transaction does not exist.
 	/// @return constraint, unavailable, or other db::error on storage failure.
-	db::error                    allocate_transaction(std::vector<allocation>& allocations);
+	error                        allocate_transaction(std::vector<allocation>& allocations);
+
+	/// Result type for account-level transaction views.
+	/// Account balance and transactions for a date range.
+	/// Each transaction carries its complete allocation set.
+	/// Checkpoints allow the UI to identify imported transaction ranges and detect gaps where bank data was never imported.
+	/// A transaction absent from all checkpoint sets was not part of any OFX import.
+	struct transaction_history {
+		using allocated_transaction = std::pair<transaction, std::vector<allocation>>;
+
+		currency starting_balance;
+		std::vector<allocated_transaction> transactions;
+		std::vector<balance_checkpoint> checkpoints;
+	};
+
+	/// Fund balance and allocations for a date range.
+	/// Each allocation is paired with its parent transaction for date, memo, or other context.
+	struct allocation_history {
+		currency starting_balance;
+		std::vector<std::pair<transaction, allocation>> allocations;
+	};
+
+	result<transaction_history>  account_history(int64_t account_id, datetime after, datetime before);
+	result<allocation_history>   fund_history(int64_t fund_id, datetime after, datetime before);
 
 #pragma endregion
 

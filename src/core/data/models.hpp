@@ -55,6 +55,62 @@ struct transaction : db_managed {
 	std::optional<int64_t> superseded_by;
 };
 
+struct balance_checkpoint : db_managed {
+	int64_t account_id = 0;
+	currency amount;
+	datetime date;
+	std::vector<int64_t> transaction_ids;
+};
+
+namespace import {
+
+/// Represents the 3 way choice a user has when importing a transaction
+struct imported_transaction {
+	/// The transaction as it arrived from the OFX import.
+	/// @note importer must ensure fitid is populated
+	transaction importing;
+
+	/// The version to be committed.
+	transaction saving;
+
+	/// Returns true if match was found by fitid — the match is definitive and cannot be changed.
+	bool is_definitive_match() const { return match_ != nullptr && match_->fitid == importing.fitid; }
+
+	/// Sets the matched candidate. Ignored if is_definitive_match() is true.
+	bool set_match(const transaction* candidate) {
+		if (!is_definitive_match()) {
+			match_ = candidate;
+			return true;
+		}
+		return false;
+	}
+
+	const transaction* get_match() const { return match_; }
+
+private:
+	const transaction* match_ = nullptr;
+};
+
+/// An account and its transactions as parsed from an OFX file.
+struct bank_account {
+	std::string acct_id;
+	currency balance;
+	datetime as_of;
+	std::vector<imported_transaction> transactions;
+};
+
+/// The result of parsing an OFX file, staged for user review before committing.
+/// candidates is the pool of existing db transactions available for matching.
+/// The importer populates `accounts`   as well as      `importing` on each `imported_transaction`.
+/// The db layer populates `candidates` and initializes `match`     on each `imported_transaction`.
+/// The user may adjust `match` for non-definitive matches, or manually adjust certain properties of `saving`.
+struct pending_import {
+	std::vector<bank_account> accounts;
+	std::vector<transaction> candidates;
+};
+
+} // fundos::import
+
 struct allocation : db_managed {
 	int64_t transaction_id = 0;
 	int64_t fund_id = 0;
@@ -319,4 +375,4 @@ struct budget : db_managed {
 	}
 };
 
-}; // fundos
+} // fundos

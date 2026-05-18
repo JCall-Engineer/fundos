@@ -214,7 +214,7 @@ static const std::string_view AMOUNT_TAG = "TRNAMT";
 static const std::string_view FITID_TAG  = "FITID";
 static const std::string_view NAME_TAG   = "NAME";
 static const std::string_view MEMO_TAG   = "MEMO";
-void import_transaction(parse_context& context, std::vector<transaction>& transactions, std::string_view close_on) {
+void import_transaction(parse_context& context, std::vector<imported_transaction>& transactions, std::string_view close_on) {
 	transaction transaction;
 	std::optional<currency> pending_amount;
 	ofx_token in = extract_token(context);
@@ -292,7 +292,9 @@ void import_transaction(parse_context& context, std::vector<transaction>& transa
 				if (pending_amount) {
 					transaction.amount = *pending_amount;
 				}
-				transactions.push_back(std::move(transaction));
+				imported_transaction imported;
+				imported.importing = std::move(transaction);
+				transactions.push_back(std::move(imported));
 				return;
 		}
 		in = extract_token(context);
@@ -301,7 +303,7 @@ void import_transaction(parse_context& context, std::vector<transaction>& transa
 }
 
 static const std::string_view TX_WRAPPER = "STMTTRN";
-void import_transactions(parse_context& context, result::bank_account& account, std::string_view close_on) {
+void import_transactions(parse_context& context, bank_account& account, std::string_view close_on) {
 	ofx_token in = extract_token(context);
 	while (in.type != ofx_token::type::eof) {
 		switch (in.type) {
@@ -321,7 +323,7 @@ void import_transactions(parse_context& context, result::bank_account& account, 
 
 static const std::string_view BALANCE_VALUE  = "BALAMT";
 static const std::string_view AS_OF_VALUE    = "DTASOF";
-void import_ledger(parse_context& context, result::bank_account& account, std::string_view close_on) {
+void import_ledger(parse_context& context, bank_account& account, std::string_view close_on) {
 	ofx_token in = extract_token(context);
 	std::optional<currency> parsed_amount;
 	std::optional<datetime> parsed_as_of;
@@ -370,7 +372,7 @@ static const std::string_view LEDGER_TAG     = "LEDGERBAL";
 static const std::string_view TXLIST_WRAPPER = "BANKTRANLIST";
 void import_bank(parse_context& context, std::string_view close_on) {
 	ofx_token in = extract_token(context);
-	result::bank_account account;
+	bank_account account;
 	while (in.type != ofx_token::type::eof) {
 		switch (in.type) {
 			case ofx_token::type::opening_tag:
@@ -394,7 +396,7 @@ void import_bank(parse_context& context, std::string_view close_on) {
 					if (account.acct_id.empty()) {
 						context.output.warn(warning::missing_acctid);
 					} else {
-						context.output.accounts.push_back(std::move(account));
+						context.output.data.accounts.push_back(std::move(account));
 					}
 					return;
 				}
@@ -505,4 +507,4 @@ result import_ofx(const std::string& filepath, const currency_locale::info& loca
 	return result(error::bad_format);
 }
 
-}; // fundos::import
+} // fundos::import
