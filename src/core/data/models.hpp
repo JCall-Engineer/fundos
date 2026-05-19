@@ -66,17 +66,20 @@ namespace import {
 
 /// Represents the 3 way choice a user has when importing a transaction
 struct imported_transaction {
-	/// The transaction as it arrived from the OFX import.
-	/// @note importer must ensure fitid is populated
+	/// Populated by the importer
+	/// @note importer must ensure fitid and cleared are populated
 	transaction importing;
 
-	/// The version to be committed.
+	/// The working copy of the transaction to be committed.
+	/// db::prepare_import initializes date and memo from match if found, otherwise from importing.
+	/// The user may freely edit date and memo: choosing from either `match`, `importing`, or a custom override.
+	/// db::perform_import merges immutable fields from `importing` and `match` into this record before saving.
 	transaction saving;
 
 	/// Returns true if match was found by fitid — the match is definitive and cannot be changed.
 	bool is_definitive_match() const { return match_ != nullptr && match_->fitid == importing.fitid; }
 
-	/// Sets the matched candidate. Ignored if is_definitive_match() is true.
+	/// Match suggestions are initialized by db::prepare_import, can be adjusted by the user if not definitive.
 	bool set_match(const transaction* candidate) {
 		if (!is_definitive_match()) {
 			match_ = candidate;
@@ -91,22 +94,40 @@ private:
 	const transaction* match_ = nullptr;
 };
 
-/// An account and its transactions as parsed from an OFX file.
+/// An account and its transactions as parsed from an OFX file or fetched from a bank API.
+/// candidates is the pool of existing db transactions available for matching.
+/// The importer creates each `imported_transaction`, populating only the `importing` field.
+/// db::prepare_import resolves `account_id` from `acct_id` and populates `candidates`.
 struct bank_account {
+	int64_t account_id = 0;
 	std::string acct_id;
 	currency balance;
 	datetime as_of;
 	std::vector<imported_transaction> transactions;
+	std::vector<transaction> candidates;
+
+	/// Returns pointers to candidates not currently matched by any imported transaction.
+	/// Pointers are valid for the lifetime of this bank_account.
+	inline std::vector<const transaction*> unclaimed_candidates() const {
+		std::unordered_set<const transaction*> claimed;
+		for (const auto& imported : transactions) {
+			if (imported.get_match() != nullptr) {
+				claimed.insert(imported.get_match());
+			}
+		}
+		std::vector<const transaction*> view;
+		for (const auto& candidate : candidates) {
+			if (!claimed.contains(&candidate)) {
+				view.push_back(&candidate);
+			}
+		}
+		return view;
+	}
 };
 
-/// The result of parsing an OFX file, staged for user review before committing.
-/// candidates is the pool of existing db transactions available for matching.
-/// The importer populates `accounts`   as well as      `importing` on each `imported_transaction`.
-/// The db layer populates `candidates` and initializes `match`     on each `imported_transaction`.
-/// The user may adjust `match` for non-definitive matches, or manually adjust certain properties of `saving`.
+/// The result of parsing an OFX file or using a bank API, staged for user review before committing.
 struct pending_import {
 	std::vector<bank_account> accounts;
-	std::vector<transaction> candidates;
 };
 
 } // fundos::import

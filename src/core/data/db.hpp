@@ -225,6 +225,9 @@ public:
 	error                        save_transaction(transaction& transaction);
 
 	/// Populates candidates and initializes match and saving on each imported_transaction.
+	/// Resolves each bank_account's acct_id to an account_id via bank_account_id.
+	/// @return rejected if any acct_id does not match a known account.
+	/// @return bad_request if any imported transaction is missing fitid or cleared.
 	error                        prepare_import(import::pending_import& pending);
 
 	/// Commits each imported_transaction in the pending import.

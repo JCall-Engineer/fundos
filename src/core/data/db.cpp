@@ -132,6 +132,16 @@ struct statement_slot {
 	const char* sql;
 };
 
+/// Each prepared statement is a statement_slot: a sqlite3_stmt* paired with the SQL string used to prepare it.
+/// All slots are named members of `statements`, giving call sites readable access by name.
+/// db_prepared_statements is a union of `statements` and a flat statement_slot[] array.
+/// The array view lets prepare() call sqlite3_prepare_v3 on every slot by index, without naming each one.
+/// The static_assert enforces that no padding exists between slots, which is what makes the array view safe.
+///
+/// Extractor lambdas are intentionally duplicated at each call site rather than factored into shared helpers.
+/// Queries that happen to select the same columns are still independent queries.
+/// A shared extractor would couple them through column order — a silent contract that breaks when either query changes.
+/// The duplication is the most honest expression of that independence.
 struct statements {
 	statement_slot get_meta { .sql = R"sql(
 		SELECT value FROM meta WHERE key = ?
@@ -293,10 +303,20 @@ struct statements {
 		WHERE id = ? AND phase_id = ?
 	)sql" };
 
-	statement_slot filter_transactions { .sql = R"sql(
-		SELECT * FROM transactions
-		WHERE account_id = ?
-		AND date BETWEEN ? AND ?
+	statement_slot find_account_by_bank_id { .sql = R"sql(
+		SELECT id
+		FROM accounts
+		WHERE bank_account_id = ?
+	)sql" };
+	statement_slot find_transaction_candidates { .sql = R"sql(
+		SELECT id, amount, date, cleared, memo, fitid, corrects_fitid, correct_action, corrects_id, superseded_by
+		FROM transactions
+		WHERE fitid IS NULL AND account_id = ?
+	)sql" };
+	statement_slot find_transaction_by_fitid { .sql = R"sql(
+		SELECT id, amount, date, cleared, memo, fitid, corrects_fitid, correct_action, corrects_id, superseded_by
+		FROM transactions
+		WHERE fitid = ? AND account_id = ?
 	)sql" };
 	statement_slot insert_transaction { .sql = R"sql(
 		INSERT INTO transactions (account_id, amount, date, cleared, memo, fitid, corrects_fitid, correct_action)
@@ -311,12 +331,6 @@ struct statements {
 		SELECT amount FROM transactions WHERE id = ?
 	)sql" };
 
-	statement_slot filter_allocations { .sql = R"sql(
-		SELECT allocations.*, transactions.date FROM allocations
-		JOIN transactions ON transactions.id = allocations.transaction_id
-		WHERE allocations.fund_id = ?
-		AND transactions.date BETWEEN ? AND ?
-	)sql" };
 	statement_slot insert_allocation { .sql = R"sql(
 		INSERT INTO allocations (transaction_id, fund_id, amount)
 		VALUES (?, ?, ?)
@@ -331,7 +345,7 @@ struct statements {
 static constexpr std::size_t num_prepared = sizeof(statements) / sizeof(statement_slot);
 static_assert(sizeof(statements) % sizeof(statement_slot) == 0, "db_prepared_statements must contain only statement_slot members with no padding");
 
-// I begroan that this layout isn't cache-efficient but prepared statements are not accessed in order so it doesn't matter and this gives us safety
+// I begroan that this layout isn't cache-efficient but prepared statements are only accessed in order once so it doesn't matter and this gives us safety
 union db_prepared_statements {
 	statement_slot slots[num_prepared];
 	statements named = {};
@@ -340,6 +354,34 @@ union db_prepared_statements {
 #pragma endregion
 
 #pragma region Query Execution Layer
+
+template<typename Enum, std::size_t N>
+static inline std::optional<std::string> enum_to_string(const enum_string_map<Enum, N>& map, Enum value) {
+	for (const auto& pair : map) {
+		if (pair.first == value) { return pair.second; }
+	}
+	return std::nullopt;
+}
+
+template<typename Enum, std::size_t N>
+static inline std::optional<Enum> string_to_enum(const enum_string_map<Enum, N>& map, std::string_view value) {
+	for (const auto& pair : map) {
+		if (pair.second == value) { return pair.first; }
+	}
+	return std::nullopt;
+}
+
+template<typename Enum, std::size_t N>
+static inline std::optional<std::string> optional_enum_to_string(const enum_string_map<Enum, N>& map, const std::optional<Enum>& value) {
+	if (!value) { return std::nullopt; }
+	return enum_to_string(map, *value);
+}
+
+template<typename Enum, std::size_t N>
+static inline std::optional<Enum> optional_string_to_enum(const enum_string_map<Enum, N>& map, const std::optional<std::string>& value) {
+	if (!value) { return std::nullopt; }
+	return string_to_enum(map, *value);
+}
 
 static inline std::string extract_text(sqlite3_stmt* stmt, int index) {
 	return reinterpret_cast<const char*>(sqlite3_column_text(stmt, index));
@@ -611,22 +653,6 @@ static const enum_string_map<currency_locale::info::negative_notation, num_negat
 	{ currency_locale::info::negative_notation::leading_minus,  "leading_minus"  },
 	{ currency_locale::info::negative_notation::trailing_minus, "trailing_minus" },
 }};
-
-template<typename Enum, std::size_t N>
-static inline std::optional<std::string> enum_to_string(const enum_string_map<Enum, N>& map, Enum value) {
-	for (const auto& pair : map) {
-		if (pair.first == value) { return pair.second; }
-	}
-	return std::nullopt;
-}
-
-template<typename Enum, std::size_t N>
-static inline std::optional<Enum> string_to_enum(const enum_string_map<Enum, N>& map, std::string_view value) {
-	for (const auto& pair : map) {
-		if (pair.second == value) { return pair.first; }
-	}
-	return std::nullopt;
-}
 
 db::result<currency_locale::info> db::get_currency_locale() {
 	static auto NOT_FOUND = result<currency_locale::info>{}; // not_found: err==none, val==nullopt
@@ -1328,6 +1354,12 @@ db::error db::save_budget(budget& budget) {
 	});
 }
 
+static constexpr size_t num_correct_actions = 2;
+static const enum_string_map<transaction::correction_type, num_correct_actions> correction_map = {{
+	{ transaction::correction_type::deletes,   "delete" },
+	{ transaction::correction_type::replaces,  "replace" },
+}};
+
 db::error db::resolve_corrections() {
 	static const char* update_corrections_sql = R"sql(
 UPDATE transactions
@@ -1359,7 +1391,103 @@ AND corrects_id IS NULL;
 }
 
 db::error db::prepare_import(import::pending_import& pending) {
+	for (auto& account : pending.accounts) {
+		auto account_query = sql_fetch_one<int64_t>(
+			prepared->named.find_account_by_bank_id.statement,
+			[&] (sqlite3_stmt* stmt) -> void {
+				bind_text(stmt, 1, account.acct_id);
+			},
+			[&] (sqlite3_stmt* stmt) -> int64_t {
+				return sqlite3_column_int64(stmt, 0);
+			}
+		);
+		if (account_query.err != error::none) { return account_query.err; }
+		if (account_query.not_found()) { return error::rejected; }
+		account.account_id = *account_query.val;
 
+		{ // Collect candidates
+
+			auto candidate_query = sql_fetch_many<transaction>(
+				prepared->named.find_transaction_candidates.statement,
+				[&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64(stmt, 1, account.account_id);
+				},
+				[&](sqlite3_stmt* stmt) -> transaction {
+					transaction out;
+					out.id_            =                                         sqlite3_column_int64  (stmt, 0);
+					out.account_id     =                                         account.account_id;
+					out.amount         =                               currency {sqlite3_column_int64  (stmt, 1)};
+					out.date           =                               datetime {sqlite3_column_int64  (stmt, 2)};
+					out.cleared        =                   as_optional<datetime>(extract_optional_int64(stmt, 3));
+					out.memo           =                                         extract_text          (stmt, 4);
+					out.fitid          =                                         extract_optional_text (stmt, 5);
+					out.corrects_fitid =                                         extract_optional_text (stmt, 6);
+					out.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 7));
+					out.corrects_id    =                                         extract_optional_int64(stmt, 8);
+					out.superseded_by  =                                         extract_optional_int64(stmt, 9);
+					return out;
+				}
+			);
+			if (candidate_query.err != error::none) { return candidate_query.err; }
+			if (!candidate_query.not_found()) {
+				account.candidates = std::move(*candidate_query.val);
+			}
+		}
+
+		// Worst case: Every transaction being imported has a matching fitid, reserve it now so references are stable
+		account.candidates.reserve(account.candidates.size() + account.transactions.size());
+
+		// Search for matching records for each imported transaction
+		for (auto& txn : account.transactions) {
+			if (!txn.importing.fitid || !txn.importing.cleared) {
+				return error::bad_request;
+			}
+			auto match = [&txn](const transaction* candidate) {
+				txn.set_match(candidate);
+				txn.saving.date = candidate->date;
+				txn.saving.memo = candidate->memo;
+			};
+			auto fitid_query = sql_fetch_one<transaction>(
+				prepared->named.find_transaction_by_fitid.statement,
+				[&](sqlite3_stmt* stmt) {
+					bind_text         (stmt, 1, *txn.importing.fitid);
+					sqlite3_bind_int64(stmt, 2, account.account_id);
+				},
+				[&](sqlite3_stmt* stmt) -> transaction {
+					transaction out;
+					out.id_            =                                         sqlite3_column_int64  (stmt, 0);
+					out.account_id     =                                         account.account_id;
+					out.amount         =                               currency {sqlite3_column_int64  (stmt, 1)};
+					out.date           =                               datetime {sqlite3_column_int64  (stmt, 2)};
+					out.cleared        =                   as_optional<datetime>(extract_optional_int64(stmt, 3));
+					out.memo           =                                         extract_text          (stmt, 4);
+					out.fitid          =                                         extract_optional_text (stmt, 5);
+					out.corrects_fitid =                                         extract_optional_text (stmt, 6);
+					out.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 7));
+					out.corrects_id    =                                         extract_optional_int64(stmt, 8);
+					out.superseded_by  =                                         extract_optional_int64(stmt, 9);
+					return out;
+				}
+			);
+			if (fitid_query.err != error::none) { return fitid_query.err; }
+			if (fitid_query.not_found()) {
+				auto view = account.unclaimed_candidates();
+				for (auto* candidate : view) {
+					if (candidate->amount == txn.importing.amount) {
+						if ((candidate->date - *txn.importing.cleared).magnitude() < timedelta::days(7)) {
+							match(candidate);
+							break;
+						}
+					}
+				}
+			} else {
+				auto& matched = account.candidates.emplace_back(std::move(*fitid_query.val));
+				match(&matched);
+			}
+		}
+	}
+
+	return error::none;
 }
 
 db::error db::perform_import(import::pending_import& pending) {
@@ -1369,14 +1497,9 @@ db::error db::perform_import(import::pending_import& pending) {
 	});
 }
 
-static constexpr size_t num_correct_actions = 2;
-static const enum_string_map<transaction::correction_type, num_correct_actions> transaction_correction_map = {{
-	{ transaction::correction_type::deletes,   "delete" },
-	{ transaction::correction_type::replaces,  "replace" },
-}};
 db::error db::save_transaction(transaction& transaction) {
 	std::optional<std::string> correct_action_string = transaction.correct_action.has_value()
-		? enum_to_string(transaction_correction_map, *transaction.correct_action)
+		? enum_to_string(correction_map, *transaction.correct_action)
 		: std::nullopt;
 
 	if (!transaction.is_persisted()) {
