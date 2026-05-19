@@ -303,30 +303,61 @@ struct statements {
 		WHERE id = ? AND phase_id = ?
 	)sql" };
 
+	/// Used to resolve imported bank ids
 	statement_slot find_account_by_bank_id { .sql = R"sql(
 		SELECT id
 		FROM accounts
 		WHERE bank_account_id = ?
 	)sql" };
+
+	/// Used to find manual transactions that may need to be updated by an import.
 	statement_slot find_transaction_candidates { .sql = R"sql(
-		SELECT id, amount, date, cleared, memo, fitid, corrects_fitid, correct_action, corrects_id, superseded_by
+		SELECT id, amount, date, cleared, memo
 		FROM transactions
-		WHERE fitid IS NULL AND account_id = ?
+		WHERE account_id = ? AND fitid IS NULL AND correct_action IS NULL AND corrects_fitid IS NULL AND corrects_id IS NULL AND superseded_by IS NULL
 	)sql" };
+
+	/// Used to find records of previously imported transactions.
 	statement_slot find_transaction_by_fitid { .sql = R"sql(
 		SELECT id, amount, date, cleared, memo, fitid, corrects_fitid, correct_action, corrects_id, superseded_by
 		FROM transactions
 		WHERE fitid = ? AND account_id = ?
 	)sql" };
-	statement_slot insert_transaction { .sql = R"sql(
+
+	/// Used to validate transactions aren't modified illegally before saving
+	statement_slot find_transaction_by_id { .sql = R"sql(
+		SELECT account_id, amount, cleared, fitid, corrects_fitid, correct_action, corrects_id, superseded_by
+		FROM transactions
+		WHERE id = ?
+	)sql" };
+
+	statement_slot insert_transaction_import { .sql = R"sql(
 		INSERT INTO transactions (account_id, amount, date, cleared, memo, fitid, corrects_fitid, correct_action)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	)sql" };
-	statement_slot update_transaction { .sql = R"sql(
+	statement_slot update_transaction_import { .sql = R"sql(
 		UPDATE transactions
 		SET amount = ?, date = ?, cleared = ?, memo = ?, fitid = ?, corrects_fitid = ?, correct_action = ?
 		WHERE id = ?
 	)sql" };
+	statement_slot insert_transaction_user { .sql = R"sql(
+		INSERT INTO transactions (account_id, amount, date, memo, corrects_id, correct_action)
+		VALUES (?, ?, ?, ?, ?, ?)
+	)sql" };
+	statement_slot update_transaction_user { .sql = R"sql(
+		UPDATE transactions
+		SET date = ?, memo = ?
+		WHERE id = ?
+	)sql" };
+
+	/// Used to allow manual corrections
+	statement_slot update_transaction_correction { .sql = R"sql(
+		UPDATE transactions
+		SET superseded_by = ?
+		WHERE id = ? AND superseded_by IS NULL
+	)sql" };
+
+	/// Used to validate allocations
 	statement_slot get_transaction_amount { .sql = R"sql(
 		SELECT amount FROM transactions WHERE id = ?
 	)sql" };
@@ -1498,39 +1529,87 @@ db::error db::perform_import(import::pending_import& pending) {
 }
 
 db::error db::save_transaction(transaction& transaction) {
-	std::optional<std::string> correct_action_string = transaction.correct_action.has_value()
-		? enum_to_string(correction_map, *transaction.correct_action)
-		: std::nullopt;
-
-	if (!transaction.is_persisted()) {
-		error err = sql_execute(
-			prepared->named.insert_transaction.statement,
-			[&](sqlite3_stmt* stmt) {
-				sqlite3_bind_int64 (stmt, 1, transaction.account_id);
-				sqlite3_bind_int64 (stmt, 2, transaction.amount.minor_units);
-				sqlite3_bind_int64 (stmt, 3, transaction.date.milliseconds_since_epoch);
-				bind_optional_int64(stmt, 4, as_optional_int64(transaction.cleared));
-				bind_text          (stmt, 5, transaction.memo);
-				bind_optional_text (stmt, 6, transaction.fitid);
-				bind_optional_text (stmt, 7, transaction.corrects_fitid);
-				bind_optional_text (stmt, 8, correct_action_string);
+	auto fetch_transaction = [this](int64_t id) -> result<fundos::transaction> {
+		return sql_fetch_one<fundos::transaction>(
+			prepared->named.find_transaction_by_id.statement,
+			[&](sqlite3_stmt* stmt) -> void {
+				sqlite3_bind_int64(stmt, 1, id);
+			},
+			[&](sqlite3_stmt* stmt) -> fundos::transaction {
+				fundos::transaction out;
+				out.id_            = id;
+				out.account_id     =                                         sqlite3_column_int64  (stmt, 0);
+				out.amount         =                                currency{sqlite3_column_int64  (stmt, 1)};
+				out.cleared        =                   as_optional<datetime>(extract_optional_int64(stmt, 2));
+				out.fitid          =                                         extract_optional_text (stmt, 3);
+				out.corrects_fitid =                                         extract_optional_text (stmt, 4);
+				out.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 5));
+				out.corrects_id    =                                         extract_optional_int64(stmt, 6);
+				out.superseded_by  =                                         extract_optional_int64(stmt, 7);
+				return out;
 			}
 		);
-		if (err != error::none) { return err; }
-		transaction.id_= sqlite3_last_insert_rowid(connection);
-		return error::none;
+	};
+
+	if (!transaction.is_persisted()) {
+		if (transaction.corrects_id.has_value() != transaction.correct_action.has_value()) {
+			return error::bad_request;
+		}
+		std::optional<result<fundos::transaction>> corrects;
+		if (transaction.corrects_id) {
+			corrects = fetch_transaction(*transaction.corrects_id);
+			if (corrects->err != error::none) { return corrects->err; }
+			if (corrects->not_found()) { return error::bad_request; }
+			if (corrects->val->account_id != transaction.account_id) { return error::bad_request; }
+			if (corrects->val->fitid.has_value()) { return error::rejected; }
+			if (corrects->val->superseded_by.has_value()) { return error::rejected; }
+		}
+
+		return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+			error err = sql_execute(
+				prepared->named.insert_transaction_user.statement,
+				[&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64 (stmt, 1, transaction.account_id);
+					sqlite3_bind_int64 (stmt, 2, transaction.amount.minor_units);
+					sqlite3_bind_int64 (stmt, 3, transaction.date.milliseconds_since_epoch);
+					bind_text          (stmt, 4, transaction.memo);
+					bind_optional_int64(stmt, 5, transaction.corrects_id);
+					bind_optional_text (stmt, 6, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, transaction.correct_action));
+				}
+			);
+			if (err != error::none) { return err; }
+			transaction.id_= sqlite3_last_insert_rowid(connection);
+			rollback.push_back([&transaction]() { transaction.id_ = 0; });
+
+			if (!corrects) { return error::none; }
+			return sql_execute(
+				prepared->named.update_transaction_correction.statement,
+				[&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64(stmt, 1, transaction.id_);
+					sqlite3_bind_int64(stmt, 2, corrects->val->id_);
+				}
+			);
+		});
 	} else {
+		auto existing = fetch_transaction(transaction.id_);
+		if (existing.err != error::none) { return existing.err; }
+		if (existing.not_found()) { return error::bad_request; }
+		if (
+			   transaction.account_id     != existing.val->account_id
+			|| transaction.amount         != existing.val->amount
+			|| transaction.cleared        != existing.val->cleared
+			|| transaction.fitid          != existing.val->fitid
+			|| transaction.corrects_fitid != existing.val->corrects_fitid
+			|| transaction.correct_action != existing.val->correct_action
+			|| transaction.corrects_id    != existing.val->corrects_id
+			|| transaction.superseded_by  != existing.val->superseded_by
+		) { return error::rejected; }
 		return sql_execute(
-			prepared->named.update_transaction.statement,
+			prepared->named.update_transaction_user.statement,
 			[&](sqlite3_stmt* stmt) {
-				sqlite3_bind_int64 (stmt, 1, transaction.amount.minor_units);
-				sqlite3_bind_int64 (stmt, 2, transaction.date.milliseconds_since_epoch);
-				bind_optional_int64(stmt, 3, as_optional_int64(transaction.cleared));
-				bind_text          (stmt, 4, transaction.memo);
-				bind_optional_text (stmt, 5, transaction.fitid);
-				bind_optional_text (stmt, 6, transaction.corrects_fitid);
-				bind_optional_text (stmt, 7, correct_action_string);
-				sqlite3_bind_int64 (stmt, 8, transaction.id_);
+				sqlite3_bind_int64 (stmt, 1, transaction.date.milliseconds_since_epoch);
+				bind_text          (stmt, 2, transaction.memo);
+				sqlite3_bind_int64 (stmt, 3, transaction.id_);
 			}
 		);
 	}

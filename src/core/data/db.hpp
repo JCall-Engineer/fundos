@@ -219,11 +219,6 @@ private:
 	error                        resolve_corrections();
 
 public:
-	/// Inserts or updates the given transaction.
-	/// If id is zero, inserts and sets id on the object.
-	/// If id is nonzero, updates the existing record.
-	error                        save_transaction(transaction& transaction);
-
 	/// Populates candidates and initializes match and saving on each imported_transaction.
 	/// Resolves each bank_account's acct_id to an account_id via bank_account_id.
 	/// @return rejected if any acct_id does not match a known account.
@@ -235,10 +230,19 @@ public:
 	///   - id — taken from  match if not null
 	///   - fitid, corrects_fitid, correct_action, cleared, amount — taken from importing
 	///   - date, memo — taken from saving
-	/// Definitive matches (is_definitive_match() == true) are treated as updates; others as inserts.
 	/// @note Callers must not modify fitid, corrects_fitid, correct_action, cleared, or amount on saving.
 	/// @note Callers must not bypass set_match() to alter definitive matches.
 	error                        perform_import(import::pending_import& pending);
+
+	/// Saves a user-created or user-edited transaction.
+	/// Insert (id == 0): persists account_id, amount, date, memo, corrects_id, correct_action.
+	///   Sets id on the object. If corrects_id is set, marks the target as superseded_by this record.
+	///   Returns rejected if the correction target is already superseded or has a fitid.
+	///   Returns bad_request if corrects_id and correct_action are not in parity or corrects_id points at an invalid target.
+	/// Update (id != 0): persists date and memo only.
+	///   Returns rejected if account_id, amount, cleared, fitid, corrects_fitid, correct_action, corrects_id, or superseded_by differ from the persisted record.
+	///   Returns bad_request if the record does not exist.
+	error                        save_transaction(transaction& transaction);
 
 	/// Replaces the allocations for a transaction atomically.
 	/// - Existing allocations not present in the vector are deleted.
