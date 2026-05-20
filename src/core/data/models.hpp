@@ -4,6 +4,7 @@
 #include <list>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <variant>
 #include "platform.hpp"
 #include "types/datetime.hpp"

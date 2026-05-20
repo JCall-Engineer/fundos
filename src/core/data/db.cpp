@@ -396,6 +396,9 @@ union db_prepared_statements {
 #pragma region Query Execution Layer
 
 template<typename Enum, std::size_t N>
+using enum_string_map = std::array<std::pair<Enum, std::string>, N>;
+
+template<typename Enum, std::size_t N>
 static inline std::optional<std::string> enum_to_string(const enum_string_map<Enum, N>& map, Enum value) {
 	for (const auto& pair : map) {
 		if (pair.first == value) { return pair.second; }
@@ -672,9 +675,6 @@ struct locale_register {
 	const std::string currency_locale_negative_format_key     = "currency_locale_negative_format";
 };
 static locale_register locale_meta = {};
-
-template<typename Enum, std::size_t N>
-using enum_string_map = std::array<std::pair<Enum, std::string>, N>;
 
 static constexpr size_t num_symbol_placement = 2;
 static const enum_string_map<percentage_locale::info::symbol_placement, num_symbol_placement> percentage_symbol_placement_map = {{
@@ -1862,6 +1862,7 @@ db::error db::allocate_transaction(std::vector<allocation>& allocations) {
 	});
 }
 
+/*
 db::result<db::transaction_history> db::account_history(int64_t account_id, datetime after, datetime before) {
 
 }
@@ -1869,6 +1870,7 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 db::result<db::allocation_history> db::fund_history(int64_t fund_id, datetime after, datetime before) {
 
 }
+*/
 
 #pragma endregion
 
