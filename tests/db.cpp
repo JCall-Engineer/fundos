@@ -14,17 +14,17 @@ sqlite3* mockDb() {
 TEST(DbOpen, EmptyOrCurrentDb) {
 	auto connection = mockDb();
 	{
-		auto file = std::make_shared<db>(connection);
-		auto& status = file->get_status();
-		EXPECT_EQ(file->is_ready(), true);
-		EXPECT_EQ(file->is_connected(), true);
+		auto database = std::make_shared<db>(connection);
+		auto& status = database->get_status();
+		EXPECT_EQ(database->is_ready(), true);
+		EXPECT_EQ(database->is_connected(), true);
 		EXPECT_EQ(status.result, db::status::code::ok);
 		EXPECT_EQ(status.schema_status, db::schema_state::created);
 		EXPECT_EQ(status.sqlite3_error, db::error::none);
 		EXPECT_EQ(status.is_ok(), true);
 		EXPECT_EQ(status.has_error(), false);
 		EXPECT_EQ(status.needs_migration(), false);
-	} // file destroyed here, connection should still exist
+	} // database destroyed here, connection should still exist
 
 	int current_schema = 0;
 	int rc = sqlite3_exec(connection, R"sql(
@@ -37,10 +37,10 @@ TEST(DbOpen, EmptyOrCurrentDb) {
 	EXPECT_EQ(current_schema, 1); // If this ever changes, write a test for older schema
 
 	{
-		auto file = std::make_shared<db>(connection, db::owns_connection{});
-		auto& status = file->get_status();
-		EXPECT_EQ(file->is_ready(), true);
-		EXPECT_EQ(file->is_connected(), true);
+		auto database = std::make_shared<db>(connection, db::owns_connection{});
+		auto& status = database->get_status();
+		EXPECT_EQ(database->is_ready(), true);
+		EXPECT_EQ(database->is_connected(), true);
 		EXPECT_EQ(status.result, db::status::code::ok);
 		EXPECT_EQ(status.schema_status, db::schema_state::current);
 		EXPECT_EQ(status.sqlite3_error, db::error::none);
@@ -52,10 +52,10 @@ TEST(DbOpen, EmptyOrCurrentDb) {
 
 TEST(DbOpen, NullDb) {
 	sqlite3* connection = nullptr;
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::null_db);
 	EXPECT_EQ(status.schema_status, db::schema_state::none);
 	EXPECT_EQ(status.sqlite3_error, db::error::none);
@@ -73,10 +73,10 @@ TEST(DbOpen, ForeignDbNoMeta) {
 		);
 	)sql", nullptr, nullptr, nullptr);
 	EXPECT_EQ(rc, SQLITE_OK);
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::app_mismatch);
 	EXPECT_EQ(status.sqlite3_error, db::error::none);
@@ -94,10 +94,10 @@ TEST(DbOpen, ForeignDbBadMeta) {
 		);
 	)sql", nullptr, nullptr, nullptr);
 	EXPECT_EQ(rc, SQLITE_OK);
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::app_mismatch);
 	EXPECT_EQ(status.sqlite3_error, db::error::none);
@@ -115,10 +115,10 @@ TEST(DbOpen, ForeignDbNoApplication) {
 		);
 	)sql", nullptr, nullptr, nullptr);
 	EXPECT_EQ(rc, SQLITE_OK);
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::app_mismatch);
 	EXPECT_EQ(status.sqlite3_error, db::error::none);
@@ -137,10 +137,10 @@ TEST(DbOpen, ForeignDbWrongApplication) {
 		INSERT INTO meta (key, value) VALUES ('application', 'other');
 	)sql", nullptr, nullptr, nullptr);
 	EXPECT_EQ(rc, SQLITE_OK);
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::app_mismatch);
 	EXPECT_EQ(status.sqlite3_error, db::error::none);
@@ -159,10 +159,10 @@ TEST(DbOpen, FundDbNoSchema) {
 		INSERT INTO meta (key, value) VALUES ('application', 'fundos');
 	)sql", nullptr, nullptr, nullptr);
 	EXPECT_EQ(rc, SQLITE_OK);
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::schema_mismatch);
 	EXPECT_EQ(status.sqlite3_error, db::error::corrupted);
@@ -182,10 +182,10 @@ TEST(DbOpen, FundDbNanSchema) {
 		INSERT INTO meta (key, value) VALUES ('schema_version', 'abc');
 	)sql", nullptr, nullptr, nullptr);
 	EXPECT_EQ(rc, SQLITE_OK);
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::schema_mismatch);
 	EXPECT_EQ(status.sqlite3_error, db::error::corrupted);
@@ -205,10 +205,10 @@ TEST(DbOpen, FundDbNegSchema) {
 		INSERT INTO meta (key, value) VALUES ('schema_version', '-1');
 	)sql", nullptr, nullptr, nullptr);
 	EXPECT_EQ(rc, SQLITE_OK);
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::schema_mismatch);
 	EXPECT_EQ(status.sqlite3_error, db::error::corrupted);
@@ -228,10 +228,10 @@ TEST(DbOpen, FundDbSchema0) {
 		INSERT INTO meta (key, value) VALUES ('schema_version', '0');
 	)sql", nullptr, nullptr, nullptr);
 	EXPECT_EQ(rc, SQLITE_OK);
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::schema_mismatch);
 	EXPECT_EQ(status.sqlite3_error, db::error::corrupted);
@@ -251,10 +251,10 @@ TEST(DbOpen, FundDbNewerSchema) {
 		INSERT INTO meta (key, value) VALUES ('schema_version', '100');
 	)sql", nullptr, nullptr, nullptr);
 	EXPECT_EQ(rc, SQLITE_OK);
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), false);
-	EXPECT_EQ(file->is_connected(), false);
+	auto database = std::make_shared<db>(connection, db::owns_connection{});
+	auto& status = database->get_status();
+	EXPECT_EQ(database->is_ready(), false);
+	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::newer_schema);
 	EXPECT_EQ(status.sqlite3_error, db::error::none);
@@ -263,13 +263,11 @@ TEST(DbOpen, FundDbNewerSchema) {
 	EXPECT_EQ(status.needs_migration(), false);
 }
 
-sqlite3* mockSchema() {
-	sqlite3* connection = mockDb();
-	auto file = std::make_shared<db>(connection); // ctor handles migration from fresh file to current schema
-	auto& status = file->get_status();
-	EXPECT_EQ(file->is_ready(), true);
-	return connection; // file is destroyed, connection still exists
-}
+/// Previous iterations used a helper function instead of a macro but that loses the ability to assert in a test
+#define FUNDOS_TEST_DB() \
+	sqlite3* connection = mockDb(); \
+	auto database = std::make_shared<db>(connection, db::owns_connection{}); \
+	ASSERT_EQ(database->is_ready(), true);
 
 static constexpr datetime CLOSED_AT = {
 	std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -279,7 +277,7 @@ static constexpr datetime CLOSED_AT = {
 };
 
 TEST(DbQuery, ReadEntities) {
-	auto connection = mockSchema();
+	FUNDOS_TEST_DB();
 	sqlite3_exec(connection, std::format(R"sql(
 		INSERT INTO users (id, name) VALUES (1, 'Alice');
 		INSERT INTO users (id, name) VALUES (2, 'Bob');
@@ -292,11 +290,8 @@ TEST(DbQuery, ReadEntities) {
 		INSERT INTO account_members (account_id, user_id) VALUES (20, 1);
 	)sql", CLOSED_AT.milliseconds_since_epoch, CLOSED_AT.milliseconds_since_epoch).c_str(), nullptr, nullptr, nullptr);
 
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	ASSERT_EQ(file->is_ready(), true);
-
 	{
-		auto result = file->get_users();
+		auto result = database->get_users();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 2);
 		auto alice = (*result.val)[0];
@@ -308,7 +303,7 @@ TEST(DbQuery, ReadEntities) {
 	}
 
 	{
-		auto result = file->get_funds();
+		auto result = database->get_funds();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 2);
 		auto emergency = (*result.val)[0];
@@ -322,7 +317,7 @@ TEST(DbQuery, ReadEntities) {
 	}
 
 	{
-		auto result = file->get_accounts();
+		auto result = database->get_accounts();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 2);
 		auto checking = (*result.val)[0];
@@ -339,30 +334,30 @@ TEST(DbQuery, ReadEntities) {
 
 	{
 		// Alice is member of Emergency (open), not Vacation (closed) — memberships excludes closed
-		auto memberships = file->get_fund_memberships(1);
+		auto memberships = database->get_fund_memberships(1);
 		ASSERT_TRUE(memberships.ok());
 		ASSERT_EQ(memberships.val->size(), 1);
 		EXPECT_EQ((*memberships.val)[0].id(), 10);
 		EXPECT_EQ((*memberships.val)[0].name, "Emergency");
 
 		// nonmemberships excludes closed funds too, so no rows return for Alice
-		auto nonmemberships = file->get_fund_nonmemberships(1);
+		auto nonmemberships = database->get_fund_nonmemberships(1);
 		ASSERT_TRUE(nonmemberships.ok());
 		ASSERT_EQ(nonmemberships.val->size(), 0);
 
 		// Bob is not a member of the only open fund open fund
-		auto bob_nonmemberships = file->get_fund_nonmemberships(2);
+		auto bob_nonmemberships = database->get_fund_nonmemberships(2);
 		ASSERT_TRUE(bob_nonmemberships.ok());
 		ASSERT_EQ(bob_nonmemberships.val->size(), 1);
 		EXPECT_EQ((*bob_nonmemberships.val)[0].id(), 10);
 
-		auto members = file->get_fund_members(10);
+		auto members = database->get_fund_members(10);
 		ASSERT_TRUE(members.ok());
 		ASSERT_EQ(members.val->size(), 1);
 		EXPECT_EQ((*members.val)[0].id(), 1);
 		EXPECT_EQ((*members.val)[0].name, "Alice");
 
-		auto nonmembers = file->get_fund_nonmembers(10);
+		auto nonmembers = database->get_fund_nonmembers(10);
 		ASSERT_TRUE(nonmembers.ok());
 		ASSERT_EQ(nonmembers.val->size(), 1);
 		EXPECT_EQ((*nonmembers.val)[0].id(), 2);
@@ -370,24 +365,24 @@ TEST(DbQuery, ReadEntities) {
 	}
 
 	{
-		auto memberships = file->get_account_memberships(1);
+		auto memberships = database->get_account_memberships(1);
 		ASSERT_TRUE(memberships.ok());
 		ASSERT_EQ(memberships.val->size(), 1);
 		EXPECT_EQ((*memberships.val)[0].id(), 20);
 		EXPECT_EQ((*memberships.val)[0].name, "Checking");
 		EXPECT_EQ((*memberships.val)[0].bank_account_id, "ref1");
 
-		auto nonmemberships = file->get_account_nonmemberships(1);
+		auto nonmemberships = database->get_account_nonmemberships(1);
 		ASSERT_TRUE(nonmemberships.ok());
 		ASSERT_EQ(nonmemberships.val->size(), 0);
 
-		auto members = file->get_account_members(20);
+		auto members = database->get_account_members(20);
 		ASSERT_TRUE(members.ok());
 		ASSERT_EQ(members.val->size(), 1);
 		EXPECT_EQ((*members.val)[0].id(), 1);
 		EXPECT_EQ((*members.val)[0].name, "Alice");
 
-		auto nonmembers = file->get_account_nonmembers(20);
+		auto nonmembers = database->get_account_nonmembers(20);
 		ASSERT_TRUE(nonmembers.ok());
 		ASSERT_EQ(nonmembers.val->size(), 1);
 		EXPECT_EQ((*nonmembers.val)[0].id(), 2);
@@ -396,27 +391,25 @@ TEST(DbQuery, ReadEntities) {
 }
 
 TEST(DbQuery, SaveEntities) {
-	auto connection = mockSchema();
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	ASSERT_EQ(file->is_ready(), true);
+	FUNDOS_TEST_DB();
 
 	user alice;
 	alice.name = "Alice";
-	ASSERT_EQ(file->save_user(alice), db::error::none);
+	ASSERT_EQ(database->save_user(alice), db::error::none);
 	EXPECT_NE(alice.id(), 0);
 
 	fund emergency;
 	emergency.name = "Emergency";
-	ASSERT_EQ(file->save_fund(emergency), db::error::none);
+	ASSERT_EQ(database->save_fund(emergency), db::error::none);
 	EXPECT_NE(emergency.id(), 0);
 
 	account checking;
 	checking.name = "Checking";
-	ASSERT_EQ(file->save_account(checking), db::error::none);
+	ASSERT_EQ(database->save_account(checking), db::error::none);
 	EXPECT_NE(checking.id(), 0);
 
 	{
-		auto result = file->get_users();
+		auto result = database->get_users();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -424,7 +417,7 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.name, alice.name);
 	}
 	{
-		auto result = file->get_funds();
+		auto result = database->get_funds();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -433,7 +426,7 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.closed_at, emergency.closed_at);
 	}
 	{
-		auto result = file->get_accounts();
+		auto result = database->get_accounts();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -444,9 +437,9 @@ TEST(DbQuery, SaveEntities) {
 	}
 
 	// Verify membership additions and removals
-	ASSERT_EQ(file->add_user_to_account(checking.id(), alice.id()), db::error::none);
+	ASSERT_EQ(database->add_user_to_account(checking.id(), alice.id()), db::error::none);
 	{
-		auto result = file->get_account_members(checking.id());
+		auto result = database->get_account_members(checking.id());
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -454,7 +447,7 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.name, alice.name);
 	}
 	{
-		auto result = file->get_account_memberships(alice.id());
+		auto result = database->get_account_memberships(alice.id());
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -463,21 +456,21 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.closed_at, checking.closed_at);
 		EXPECT_EQ(row.bank_account_id, checking.bank_account_id);
 	}
-	ASSERT_EQ(file->remove_user_from_account(checking.id(), alice.id()), db::error::none);
+	ASSERT_EQ(database->remove_user_from_account(checking.id(), alice.id()), db::error::none);
 	{
-		auto result = file->get_account_members(checking.id());
+		auto result = database->get_account_members(checking.id());
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 0);
 	}
 	{
-		auto result = file->get_account_memberships(alice.id());
+		auto result = database->get_account_memberships(alice.id());
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 0);
 	}
 
-	ASSERT_EQ(file->add_user_to_fund(emergency.id(), alice.id()), db::error::none);
+	ASSERT_EQ(database->add_user_to_fund(emergency.id(), alice.id()), db::error::none);
 	{
-		auto result = file->get_fund_members(emergency.id());
+		auto result = database->get_fund_members(emergency.id());
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -485,7 +478,7 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.name, alice.name);
 	}
 	{
-		auto result = file->get_fund_memberships(alice.id());
+		auto result = database->get_fund_memberships(alice.id());
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -493,24 +486,24 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.name, emergency.name);
 		EXPECT_EQ(row.closed_at, emergency.closed_at);
 	}
-	ASSERT_EQ(file->remove_user_from_fund(emergency.id(), alice.id()), db::error::none);
+	ASSERT_EQ(database->remove_user_from_fund(emergency.id(), alice.id()), db::error::none);
 	{
-		auto result = file->get_fund_members(emergency.id());
+		auto result = database->get_fund_members(emergency.id());
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 0);
 	}
 	{
-		auto result = file->get_fund_memberships(alice.id());
+		auto result = database->get_fund_memberships(alice.id());
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 0);
 	}
 
 	// Verify update path
 	alice.name = "Alicia";
-	ASSERT_EQ(file->save_user(alice), db::error::none);
+	ASSERT_EQ(database->save_user(alice), db::error::none);
 
 	{
-		auto result = file->get_users();
+		auto result = database->get_users();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -520,9 +513,9 @@ TEST(DbQuery, SaveEntities) {
 
 	emergency.name = "Rainy Day";
 	emergency.closed_at = CLOSED_AT;
-	ASSERT_EQ(file->save_fund(emergency), db::error::none);
+	ASSERT_EQ(database->save_fund(emergency), db::error::none);
 	{
-		auto result = file->get_funds();
+		auto result = database->get_funds();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -534,9 +527,9 @@ TEST(DbQuery, SaveEntities) {
 	checking.name = "Debit Card";
 	checking.bank_account_id = "ref1";
 	checking.closed_at = CLOSED_AT;
-	ASSERT_EQ(file->save_account(checking), db::error::none);
+	ASSERT_EQ(database->save_account(checking), db::error::none);
 	{
-		auto result = file->get_accounts();
+		auto result = database->get_accounts();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 		auto& row = (*result.val)[0];
@@ -548,24 +541,23 @@ TEST(DbQuery, SaveEntities) {
 }
 
 TEST(DbQuery, MetaLocales) {
-	auto connection = mockSchema();
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
+	FUNDOS_TEST_DB();
 	{
-		auto saved_currency   = file->get_currency_locale();
-		auto saved_percentage = file->get_percentage_locale();
+		auto saved_currency   = database->get_currency_locale();
+		auto saved_percentage = database->get_percentage_locale();
 
 		EXPECT_EQ(saved_currency.not_found(),   true);
 		EXPECT_EQ(saved_percentage.not_found(), true);
 	}
 	{
-		auto currency_result   = file->set_currency_locale_preset(currency_locale::locales.named.USD);
-		auto percentage_result = file->set_percentage_locale_preset(percentage_locale::locales.named.en);
+		auto currency_result   = database->set_currency_locale_preset(currency_locale::locales.named.USD);
+		auto percentage_result = database->set_percentage_locale_preset(percentage_locale::locales.named.en);
 
 		EXPECT_EQ(currency_result, db::error::none);
 		EXPECT_EQ(percentage_result, db::error::none);
 
-		auto saved_currency   = file->get_currency_locale();
-		auto saved_percentage = file->get_percentage_locale();
+		auto saved_currency   = database->get_currency_locale();
+		auto saved_percentage = database->get_percentage_locale();
 
 		EXPECT_EQ(saved_currency.ok(),   true);
 		EXPECT_EQ(saved_percentage.ok(), true);
@@ -598,14 +590,14 @@ TEST(DbQuery, MetaLocales) {
 			.has_space_around_number = true,
 			.symbol_position = percentage_locale::info::symbol_placement::before,
 		};
-		auto currency_result   = file->set_currency_locale(custom_currency);
-		auto percentage_result = file->set_percentage_locale(custom_percentage);
+		auto currency_result   = database->set_currency_locale(custom_currency);
+		auto percentage_result = database->set_percentage_locale(custom_percentage);
 
 		EXPECT_EQ(currency_result, db::error::none);
 		EXPECT_EQ(percentage_result, db::error::none);
 
-		auto saved_currency   = file->get_currency_locale();
-		auto saved_percentage = file->get_percentage_locale();
+		auto saved_currency   = database->get_currency_locale();
+		auto saved_percentage = database->get_percentage_locale();
 
 		EXPECT_EQ(saved_currency.ok(),   true);
 		EXPECT_EQ(saved_percentage.ok(), true);
@@ -637,9 +629,7 @@ static int count_rows(sqlite3* connection, const char* query) {
 }
 
 TEST(DbQuery, SaveBudget_ReadBack) {
-	auto connection = mockSchema();
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	ASSERT_TRUE(file->is_ready());
+	FUNDOS_TEST_DB();
 
 	// Create funds via save_fund
 	fund emergency_savings; emergency_savings.name = "Emergency Savings";
@@ -647,11 +637,11 @@ TEST(DbQuery, SaveBudget_ReadBack) {
 	fund investments;       investments.name       = "Investments";
 	fund flex_spending;     flex_spending.name     = "Flex Spending";
 	fund rent;              rent.name              = "Rent";
-	ASSERT_EQ(file->save_fund(emergency_savings), db::error::none);
-	ASSERT_EQ(file->save_fund(food),              db::error::none);
-	ASSERT_EQ(file->save_fund(investments),       db::error::none);
-	ASSERT_EQ(file->save_fund(flex_spending),     db::error::none);
-	ASSERT_EQ(file->save_fund(rent),              db::error::none);
+	ASSERT_EQ(database->save_fund(emergency_savings), db::error::none);
+	ASSERT_EQ(database->save_fund(food),              db::error::none);
+	ASSERT_EQ(database->save_fund(investments),       db::error::none);
+	ASSERT_EQ(database->save_fund(flex_spending),     db::error::none);
+	ASSERT_EQ(database->save_fund(rent),              db::error::none);
 
 	// Manually build initial budget state in SQL
 	// budget: "Default", overflow -> emergency_savings
@@ -700,7 +690,7 @@ TEST(DbQuery, SaveBudget_ReadBack) {
 
 	// Verify get_budgets round-trip before any save
 	{
-		auto result = file->get_budgets();
+		auto result = database->get_budgets();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 
@@ -772,20 +762,18 @@ TEST(DbQuery, SaveBudget_ReadBack) {
 }
 
 TEST(DbQuery, SaveBudget_PartialUpdate) {
-	auto connection = mockSchema();
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	ASSERT_TRUE(file->is_ready());
+	FUNDOS_TEST_DB();
 
 	fund emergency_savings; emergency_savings.name = "Emergency Savings";
 	fund food;              food.name              = "Food";
 	fund investments;       investments.name       = "Investments";
 	fund flex_spending;     flex_spending.name     = "Flex Spending";
 	fund rent;              rent.name              = "Rent";
-	ASSERT_EQ(file->save_fund(emergency_savings), db::error::none);
-	ASSERT_EQ(file->save_fund(food),              db::error::none);
-	ASSERT_EQ(file->save_fund(investments),       db::error::none);
-	ASSERT_EQ(file->save_fund(flex_spending),     db::error::none);
-	ASSERT_EQ(file->save_fund(rent),              db::error::none);
+	ASSERT_EQ(database->save_fund(emergency_savings), db::error::none);
+	ASSERT_EQ(database->save_fund(food),              db::error::none);
+	ASSERT_EQ(database->save_fund(investments),       db::error::none);
+	ASSERT_EQ(database->save_fund(flex_spending),     db::error::none);
+	ASSERT_EQ(database->save_fund(rent),              db::error::none);
 
 	{
 		sqlite3_stmt* stmt = nullptr;
@@ -818,7 +806,7 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 		sqlite3_finalize(stmt);
 	}
 
-	auto get_result = file->get_budgets();
+	auto get_result = database->get_budgets();
 	ASSERT_TRUE(get_result.ok());
 	ASSERT_EQ(get_result.val->size(), 1);
 	budget default_budget = (*get_result.val)[0];
@@ -866,7 +854,7 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 
 	default_budget.phases.push_back(new_fixed_phase);
 
-	ASSERT_EQ(file->save_budget(default_budget), db::error::none);
+	ASSERT_EQ(database->save_budget(default_budget), db::error::none);
 
 	// Verify id stability for surviving rows
 	EXPECT_EQ(default_budget.id(), original_budget_id);
@@ -905,7 +893,7 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 
 	// get_budgets round-trip
 	{
-		auto result = file->get_budgets();
+		auto result = database->get_budgets();
 		ASSERT_TRUE(result.ok());
 		ASSERT_EQ(result.val->size(), 1);
 
@@ -957,16 +945,14 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 }
 
 TEST(DbQuery, SaveBudget_RollbackOnError) {
-	auto connection = mockSchema();
-	auto file = std::make_shared<db>(connection, db::owns_connection{});
-	ASSERT_TRUE(file->is_ready());
+	FUNDOS_TEST_DB();
 
 	fund emergency_savings; emergency_savings.name = "Emergency Savings";
 	fund flex_spending;     flex_spending.name     = "Flex Spending";
 	fund investments;       investments.name       = "Investments";
-	ASSERT_EQ(file->save_fund(emergency_savings), db::error::none);
-	ASSERT_EQ(file->save_fund(flex_spending),     db::error::none);
-	ASSERT_EQ(file->save_fund(investments),       db::error::none);
+	ASSERT_EQ(database->save_fund(emergency_savings), db::error::none);
+	ASSERT_EQ(database->save_fund(flex_spending),     db::error::none);
+	ASSERT_EQ(database->save_fund(investments),       db::error::none);
 
 	// Build a fresh budget with one percentage phase, three targets,
 	// last target references a nonexistent fund to trigger FK violation
@@ -1000,7 +986,7 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 	bad_budget.phases.push_back(phase);
 
 	// Capture pre-save ids (all zero) for rollback verification
-	auto result = file->save_budget(bad_budget);
+	auto result = database->save_budget(bad_budget);
 	EXPECT_NE(result, db::error::none);
 
 	// All ids must be rolled back to zero
@@ -1029,7 +1015,7 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 		fixed_phase->targets.back().fund_id = investments.id();
 	}
 
-	ASSERT_EQ(file->save_budget(bad_budget), db::error::none);
+	ASSERT_EQ(database->save_budget(bad_budget), db::error::none);
 	EXPECT_NE(bad_budget.id(), 0);
 	{
 		auto& phase_variant = *bad_budget.phases.begin();
@@ -1047,243 +1033,193 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets"), 3);
 }
 
-struct test_context {
-	std::shared_ptr<db> file;
-	fund groceries;
-	account checking;
-	transaction txn;
-};
-
-static void seed(test_context& ctx) {
-	ctx.groceries.name = "Groceries";
-	ctx.file->save_fund(ctx.groceries);
-
-	ctx.checking.name = "Checking";
-	ctx.file->save_account(ctx.checking);
-
-	ctx.txn.account_id = ctx.checking.id();
-	ctx.txn.amount = currency{10000}; // $100
-	ctx.txn.date = datetime{0};
-	ctx.txn.memo = "Test";
-	ctx.file->save_transaction(ctx.txn);
-}
+/// Previous iterations used a helper function instead of a macro but that loses the ability to assert in a test
+#define FUNDOS_SEED() \
+	fund groceries; \
+	groceries.name = "Groceries"; \
+	ASSERT_EQ(database->save_fund(groceries), db::error::none); \
+	account checking; \
+	checking.name = "Checking"; \
+	ASSERT_EQ(database->save_account(checking), db::error::none); \
+	transaction txn; \
+	txn.account_id = checking.id(); \
+	txn.amount = currency{10000}; \
+	txn.date = datetime{0}; \
+	txn.memo = "Test"; \
+	ASSERT_EQ(database->save_transaction(txn), db::error::none);
 
 TEST(DbQuery, SaveTransaction) {
-	auto connection = mockSchema();
-	test_context ctx = test_context{
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	seed(ctx);
-	ASSERT_NE(ctx.groceries.id(), 0);
-	ASSERT_NE(ctx.checking.id(), 0);
-	ASSERT_NE(ctx.txn.id(), 0);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
 
 }
 
 TEST(DbQuery, AllocateTransaction_SingleAllocation) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	seed(ctx);
-	ASSERT_NE(ctx.groceries.id(), 0);
-	ASSERT_NE(ctx.txn.id(), 0);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
 
 	allocation alloc;
-	alloc.transaction_id = ctx.txn.id();
-	alloc.fund_id = ctx.groceries.id();
+	alloc.transaction_id = txn.id();
+	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 
 	std::vector<allocation> allocations = { alloc };
-	ASSERT_EQ(ctx.file->allocate_transaction(allocations), db::error::none);
+	ASSERT_EQ(database->allocate_transaction(allocations), db::error::none);
 	EXPECT_NE(allocations[0].id(), 0);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM allocations"), 1);
 }
 
 TEST(DbQuery, AllocateTransaction_MultipleAllocations) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	fund rent; rent.name = "Rent";
-	ctx.file->save_fund(rent);
-	seed(ctx);
-	ASSERT_NE(ctx.groceries.id(), 0);
-	ASSERT_NE(rent.id(), 0);
-	ASSERT_NE(ctx.txn.id(), 0);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	fund rent;
+	rent.name = "Rent";
+	ASSERT_EQ(database->save_fund(rent), db::error::none);
 
 	allocation alloc1;
-	alloc1.transaction_id = ctx.txn.id();
-	alloc1.fund_id = ctx.groceries.id();
+	alloc1.transaction_id = txn.id();
+	alloc1.fund_id = groceries.id();
 	alloc1.amount = currency{6000};
 
 	allocation alloc2;
-	alloc2.transaction_id = ctx.txn.id();
+	alloc2.transaction_id = txn.id();
 	alloc2.fund_id = rent.id();
 	alloc2.amount = currency{4000};
 
 	std::vector<allocation> allocations = { alloc1, alloc2 };
-	ASSERT_EQ(ctx.file->allocate_transaction(allocations), db::error::none);
+	ASSERT_EQ(database->allocate_transaction(allocations), db::error::none);
 	EXPECT_NE(allocations[0].id(), 0);
 	EXPECT_NE(allocations[1].id(), 0);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM allocations"), 2);
 }
 
 TEST(DbQuery, AllocateTransaction_UpdateExisting) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	fund rent; rent.name = "Rent";
-	ctx.file->save_fund(rent);
-	seed(ctx);
-	ASSERT_NE(ctx.groceries.id(), 0);
-	ASSERT_NE(rent.id(), 0);
-	ASSERT_NE(ctx.txn.id(), 0);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	fund rent;
+	rent.name = "Rent";
+	ASSERT_EQ(database->save_fund(rent), db::error::none);
 
 	allocation alloc;
-	alloc.transaction_id = ctx.txn.id();
-	alloc.fund_id = ctx.groceries.id();
+	alloc.transaction_id = txn.id();
+	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	ASSERT_EQ(ctx.file->allocate_transaction(allocations), db::error::none);
+	ASSERT_EQ(database->allocate_transaction(allocations), db::error::none);
 	ASSERT_NE(allocations[0].id(), 0);
 	int64_t original_id = allocations[0].id();
 
 	// Update amount on the existing allocation
 	allocations[0].fund_id = rent.id(); // same sum, different fund
-	ASSERT_EQ(ctx.file->allocate_transaction(allocations), db::error::none);
+	ASSERT_EQ(database->allocate_transaction(allocations), db::error::none);
 	EXPECT_EQ(allocations[0].id(), original_id);
 	std::string query = std::format("SELECT COUNT(*) FROM allocations WHERE fund_id = {}", rent.id());
 	EXPECT_EQ(count_rows(connection, query.c_str()), 1);
 }
 
 TEST(DbQuery, AllocateTransaction_Empty) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	seed(ctx);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
 
 	std::vector<allocation> allocations;
-	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_ZeroTransactionId) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	seed(ctx);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
 
 	allocation alloc;
-	alloc.fund_id = ctx.groceries.id();
+	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_MismatchedTransactionIds) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	fund rent; rent.name = "Rent";
-	ctx.file->save_fund(rent);
-	seed(ctx);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	fund rent;
+	rent.name = "Rent";
+	ASSERT_EQ(database->save_fund(rent), db::error::none);
 
 	allocation alloc1;
-	alloc1.transaction_id = ctx.txn.id();
-	alloc1.fund_id = ctx.groceries.id();
+	alloc1.transaction_id = txn.id();
+	alloc1.fund_id = groceries.id();
 	alloc1.amount = currency{6000};
 
 	allocation alloc2;
-	alloc2.transaction_id = ctx.txn.id() + 1;
+	alloc2.transaction_id = txn.id() + 1;
 	alloc2.fund_id = rent.id();
 	alloc2.amount = currency{4000};
 
 	std::vector<allocation> allocations = { alloc1, alloc2 };
-	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_DuplicateFund) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	seed(ctx);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
 
 	allocation alloc1;
-	alloc1.transaction_id = ctx.txn.id();
-	alloc1.fund_id = ctx.groceries.id();
+	alloc1.transaction_id = txn.id();
+	alloc1.fund_id = groceries.id();
 	alloc1.amount = currency{6000};
 
 	allocation alloc2;
-	alloc2.transaction_id = ctx.txn.id();
-	alloc2.fund_id = ctx.groceries.id();
+	alloc2.transaction_id = txn.id();
+	alloc2.fund_id = groceries.id();
 	alloc2.amount = currency{4000};
 
 	std::vector<allocation> allocations = { alloc1, alloc2 };
-	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_ZeroFundId) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	seed(ctx);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
 
 	allocation alloc;
-	alloc.transaction_id = ctx.txn.id();
+	alloc.transaction_id = txn.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_WrongSum) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	seed(ctx);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
 
 	allocation alloc;
-	alloc.transaction_id = ctx.txn.id();
-	alloc.fund_id = ctx.groceries.id();
+	alloc.transaction_id = txn.id();
+	alloc.fund_id = groceries.id();
 	alloc.amount = currency{9999};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::rejected);
+	EXPECT_EQ(database->allocate_transaction(allocations), db::error::rejected);
 }
 
 TEST(DbQuery, AllocateTransaction_NonexistentTransaction) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	seed(ctx);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
 
 	allocation alloc;
 	alloc.transaction_id = 99999;
-	alloc.fund_id = ctx.groceries.id();
+	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::rejected);
+	EXPECT_EQ(database->allocate_transaction(allocations), db::error::rejected);
 }
 
 TEST(DbQuery, AllocateTransaction_ClosedFund) {
-	auto connection = mockSchema();
-	test_context ctx = {
-		.file = std::make_shared<db>(connection, db::owns_connection{})
-	};
-	seed(ctx);
-	ctx.groceries.closed_at = CLOSED_AT;
-	ASSERT_EQ(ctx.file->save_fund(ctx.groceries), db::error::none);
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	groceries.closed_at = CLOSED_AT;
+	ASSERT_EQ(database->save_fund(groceries), db::error::none);
 
 	allocation alloc;
-	alloc.transaction_id = ctx.txn.id();
-	alloc.fund_id = ctx.groceries.id();
+	alloc.transaction_id = txn.id();
+	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(ctx.file->allocate_transaction(allocations), db::error::rejected);
+	EXPECT_EQ(database->allocate_transaction(allocations), db::error::rejected);
 }
