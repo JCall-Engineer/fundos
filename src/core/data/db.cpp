@@ -350,6 +350,15 @@ struct statements {
 		WHERE id = ?
 	)sql" };
 
+	statement_slot insert_balance_checkpoint { .sql = R"sql(
+		INSERT INTO balance_checkpoints (account_id, amount, date)
+		VALUES (?, ?, ?)
+	)sql" };
+	statement_slot insert_checkpoint_transaction { .sql = R"sql(
+		INSERT INTO balance_checkpoint_transactions (checkpoint_id, transaction_id)
+		VALUES (?, ?)
+	)sql" };
+
 	/// Used to allow manual corrections
 	statement_slot update_transaction_correction { .sql = R"sql(
 		UPDATE transactions
@@ -1601,10 +1610,21 @@ db::error db::perform_import(import::pending_import& pending) {
 
 	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
 		for (auto& account : pending.accounts) {
+			error err = sql_execute(
+				prepared->named.insert_balance_checkpoint.statement,
+				[&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64(stmt, 1, account.account_id);
+					sqlite3_bind_int64(stmt, 2, account.balance.minor_units);
+					sqlite3_bind_int64(stmt, 3, account.as_of.milliseconds_since_epoch);
+				}
+			);
+			if (err != error::none) { return err; }
+			int64_t checkpoint_id = sqlite3_last_insert_rowid(connection);
+
 			for (auto& importing : account.transactions) {
 				transaction& transaction = importing.saving;
 				if (!transaction.is_persisted()) {
-					error err = sql_execute(
+					err = sql_execute(
 						prepared->named.insert_transaction_import.statement,
 						[&](sqlite3_stmt* stmt) {
 							sqlite3_bind_int64 (stmt, 1, transaction.account_id);
@@ -1620,8 +1640,9 @@ db::error db::perform_import(import::pending_import& pending) {
 					if (err != error::none) { return err; }
 					transaction.id_= sqlite3_last_insert_rowid(connection);
 					rollback.push_back([&transaction]() { transaction.id_ = 0; });
+
 				} else {
-					error err = sql_execute(
+					err = sql_execute(
 						prepared->named.update_transaction_import.statement,
 						[&](sqlite3_stmt* stmt) {
 							sqlite3_bind_int64 (stmt, 1, transaction.amount.minor_units);
@@ -1636,6 +1657,14 @@ db::error db::perform_import(import::pending_import& pending) {
 					);
 					if (err != error::none) { return err; }
 				}
+				err = sql_execute(
+					prepared->named.insert_checkpoint_transaction.statement,
+					[&](sqlite3_stmt* stmt) {
+						sqlite3_bind_int64(stmt, 1, checkpoint_id);
+						sqlite3_bind_int64(stmt, 2, transaction.id_);
+					}
+				);
+				if (err != error::none) { return err; }
 			}
 		}
 		return resolve_corrections();
