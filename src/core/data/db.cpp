@@ -1543,6 +1543,8 @@ db::error db::prepare_import(import::pending_import& pending) {
 				}
 			);
 			if (fitid_query.err != error::none) { return fitid_query.err; }
+			txn.saving.date = txn.importing.date;
+			txn.saving.memo = txn.importing.memo;
 			if (fitid_query.not_found()) {
 				auto view = account.unclaimed_candidates();
 				for (auto* candidate : view) {
