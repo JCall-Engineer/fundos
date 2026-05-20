@@ -1421,6 +1421,41 @@ AND corrects_id IS NULL;
 	return error::none;
 }
 
+db::result<transaction> db::fetch_transaction(int64_t id) {
+	return sql_fetch_one<fundos::transaction>(
+		prepared->named.find_transaction_by_id.statement,
+		[&](sqlite3_stmt* stmt) -> void {
+			sqlite3_bind_int64(stmt, 1, id);
+		},
+		[&](sqlite3_stmt* stmt) -> fundos::transaction {
+			fundos::transaction out;
+			out.id_            = id;
+			out.account_id     =                                         sqlite3_column_int64  (stmt, 0);
+			out.amount         =                                currency{sqlite3_column_int64  (stmt, 1)};
+			out.cleared        =                   as_optional<datetime>(extract_optional_int64(stmt, 2));
+			out.fitid          =                                         extract_optional_text (stmt, 3);
+			out.corrects_fitid =                                         extract_optional_text (stmt, 4);
+			out.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 5));
+			out.corrects_id    =                                         extract_optional_int64(stmt, 6);
+			out.superseded_by  =                                         extract_optional_int64(stmt, 7);
+			return out;
+		}
+	);
+}
+
+static inline bool safe_match(const transaction& lhs, const transaction& rhs) {
+	return (
+		   lhs.account_id     == rhs.account_id
+		&& lhs.amount         == rhs.amount
+		&& lhs.cleared        == rhs.cleared
+		&& lhs.fitid          == rhs.fitid
+		&& lhs.corrects_fitid == rhs.corrects_fitid
+		&& lhs.correct_action == rhs.correct_action
+		&& lhs.corrects_id    == rhs.corrects_id
+		&& lhs.superseded_by  == rhs.superseded_by
+	);
+}
+
 db::error db::prepare_import(import::pending_import& pending) {
 	for (auto& account : pending.accounts) {
 		auto account_query = sql_fetch_one<int64_t>(
@@ -1437,7 +1472,6 @@ db::error db::prepare_import(import::pending_import& pending) {
 		account.account_id = *account_query.val;
 
 		{ // Collect candidates
-
 			auto candidate_query = sql_fetch_many<transaction>(
 				prepared->named.find_transaction_candidates.statement,
 				[&](sqlite3_stmt* stmt) {
@@ -1522,35 +1556,93 @@ db::error db::prepare_import(import::pending_import& pending) {
 }
 
 db::error db::perform_import(import::pending_import& pending) {
-	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+	for (auto& account : pending.accounts) {
+		auto account_query = sql_fetch_one<int64_t>(
+			prepared->named.find_account_by_bank_id.statement,
+			[&] (sqlite3_stmt* stmt) -> void {
+				bind_text(stmt, 1, account.acct_id);
+			},
+			[&] (sqlite3_stmt* stmt) -> int64_t {
+				return sqlite3_column_int64(stmt, 0);
+			}
+		);
+		if (account_query.err != error::none) { return account_query.err; }
+		if (account_query.not_found()) { return error::bad_request; }
+		if (*account_query.val != account.account_id) { return error::bad_request; }
 
+		for (auto& transaction : account.transactions) {
+			if (!transaction.importing.cleared) { return error::bad_request; }
+			transaction.saving.id_ = 0;
+			transaction.saving.account_id = account.account_id;
+			transaction.saving.amount = transaction.importing.amount;
+			transaction.saving.cleared = transaction.importing.cleared;
+			transaction.saving.fitid = transaction.importing.fitid;
+			transaction.saving.corrects_fitid = transaction.importing.corrects_fitid;
+			transaction.saving.correct_action = transaction.importing.correct_action;
+
+			if (transaction.get_match() != nullptr) {
+				auto match = fetch_transaction(transaction.get_match()->id_);
+				if (match.err != error::none) { return match.err; }
+				if (match.not_found()) { return error::bad_request; }
+				if (!safe_match(*transaction.get_match(), *match.val)) { return error::bad_request; }
+
+				transaction.saving.id_ = match.val->id_;
+				if (match.val->account_id != account.account_id) { return error::bad_request; }
+				if (match.val->fitid && match.val->fitid != transaction.importing.fitid) { return error::bad_request; }
+				if (match.val->fitid) {
+					if (match.val->correct_action != transaction.importing.correct_action) { return error::bad_request; }
+					if (match.val->corrects_fitid != transaction.importing.corrects_fitid) { return error::bad_request; }
+				} else {
+					if (match.val->correct_action || match.val->corrects_id || match.val->superseded_by) { return error::bad_request; }
+				}
+			}
+		}
+	}
+
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
+		for (auto& account : pending.accounts) {
+			for (auto& importing : account.transactions) {
+				transaction& transaction = importing.saving;
+				if (!transaction.is_persisted()) {
+					error err = sql_execute(
+						prepared->named.insert_transaction_import.statement,
+						[&](sqlite3_stmt* stmt) {
+							sqlite3_bind_int64 (stmt, 1, transaction.account_id);
+							sqlite3_bind_int64 (stmt, 2, transaction.amount.minor_units);
+							sqlite3_bind_int64 (stmt, 3, transaction.date.milliseconds_since_epoch);
+							bind_optional_int64(stmt, 4, as_optional_int64(transaction.cleared));
+							bind_text          (stmt, 5, transaction.memo);
+							bind_optional_text (stmt, 6, transaction.fitid);
+							bind_optional_text (stmt, 7, transaction.corrects_fitid);
+							bind_optional_text (stmt, 8, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, transaction.correct_action));
+						}
+					);
+					if (err != error::none) { return err; }
+					transaction.id_= sqlite3_last_insert_rowid(connection);
+					rollback.push_back([&transaction]() { transaction.id_ = 0; });
+				} else {
+					error err = sql_execute(
+						prepared->named.update_transaction_import.statement,
+						[&](sqlite3_stmt* stmt) {
+							sqlite3_bind_int64 (stmt, 1, transaction.amount.minor_units);
+							sqlite3_bind_int64 (stmt, 2, transaction.date.milliseconds_since_epoch);
+							bind_optional_int64(stmt, 3, as_optional_int64(transaction.cleared));
+							bind_text          (stmt, 4, transaction.memo);
+							bind_optional_text (stmt, 5, transaction.fitid);
+							bind_optional_text (stmt, 6, transaction.corrects_fitid);
+							bind_optional_text (stmt, 7, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, transaction.correct_action));
+							sqlite3_bind_int64 (stmt, 8, transaction.id_);
+						}
+					);
+					if (err != error::none) { return err; }
+				}
+			}
+		}
 		return resolve_corrections();
 	});
 }
 
 db::error db::save_transaction(transaction& transaction) {
-	auto fetch_transaction = [this](int64_t id) -> result<fundos::transaction> {
-		return sql_fetch_one<fundos::transaction>(
-			prepared->named.find_transaction_by_id.statement,
-			[&](sqlite3_stmt* stmt) -> void {
-				sqlite3_bind_int64(stmt, 1, id);
-			},
-			[&](sqlite3_stmt* stmt) -> fundos::transaction {
-				fundos::transaction out;
-				out.id_            = id;
-				out.account_id     =                                         sqlite3_column_int64  (stmt, 0);
-				out.amount         =                                currency{sqlite3_column_int64  (stmt, 1)};
-				out.cleared        =                   as_optional<datetime>(extract_optional_int64(stmt, 2));
-				out.fitid          =                                         extract_optional_text (stmt, 3);
-				out.corrects_fitid =                                         extract_optional_text (stmt, 4);
-				out.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 5));
-				out.corrects_id    =                                         extract_optional_int64(stmt, 6);
-				out.superseded_by  =                                         extract_optional_int64(stmt, 7);
-				return out;
-			}
-		);
-	};
-
 	if (!transaction.is_persisted()) {
 		if (transaction.corrects_id.has_value() != transaction.correct_action.has_value()) {
 			return error::bad_request;
@@ -1594,16 +1686,7 @@ db::error db::save_transaction(transaction& transaction) {
 		auto existing = fetch_transaction(transaction.id_);
 		if (existing.err != error::none) { return existing.err; }
 		if (existing.not_found()) { return error::bad_request; }
-		if (
-			   transaction.account_id     != existing.val->account_id
-			|| transaction.amount         != existing.val->amount
-			|| transaction.cleared        != existing.val->cleared
-			|| transaction.fitid          != existing.val->fitid
-			|| transaction.corrects_fitid != existing.val->corrects_fitid
-			|| transaction.correct_action != existing.val->correct_action
-			|| transaction.corrects_id    != existing.val->corrects_id
-			|| transaction.superseded_by  != existing.val->superseded_by
-		) { return error::rejected; }
+		if (!safe_match(transaction, *existing.val)) { return error::rejected; }
 		return sql_execute(
 			prepared->named.update_transaction_user.statement,
 			[&](sqlite3_stmt* stmt) {

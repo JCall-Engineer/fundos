@@ -218,6 +218,9 @@ private:
 	/// Should be called after each OFX import.
 	error                        resolve_corrections();
 
+	/// Used internally to pull all fields from a transaction needed for validating safe updates to the db
+	result<transaction>          fetch_transaction(int64_t id);
+
 public:
 	/// Populates candidates and initializes match and saving on each imported_transaction.
 	/// Resolves each bank_account's acct_id to an account_id via bank_account_id.
@@ -227,11 +230,14 @@ public:
 
 	/// Commits each imported_transaction in the pending import.
 	/// The committed record is assembled from multiple sources rather than saving verbatim:
-	///   - id — taken from  match if not null
+	///   - id — taken from match if not null (nonnull match = update, null = insert)
+	///   - account_id — taken from the enclosing bank_account (resolved by prepare_import)
 	///   - fitid, corrects_fitid, correct_action, cleared, amount — taken from importing
 	///   - date, memo — taken from saving
+	/// Runs resolve_corrections after all transactions are committed.
 	/// @note Callers must not modify fitid, corrects_fitid, correct_action, cleared, or amount on saving.
 	/// @note Callers must not bypass set_match() to alter definitive matches.
+	/// @return bad_request if any imported transaction's import state is corrupt.
 	error                        perform_import(import::pending_import& pending);
 
 	/// Saves a user-created or user-edited transaction.
