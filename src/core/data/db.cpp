@@ -429,9 +429,8 @@ static inline std::optional<Enum> optional_string_to_enum(const enum_string_map<
 static inline std::string extract_text(sqlite3_stmt* stmt, int index) {
 	return reinterpret_cast<const char*>(sqlite3_column_text(stmt, index));
 }
-static inline void bind_text(sqlite3_stmt* stmt, int index, const char*) = delete; // prevent footgun: implicit copy of raw c strings
 static inline void bind_text(sqlite3_stmt* stmt, int index, const std::string& value) {
-	sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_STATIC);
+	sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_TRANSIENT); // I wanted to use SQLITE_STATIC but implicit string copies has become complicated
 }
 
 static inline std::optional<std::string> extract_optional_text(sqlite3_stmt* stmt, int index) {
@@ -440,7 +439,7 @@ static inline std::optional<std::string> extract_optional_text(sqlite3_stmt* stm
 }
 static inline void bind_optional_text(sqlite3_stmt* stmt, int index, const std::optional<std::string>& value) {
 	if (value) {
-		sqlite3_bind_text(stmt, index, value->c_str(), -1, SQLITE_STATIC);
+		sqlite3_bind_text(stmt, index, value->c_str(), -1, SQLITE_TRANSIENT); // I wanted to use SQLITE_STATIC but implicit string copies has become complicated
 	} else {
 		sqlite3_bind_null(stmt, index);
 	}

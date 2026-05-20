@@ -1048,10 +1048,181 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 	txn.memo = "Test"; \
 	ASSERT_EQ(database->save_transaction(txn), db::error::none);
 
-TEST(DbQuery, SaveTransaction) {
+template<typename T>
+static T fetch_field(sqlite3* connection, const char* sql) {
+	T value{};
+	sqlite3_exec(connection, sql,
+		[](void* data, int, char** cols, char**) {
+			*static_cast<T*>(data) = cols[0] ? static_cast<T>(std::atoll(cols[0])) : T{};
+			return 0;
+		}, &value, nullptr);
+	return value;
+}
+
+template<>
+static std::string fetch_field<std::string>(sqlite3* connection, const char* sql) {
+	std::string value;
+	sqlite3_exec(connection, sql,
+		[](void* data, int, char** cols, char**) {
+			if (cols[0]) { *static_cast<std::string*>(data) = cols[0]; }
+			return 0;
+		}, &value, nullptr);
+	return value;
+}
+
+template<>
+static std::optional<std::string> fetch_field<std::optional<std::string>>(sqlite3* connection, const char* sql) {
+	std::optional<std::string> value;
+	sqlite3_exec(connection, sql,
+		[](void* data, int, char** cols, char**) {
+			auto* out = static_cast<std::optional<std::string>*>(data);
+			*out = cols[0] ? std::optional<std::string>{cols[0]} : std::nullopt;
+			return 0;
+		}, &value, nullptr);
+	return value;
+}
+
+template<>
+static std::optional<int64_t> fetch_field<std::optional<int64_t>>(sqlite3* connection, const char* sql) {
+	std::optional<int64_t> value;
+	sqlite3_exec(connection, sql,
+		[](void* data, int, char** cols, char**) {
+			auto* out = static_cast<std::optional<int64_t>*>(data);
+			*out = cols[0] ? std::optional<int64_t>{std::atoll(cols[0])} : std::nullopt;
+			return 0;
+		}, &value, nullptr);
+	return value;
+}
+
+TEST(DbQuery, SaveTransaction_Insert) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
+	EXPECT_NE(txn.id(), 0);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM transactions"), 1);
+}
 
+TEST(DbQuery, SaveTransaction_Update) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	txn.date = datetime{86400000}; // 1 day later
+	txn.memo = "Updated";
+	ASSERT_EQ(database->save_transaction(txn), db::error::none);
+	EXPECT_EQ(86400000, fetch_field<int64_t>(connection, "SELECT date FROM transactions LIMIT 1"));
+	EXPECT_EQ("Updated", fetch_field<std::string>(connection, "SELECT memo FROM transactions LIMIT 1"));
+}
+
+TEST(DbQuery, SaveTransaction_Update_ImmutableFieldChanged) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	txn.amount = currency{99999};
+	EXPECT_EQ(database->save_transaction(txn), db::error::rejected);
+}
+
+TEST(DbQuery, SaveTransaction_Update_NonexistentId) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	sqlite3_exec(connection, "DELETE FROM transactions", nullptr, nullptr, nullptr);
+	EXPECT_EQ(database->save_transaction(txn), db::error::bad_request);
+}
+
+TEST(DbQuery, SaveTransaction_InsertCorrection) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	transaction correction;
+	correction.account_id   = checking.id();
+	correction.amount       = currency{5000};
+	correction.date         = datetime{0};
+	correction.memo         = "Correction";
+	correction.corrects_id  = txn.id();
+	correction.correct_action = transaction::correction_type::replaces;
+	ASSERT_EQ(database->save_transaction(correction), db::error::none);
+	ASSERT_NE(correction.id(), 0);
+	auto superseded_by = fetch_field<std::optional<int64_t>>(connection,
+		std::format("SELECT superseded_by FROM transactions WHERE id = {}", txn.id()).c_str()
+	);
+	EXPECT_EQ(superseded_by, correction.id());
+}
+
+TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectAction) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	transaction correction;
+	correction.account_id  = checking.id();
+	correction.amount      = currency{5000};
+	correction.date        = datetime{0};
+	correction.memo        = "Bad";
+	correction.corrects_id = txn.id();
+	// correct_action intentionally omitted
+	EXPECT_EQ(database->save_transaction(correction), db::error::bad_request);
+}
+
+TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectsId) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	transaction correction;
+	correction.account_id     = checking.id();
+	correction.amount         = currency{5000};
+	correction.date           = datetime{0};
+	correction.memo           = "Bad";
+	correction.correct_action = transaction::correction_type::replaces;
+	// corrects_id intentionally omitted
+	EXPECT_EQ(database->save_transaction(correction), db::error::bad_request);
+}
+
+TEST(DbQuery, SaveTransaction_InsertCorrection_TargetHasFitid) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	std::string update = std::format(
+		"UPDATE transactions SET fitid = 'imported-fitid' WHERE id = {}", txn.id()
+	);
+	ASSERT_EQ(sqlite3_exec(connection, update.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
+	transaction correction;
+	correction.account_id     = checking.id();
+	correction.amount         = currency{5000};
+	correction.date           = datetime{0};
+	correction.memo           = "Correction";
+	correction.corrects_id    = txn.id();
+	correction.correct_action = transaction::correction_type::replaces;
+	EXPECT_EQ(database->save_transaction(correction), db::error::rejected);
+}
+
+TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	transaction superseder;
+	superseder.account_id = checking.id();
+	superseder.amount     = currency{5000};
+	superseder.date       = datetime{0};
+	superseder.memo       = "Superseder";
+	ASSERT_EQ(database->save_transaction(superseder), db::error::none);
+	std::string update = std::format(
+		"UPDATE transactions SET superseded_by = {} WHERE id = {}", superseder.id(), txn.id()
+	);
+	ASSERT_EQ(sqlite3_exec(connection, update.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
+	transaction correction;
+	correction.account_id     = checking.id();
+	correction.amount         = currency{5000};
+	correction.date           = datetime{0};
+	correction.memo           = "Correction";
+	correction.corrects_id    = txn.id();
+	correction.correct_action = transaction::correction_type::replaces;
+	EXPECT_EQ(database->save_transaction(correction), db::error::rejected);
+}
+
+TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED();
+	account savings;
+	savings.name = "Savings";
+	ASSERT_EQ(database->save_account(savings), db::error::none);
+	transaction correction;
+	correction.account_id     = savings.id();
+	correction.amount         = currency{5000};
+	correction.date           = datetime{0};
+	correction.memo           = "Correction";
+	correction.corrects_id    = txn.id();
+	correction.correct_action = transaction::correction_type::replaces;
+	EXPECT_EQ(database->save_transaction(correction), db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_SingleAllocation) {
