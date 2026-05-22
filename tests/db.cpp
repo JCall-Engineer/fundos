@@ -587,10 +587,10 @@ TEST(DbQuery, MetaLocales) {
 			.symbol_position = currency_locale::spec::symbol_placement::before,
 			.negative_format = currency_locale::spec::negative_notation::leading_minus,
 		};
-		percentage_locale::info custom_percentage = {
+		percentage_locale::spec custom_percentage = {
 			.decimal_separator = ':',
 			.has_space_around_number = true,
-			.symbol_position = percentage_locale::info::symbol_placement::before,
+			.symbol_position = percentage_locale::spec::symbol_placement::before,
 		};
 		auto currency_result   = database->set_currency_locale(custom_currency);
 		auto percentage_result = database->set_percentage_locale(custom_percentage);
@@ -1240,7 +1240,7 @@ static T fetch_field(sqlite3* connection, const char* sql) {
 }
 
 template<>
-static std::string fetch_field<std::string>(sqlite3* connection, const char* sql) {
+std::string fetch_field<std::string>(sqlite3* connection, const char* sql) {
 	std::string value;
 	sqlite3_exec(connection, sql,
 		[](void* data, int, char** cols, char**) {
@@ -1251,7 +1251,7 @@ static std::string fetch_field<std::string>(sqlite3* connection, const char* sql
 }
 
 template<>
-static std::optional<std::string> fetch_field<std::optional<std::string>>(sqlite3* connection, const char* sql) {
+std::optional<std::string> fetch_field<std::optional<std::string>>(sqlite3* connection, const char* sql) {
 	std::optional<std::string> value;
 	sqlite3_exec(connection, sql,
 		[](void* data, int, char** cols, char**) {
@@ -1263,7 +1263,7 @@ static std::optional<std::string> fetch_field<std::optional<std::string>>(sqlite
 }
 
 template<>
-static std::optional<int64_t> fetch_field<std::optional<int64_t>>(sqlite3* connection, const char* sql) {
+std::optional<int64_t> fetch_field<std::optional<int64_t>>(sqlite3* connection, const char* sql) {
 	std::optional<int64_t> value;
 	sqlite3_exec(connection, sql,
 		[](void* data, int, char** cols, char**) {

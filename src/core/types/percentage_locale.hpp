@@ -4,7 +4,7 @@
 
 namespace fundos::percentage_locale {
 
-struct info {
+struct spec {
 	enum class symbol_placement : uint8_t {
 		before,
 		after
@@ -17,7 +17,7 @@ struct info {
 
 struct slot {
 	const char* identifier;
-	info info;
+	spec info;
 };
 
 struct data {
@@ -25,21 +25,21 @@ struct data {
 		"en", {
 			.decimal_separator = '.',
 			.has_space_around_number = false,
-			.symbol_position = info::symbol_placement::after,
+			.symbol_position = spec::symbol_placement::after,
 		}
 	};
 	slot de {
 		"de", {
 			.decimal_separator = ',',
 			.has_space_around_number = false,
-			.symbol_position = info::symbol_placement::after,
+			.symbol_position = spec::symbol_placement::after,
 		}
 	};
 	slot fr {
 		"fr", {
 			.decimal_separator = ',',
 			.has_space_around_number = true,
-			.symbol_position = info::symbol_placement::after,
+			.symbol_position = spec::symbol_placement::after,
 		}
 	};
 };
@@ -52,7 +52,7 @@ union registry {
 };
 static constexpr registry locales = { .named = {} };
 
-static inline std::optional<info> const get_locale(std::string_view identifier) {
+static inline std::optional<spec> const get_locale(std::string_view identifier) {
 	for (std::size_t i = 0; i < num_locales; i++) {
 		if (locales.slots[i].identifier == identifier)
 			return locales.slots[i].info;

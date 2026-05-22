@@ -48,10 +48,10 @@ TEST(PercentageStringConversions, ToString) {
 	EXPECT_EQ(percentage{10000}.to_string(percentage_locale::locales.named.de.info), "100%");
 	EXPECT_EQ(percentage{9876}.to_string(percentage_locale::locales.named.de.info), "98,76%");
 
-	percentage_locale::info tr = {
+	percentage_locale::spec tr = {
 		.decimal_separator = ',',
 		.has_space_around_number = false,
-		.symbol_position = percentage_locale::info::symbol_placement::before,
+		.symbol_position = percentage_locale::spec::symbol_placement::before,
 	};
 	EXPECT_EQ(percentage{0}.to_string(tr), "%0");
 	EXPECT_EQ(percentage{25}.to_string(tr), "%0,25");
@@ -60,10 +60,10 @@ TEST(PercentageStringConversions, ToString) {
 	EXPECT_EQ(percentage{10000}.to_string(tr), "%100");
 	EXPECT_EQ(percentage{9876}.to_string(tr), "%98,76");
 
-	percentage_locale::info hypothetical = {
+	percentage_locale::spec hypothetical = {
 		.decimal_separator = ',',
 		.has_space_around_number = true,
-		.symbol_position = percentage_locale::info::symbol_placement::before,
+		.symbol_position = percentage_locale::spec::symbol_placement::before,
 	};
 	EXPECT_EQ(percentage{0}.to_string(hypothetical), "% 0");
 	EXPECT_EQ(percentage{25}.to_string(hypothetical), "% 0,25");

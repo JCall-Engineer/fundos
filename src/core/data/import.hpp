@@ -32,7 +32,7 @@ struct result {
 	std::array<int32_t, (size_t)warning::NUM_WARNINGS> warning_counts = {};
 
 	result() = default;
-	result(error error) { err = error; }
+	result(error e) { err = e; }
 	void error(error e) { err = e; data.accounts.clear(); }
 	void warn(warning w) { ++warning_counts[(size_t)w]; }
 

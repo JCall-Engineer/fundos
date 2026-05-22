@@ -802,9 +802,9 @@ struct locale_register {
 static locale_register locale_meta = {};
 
 static constexpr size_t num_symbol_placement = 2;
-static const enum_string_map<percentage_locale::info::symbol_placement, num_symbol_placement> percentage_symbol_placement_map = {{
-	{ percentage_locale::info::symbol_placement::before, "before" },
-	{ percentage_locale::info::symbol_placement::after,  "after"  },
+static const enum_string_map<percentage_locale::spec::symbol_placement, num_symbol_placement> percentage_symbol_placement_map = {{
+	{ percentage_locale::spec::symbol_placement::before, "before" },
+	{ percentage_locale::spec::symbol_placement::after,  "after"  },
 }};
 static const enum_string_map<currency_locale::spec::symbol_placement, num_symbol_placement> currency_symbol_placement_map = {{
 	{ currency_locale::spec::symbol_placement::before, "before" },
@@ -934,9 +934,9 @@ db::error db::set_currency_locale(const currency_locale::spec& locale) {
 	});
 }
 
-db::result<percentage_locale::info> db::get_percentage_locale() {
-	static auto NOT_FOUND = result<percentage_locale::info>{}; // not_found: err==none, val==nullopt
-	static auto ERROR = [](error err) { return result<percentage_locale::info>{ .err = err }; };
+db::result<percentage_locale::spec> db::get_percentage_locale() {
+	static auto NOT_FOUND = result<percentage_locale::spec>{}; // not_found: err==none, val==nullopt
+	static auto ERROR = [](error err) { return result<percentage_locale::spec>{ .err = err }; };
 
 	auto preset_result = get_meta(locale_meta.percentage_locale_key);
 	if (preset_result.err != error::none) { return ERROR(preset_result.err); }
@@ -963,9 +963,9 @@ db::result<percentage_locale::info> db::get_percentage_locale() {
 		if (position_result.not_found()) { return NOT_FOUND; }
 		auto position_enum = string_to_enum(percentage_symbol_placement_map, position_result.val.value());
 		if (!position_enum.has_value()) { return NOT_FOUND; }
-		percentage_locale::info::symbol_placement symbol_position = position_enum.value();
+		percentage_locale::spec::symbol_placement symbol_position = position_enum.value();
 
-		return result<percentage_locale::info>{ .val = percentage_locale::info{
+		return result<percentage_locale::spec>{ .val = percentage_locale::spec{
 			.decimal_separator = decimal_separator,
 			.has_space_around_number = has_space_around_number,
 			.symbol_position = symbol_position,
@@ -973,14 +973,14 @@ db::result<percentage_locale::info> db::get_percentage_locale() {
 	}
 	auto locale = percentage_locale::get_locale(preset_value);
 	if (locale.has_value()) {
-		return result<percentage_locale::info>{ .val = locale.value() };
+		return result<percentage_locale::spec>{ .val = locale.value() };
 	}
 	return NOT_FOUND;
 }
 db::error db::set_percentage_locale_preset(const percentage_locale::slot& slot) {
 	return set_meta(locale_meta.percentage_locale_key, slot.identifier);
 }
-db::error db::set_percentage_locale(const percentage_locale::info& locale) {
+db::error db::set_percentage_locale(const percentage_locale::spec& locale) {
 	return sql_transaction([&](std::vector<std::function<void()>>&) -> error {
 		error result = set_meta(locale_meta.percentage_locale_key, locale_meta.custom_sentinel_val);
 		if (result != error::none) { return result; }
@@ -1012,23 +1012,23 @@ db::result<std::vector<user>> db::get_users() {
 		}
 	);
 }
-db::error db::save_user(user& user) {
-	if (!user.is_persisted()) {
+db::error db::save_user(user& saving) {
+	if (!saving.is_persisted()) {
 		error err = sql_execute(
 			prepared->named.insert_user.statement,
 			[&](sqlite3_stmt* stmt) {
-				bind_text(stmt, 1, user.name);
+				bind_text(stmt, 1, saving.name);
 			}
 		);
 		if (err != error::none) { return err; }
-		user.id_= sqlite3_last_insert_rowid(connection);
+		saving.id_= sqlite3_last_insert_rowid(connection);
 		return error::none;
 	} else {
 		return sql_execute(
 			prepared->named.update_user.statement,
 			[&](sqlite3_stmt* stmt) {
-				bind_text         (stmt, 1, user.name);
-				sqlite3_bind_int64(stmt, 2, user.id_);
+				bind_text         (stmt, 1, saving.name);
+				sqlite3_bind_int64(stmt, 2, saving.id_);
 			}
 		);
 	}
@@ -1214,24 +1214,24 @@ db::result<std::vector<fund>> db::get_funds() {
 		}
 	);
 }
-db::error db::save_fund(fund& fund) {
-	if (!fund.is_persisted()) {
+db::error db::save_fund(fund& saving) {
+	if (!saving.is_persisted()) {
 		error err = sql_execute(
 			prepared->named.insert_fund.statement,
 			[&](sqlite3_stmt* stmt) {
-				bind_text(stmt, 1, fund.name);
+				bind_text(stmt, 1, saving.name);
 			}
 		);
 		if (err != error::none) { return err; }
-		fund.id_= sqlite3_last_insert_rowid(connection);
+		saving.id_= sqlite3_last_insert_rowid(connection);
 		return error::none;
 	} else {
 		return sql_execute(
 			prepared->named.update_fund.statement,
 			[&](sqlite3_stmt* stmt) {
-				bind_text          (stmt, 1, fund.name);
-				bind_optional_int64(stmt, 2, as_optional_int64(fund.closed_at));
-				sqlite3_bind_int64 (stmt, 3, fund.id_);
+				bind_text          (stmt, 1, saving.name);
+				bind_optional_int64(stmt, 2, as_optional_int64(saving.closed_at));
+				sqlite3_bind_int64 (stmt, 3, saving.id_);
 			}
 		);
 	}
@@ -1251,26 +1251,26 @@ db::result<std::vector<account>> db::get_accounts() {
 		}
 	);
 }
-db::error db::save_account(account& account) {
-	if (!account.is_persisted()) {
+db::error db::save_account(account& saving) {
+	if (!saving.is_persisted()) {
 		error err = sql_execute(
 			prepared->named.insert_account.statement,
 			[&](sqlite3_stmt* stmt) {
-				bind_text         (stmt, 1, account.name);
-				bind_optional_text(stmt, 2, account.bank_account_id);
+				bind_text         (stmt, 1, saving.name);
+				bind_optional_text(stmt, 2, saving.bank_account_id);
 			}
 		);
 		if (err != error::none) { return err; }
-		account.id_= sqlite3_last_insert_rowid(connection);
+		saving.id_= sqlite3_last_insert_rowid(connection);
 		return error::none;
 	} else {
 		return sql_execute(
 			prepared->named.update_account.statement,
 			[&](sqlite3_stmt* stmt) {
-				bind_text          (stmt, 1, account.name);
-				bind_optional_int64(stmt, 2, as_optional_int64(account.closed_at));
-				bind_optional_text (stmt, 3, account.bank_account_id);
-				sqlite3_bind_int64 (stmt, 4, account.id_);
+				bind_text          (stmt, 1, saving.name);
+				bind_optional_int64(stmt, 2, as_optional_int64(saving.closed_at));
+				bind_optional_text (stmt, 3, saving.bank_account_id);
+				sqlite3_bind_int64 (stmt, 4, saving.id_);
 			}
 		);
 	}
@@ -1353,29 +1353,29 @@ db::result<std::vector<budget>> db::get_budgets() {
 	}
 	return result<std::vector<budget>>{ .val = std::move(out) };
 }
-db::error db::save_budget(budget& budget) {
+db::error db::save_budget(budget& saving) {
 	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
 		error result;
 
 		// Update budget
-		if (!budget.is_persisted()) {
+		if (!saving.is_persisted()) {
 			result = sql_execute(
 				prepared->named.insert_budget.statement,
 				[&](sqlite3_stmt* stmt) {
-					bind_text(stmt, 1, budget.name);
-					sqlite3_bind_int64(stmt, 2, budget.overflow_fund);
+					bind_text(stmt, 1, saving.name);
+					sqlite3_bind_int64(stmt, 2, saving.overflow_fund);
 				}
 			);
 			if (result != error::none) { return result; }
-			budget.id_= sqlite3_last_insert_rowid(connection);
-			rollback.push_back([&budget]() { budget.id_ = 0; });
+			saving.id_= sqlite3_last_insert_rowid(connection);
+			rollback.push_back([&saving]() { saving.id_ = 0; });
 		} else {
 			result = sql_execute(
 				prepared->named.update_budget.statement,
 				[&](sqlite3_stmt* stmt) {
-					bind_text(stmt, 1, budget.name);
-					sqlite3_bind_int64(stmt, 2, budget.overflow_fund);
-					sqlite3_bind_int64(stmt, 3, budget.id_);
+					bind_text(stmt, 1, saving.name);
+					sqlite3_bind_int64(stmt, 2, saving.overflow_fund);
+					sqlite3_bind_int64(stmt, 3, saving.id_);
 				}
 			);
 			if (result != error::none) { return result; }
@@ -1384,7 +1384,7 @@ db::error db::save_budget(budget& budget) {
 		// Delete phases not found in budget anymore
 		{
 			std::vector<int64_t> preserve_ids;
-			budget.each_phase([&preserve_ids](int pos, any_budget_phase* phase) -> bool {
+			saving.each_phase([&preserve_ids](int pos, any_budget_phase* phase) -> bool {
 				std::visit([&](auto& typed_phase) {
 					if (typed_phase.is_persisted()) {
 						preserve_ids.push_back(typed_phase.id_);
@@ -1396,7 +1396,7 @@ db::error db::save_budget(budget& budget) {
 			result = sql_delete_except({
 				.table = "budget_phases",
 				.filter_column = "budget_id",
-				.filter_value = budget.id_,
+				.filter_value = saving.id_,
 				.preserve_ids = preserve_ids,
 			});
 			if (result != error::none) { return result; }
@@ -1418,7 +1418,7 @@ db::error db::save_budget(budget& budget) {
 				result = sql_execute(prepared->named.update_phase.statement, [&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int(stmt, 1, pos);
 					sqlite3_bind_int64(stmt, 2, phase_managed->id_);
-					sqlite3_bind_int64(stmt, 3, budget.id_);
+					sqlite3_bind_int64(stmt, 3, saving.id_);
 				});
 				if (result != error::none) { return true; }
 				if (sqlite3_changes(connection) != 1) {
@@ -1427,7 +1427,7 @@ db::error db::save_budget(budget& budget) {
 				}
 			} else {
 				result = sql_execute(prepared->named.insert_phase.statement, [&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int64(stmt, 1, budget.id_);
+					sqlite3_bind_int64(stmt, 1, saving.id_);
 					sqlite3_bind_int  (stmt, 2, pos);
 					bind_text         (stmt, 3, kind);
 				});
@@ -1483,7 +1483,7 @@ db::error db::save_budget(budget& budget) {
 		};
 
 		// We are "finding" errors as we save phases
-		auto phase_err = budget.find_phase(
+		auto phase_err = saving.find_phase(
 			[&](int pos, budget_phase<fixed_target>* phase) -> bool {
 				if (upsert_phase(pos, phase, fixed_phase_identifier)) { return true; }
 
@@ -1749,37 +1749,37 @@ db::error db::perform_import(import::pending_import& pending) {
 			int64_t checkpoint_id = sqlite3_last_insert_rowid(connection);
 
 			for (auto& importing : account.transactions) {
-				transaction& transaction = importing.saving;
-				if (!transaction.is_persisted()) {
+				transaction& saving = importing.saving;
+				if (!saving.is_persisted()) {
 					err = sql_execute(
 						prepared->named.insert_transaction_import.statement,
 						[&](sqlite3_stmt* stmt) {
-							sqlite3_bind_int64 (stmt, 1, transaction.account_id);
-							sqlite3_bind_int64 (stmt, 2, transaction.amount.minor_units);
-							sqlite3_bind_int64 (stmt, 3, transaction.date.milliseconds_since_epoch);
-							bind_optional_int64(stmt, 4, as_optional_int64(transaction.cleared));
-							bind_text          (stmt, 5, transaction.memo);
-							bind_optional_text (stmt, 6, transaction.fitid);
-							bind_optional_text (stmt, 7, transaction.corrects_fitid);
-							bind_optional_text (stmt, 8, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, transaction.correct_action));
+							sqlite3_bind_int64 (stmt, 1, saving.account_id);
+							sqlite3_bind_int64 (stmt, 2, saving.amount.minor_units);
+							sqlite3_bind_int64 (stmt, 3, saving.date.milliseconds_since_epoch);
+							bind_optional_int64(stmt, 4, as_optional_int64(saving.cleared));
+							bind_text          (stmt, 5, saving.memo);
+							bind_optional_text (stmt, 6, saving.fitid);
+							bind_optional_text (stmt, 7, saving.corrects_fitid);
+							bind_optional_text (stmt, 8, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, saving.correct_action));
 						}
 					);
 					if (err != error::none) { return err; }
-					transaction.id_= sqlite3_last_insert_rowid(connection);
-					rollback.push_back([&transaction]() { transaction.id_ = 0; });
+					saving.id_= sqlite3_last_insert_rowid(connection);
+					rollback.push_back([&saving]() { saving.id_ = 0; });
 
 				} else {
 					err = sql_execute(
 						prepared->named.update_transaction_import.statement,
 						[&](sqlite3_stmt* stmt) {
-							sqlite3_bind_int64 (stmt, 1, transaction.amount.minor_units);
-							sqlite3_bind_int64 (stmt, 2, transaction.date.milliseconds_since_epoch);
-							bind_optional_int64(stmt, 3, as_optional_int64(transaction.cleared));
-							bind_text          (stmt, 4, transaction.memo);
-							bind_optional_text (stmt, 5, transaction.fitid);
-							bind_optional_text (stmt, 6, transaction.corrects_fitid);
-							bind_optional_text (stmt, 7, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, transaction.correct_action));
-							sqlite3_bind_int64 (stmt, 8, transaction.id_);
+							sqlite3_bind_int64 (stmt, 1, saving.amount.minor_units);
+							sqlite3_bind_int64 (stmt, 2, saving.date.milliseconds_since_epoch);
+							bind_optional_int64(stmt, 3, as_optional_int64(saving.cleared));
+							bind_text          (stmt, 4, saving.memo);
+							bind_optional_text (stmt, 5, saving.fitid);
+							bind_optional_text (stmt, 6, saving.corrects_fitid);
+							bind_optional_text (stmt, 7, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, saving.correct_action));
+							sqlite3_bind_int64 (stmt, 8, saving.id_);
 						}
 					);
 					if (err != error::none) { return err; }
@@ -1788,7 +1788,7 @@ db::error db::perform_import(import::pending_import& pending) {
 					prepared->named.insert_checkpoint_transaction.statement,
 					[&](sqlite3_stmt* stmt) {
 						sqlite3_bind_int64(stmt, 1, checkpoint_id);
-						sqlite3_bind_int64(stmt, 2, transaction.id_);
+						sqlite3_bind_int64(stmt, 2, saving.id_);
 					}
 				);
 				if (err != error::none) { return err; }
@@ -1798,17 +1798,17 @@ db::error db::perform_import(import::pending_import& pending) {
 	});
 }
 
-db::error db::save_transaction(transaction& transaction) {
-	if (!transaction.is_persisted()) {
-		if (transaction.corrects_id.has_value() != transaction.correct_action.has_value()) {
+db::error db::save_transaction(transaction& saving) {
+	if (!saving.is_persisted()) {
+		if (saving.corrects_id.has_value() != saving.correct_action.has_value()) {
 			return error::bad_request;
 		}
 		std::optional<result<fundos::transaction>> corrects;
-		if (transaction.corrects_id) {
-			corrects = fetch_transaction(*transaction.corrects_id);
+		if (saving.corrects_id) {
+			corrects = fetch_transaction(*saving.corrects_id);
 			if (corrects->err != error::none) { return corrects->err; }
 			if (corrects->not_found()) { return error::bad_request; }
-			if (corrects->val->account_id != transaction.account_id) { return error::bad_request; }
+			if (corrects->val->account_id != saving.account_id) { return error::bad_request; }
 			if (corrects->val->fitid.has_value()) { return error::rejected; }
 			if (corrects->val->superseded_by.has_value()) { return error::rejected; }
 		}
@@ -1817,38 +1817,38 @@ db::error db::save_transaction(transaction& transaction) {
 			error err = sql_execute(
 				prepared->named.insert_transaction_user.statement,
 				[&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int64 (stmt, 1, transaction.account_id);
-					sqlite3_bind_int64 (stmt, 2, transaction.amount.minor_units);
-					sqlite3_bind_int64 (stmt, 3, transaction.date.milliseconds_since_epoch);
-					bind_text          (stmt, 4, transaction.memo);
-					bind_optional_int64(stmt, 5, transaction.corrects_id);
-					bind_optional_text (stmt, 6, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, transaction.correct_action));
+					sqlite3_bind_int64 (stmt, 1, saving.account_id);
+					sqlite3_bind_int64 (stmt, 2, saving.amount.minor_units);
+					sqlite3_bind_int64 (stmt, 3, saving.date.milliseconds_since_epoch);
+					bind_text          (stmt, 4, saving.memo);
+					bind_optional_int64(stmt, 5, saving.corrects_id);
+					bind_optional_text (stmt, 6, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, saving.correct_action));
 				}
 			);
 			if (err != error::none) { return err; }
-			transaction.id_= sqlite3_last_insert_rowid(connection);
-			rollback.push_back([&transaction]() { transaction.id_ = 0; });
+			saving.id_= sqlite3_last_insert_rowid(connection);
+			rollback.push_back([&saving]() { saving.id_ = 0; });
 
 			if (!corrects) { return error::none; }
 			return sql_execute(
 				prepared->named.update_transaction_correction.statement,
 				[&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int64(stmt, 1, transaction.id_);
+					sqlite3_bind_int64(stmt, 1, saving.id_);
 					sqlite3_bind_int64(stmt, 2, corrects->val->id_);
 				}
 			);
 		});
 	} else {
-		auto existing = fetch_transaction(transaction.id_);
+		auto existing = fetch_transaction(saving.id_);
 		if (existing.err != error::none) { return existing.err; }
 		if (existing.not_found()) { return error::bad_request; }
-		if (!safe_match(transaction, *existing.val)) { return error::rejected; }
+		if (!safe_match(saving, *existing.val)) { return error::rejected; }
 		return sql_execute(
 			prepared->named.update_transaction_user.statement,
 			[&](sqlite3_stmt* stmt) {
-				sqlite3_bind_int64 (stmt, 1, transaction.date.milliseconds_since_epoch);
-				bind_text          (stmt, 2, transaction.memo);
-				sqlite3_bind_int64 (stmt, 3, transaction.id_);
+				sqlite3_bind_int64 (stmt, 1, saving.date.milliseconds_since_epoch);
+				bind_text          (stmt, 2, saving.memo);
+				sqlite3_bind_int64 (stmt, 3, saving.id_);
 			}
 		);
 	}

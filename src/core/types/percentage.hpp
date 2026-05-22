@@ -8,7 +8,7 @@
 namespace fundos {
 
 std::optional<int32_t> parse_percentage(const std::string& text);
-std::string format_percentage(int32_t basis_points, const percentage_locale::info& locale);
+std::string format_percentage(int32_t basis_points, const percentage_locale::spec& locale);
 
 template<typename Scalar>
 concept SignedScalar = requires(Scalar value, int64_t factor) {
@@ -31,7 +31,7 @@ struct percentage {
 		if (!parsed) { return std::nullopt; }
 		return percentage{*parsed};
 	}
-	std::string to_string(const percentage_locale::info& locale) const { return format_percentage(basis_points, locale); }
+	std::string to_string(const percentage_locale::spec& locale) const { return format_percentage(basis_points, locale); }
 
 	// Convert operator allows this to be used like a true primitive type
 	constexpr explicit operator int64_t() const { return basis_points; }

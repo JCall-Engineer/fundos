@@ -164,16 +164,16 @@ public:
 	error                           set_currency_locale_preset(const currency_locale::slot&);
 	error                           set_currency_locale(const currency_locale::spec&);
 
-	result<percentage_locale::info> get_percentage_locale();
+	result<percentage_locale::spec> get_percentage_locale();
 	error                           set_percentage_locale_preset(const percentage_locale::slot&);
-	error                           set_percentage_locale(const percentage_locale::info&);
+	error                           set_percentage_locale(const percentage_locale::spec&);
 
 	result<std::vector<user>>    get_users();
 
 	/// Inserts or updates the given user.
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
-	error                        save_user(user&);
+	error                        save_user(user& saving);
 	error                        delete_user(int64_t user_id);
 
 	result<std::vector<account>> get_accounts();
@@ -181,14 +181,14 @@ public:
 	/// Inserts or updates the given account.
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
-	error                        save_account(account&);
+	error                        save_account(account& saving);
 
 	result<std::vector<fund>>    get_funds();
 
 	/// Inserts or updates the given fund.
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
-	error                        save_fund(fund&);
+	error                        save_fund(fund& saving);
 
 	result<std::vector<account>> get_account_memberships(int64_t user_id);
 	result<std::vector<account>> get_account_nonmemberships(int64_t user_id);
@@ -209,7 +209,7 @@ public:
 	/// Inserts or updates the budget and performs a deep save of its phases and targets.
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
-	error                        save_budget(budget&);
+	error                        save_budget(budget& saving);
 
 private:
 	/// Resolves correction links between transactions after an OFX import.
@@ -248,7 +248,7 @@ public:
 	/// Update (id != 0): persists date and memo only.
 	///   Returns rejected if account_id, amount, cleared, fitid, corrects_fitid, correct_action, corrects_id, or superseded_by differ from the persisted record.
 	///   Returns bad_request if the record does not exist.
-	error                        save_transaction(transaction& transaction);
+	error                        save_transaction(transaction& saving);
 
 	/// Replaces the allocations for a transaction atomically.
 	/// - Existing allocations not present in the vector are deleted.
