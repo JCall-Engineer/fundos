@@ -272,7 +272,7 @@ public:
 	/// A transaction absent from all checkpoint sets was not part of any OFX import.
 	struct transaction_history {
 		struct allocated_transaction {
-			transaction transaction;
+			transaction record;
 			bool orphaned_correction = false;
 			bool balance_is_speculative = false;
 			std::optional<currency> balance;

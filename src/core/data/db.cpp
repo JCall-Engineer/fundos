@@ -2001,20 +2001,20 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 		},
 		[&](sqlite3_stmt* stmt) -> transaction {
 			transaction out;
-			out.transaction.account_id = account_id;
-			out.transaction.id_            =                                         sqlite3_column_int64  (stmt, 0);
-			out.transaction.amount         =                               currency {sqlite3_column_int64  (stmt, 1)};
-			out.transaction.date           =                               datetime {sqlite3_column_int64  (stmt, 2)};
-			out.transaction.cleared        =                   as_optional<datetime>(extract_optional_int64(stmt, 3));
-			out.transaction.memo           =                                         extract_text          (stmt, 4);
-			out.transaction.fitid          =                                         extract_optional_text (stmt, 5);
-			out.transaction.corrects_fitid =                                         extract_optional_text (stmt, 6);
-			out.transaction.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 7));
-			out.transaction.corrects_id    =                                         extract_optional_int64(stmt, 8);
-			out.transaction.superseded_by  =                                         extract_optional_int64(stmt, 9);
+			out.record.account_id = account_id;
+			out.record.id_            =                                         sqlite3_column_int64  (stmt, 0);
+			out.record.amount         =                               currency {sqlite3_column_int64  (stmt, 1)};
+			out.record.date           =                               datetime {sqlite3_column_int64  (stmt, 2)};
+			out.record.cleared        =                   as_optional<datetime>(extract_optional_int64(stmt, 3));
+			out.record.memo           =                                         extract_text          (stmt, 4);
+			out.record.fitid          =                                         extract_optional_text (stmt, 5);
+			out.record.corrects_fitid =                                         extract_optional_text (stmt, 6);
+			out.record.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 7));
+			out.record.corrects_id    =                                         extract_optional_int64(stmt, 8);
+			out.record.superseded_by  =                                         extract_optional_int64(stmt, 9);
 			std::optional<currency> effective_amount =         as_optional<currency>(extract_optional_int64(stmt, 10));
 			if (effective_amount) {
-				out.transaction.amount = *effective_amount;
+				out.record.amount = *effective_amount;
 			} else {
 				out.orphaned_correction = true;
 			}
@@ -2027,11 +2027,11 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 		auto fetched_allocations = sql_fetch_many<allocation>(
 			prepared->named.get_transaction_allocations.statement,
 			[&](sqlite3_stmt* stmt) -> void {
-				sqlite3_bind_int64(stmt, 1, transaction.transaction.id_);
+				sqlite3_bind_int64(stmt, 1, transaction.record.id_);
 			},
 			[&](sqlite3_stmt* stmt) -> allocation {
 				allocation out;
-				out.transaction_id = transaction.transaction.id_;
+				out.transaction_id = transaction.record.id_;
 				out.id_     =          sqlite3_column_int64(stmt, 0);
 				out.fund_id =          sqlite3_column_int64(stmt, 1);
 				out.amount  = currency{sqlite3_column_int64(stmt, 2)};

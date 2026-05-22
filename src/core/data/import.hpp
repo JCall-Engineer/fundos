@@ -33,8 +33,8 @@ struct result {
 
 	result() = default;
 	result(error e) { err = e; }
-	void error(error e) { err = e; data.accounts.clear(); }
-	void warn(warning w) { ++warning_counts[(size_t)w]; }
+	void set_error(error e) { err = e; data.accounts.clear(); }
+	void add_warning(warning w) { ++warning_counts[(size_t)w]; }
 
 	bool ok() const { return err == error::none; }
 };

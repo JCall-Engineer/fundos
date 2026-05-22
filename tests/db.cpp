@@ -1062,10 +1062,10 @@ TEST(DbQuery, AccountHistory_NoCheckpoints) {
 	ASSERT_EQ(history.val->checkpoints.size(), 0);
 	ASSERT_EQ(history.val->transactions.size(), 2);
 
-	ASSERT_EQ(history.val->transactions[0].transaction.id(), 3);
+	ASSERT_EQ(history.val->transactions[0].record.id(), 3);
 	ASSERT_EQ(history.val->transactions[0].balance, currency{133});
 	
-	ASSERT_EQ(history.val->transactions[1].transaction.id(), 4);
+	ASSERT_EQ(history.val->transactions[1].record.id(), 4);
 	ASSERT_EQ(history.val->transactions[1].balance, currency{166});
 }
 
@@ -1108,19 +1108,19 @@ TEST(DbQuery, AccountHistory_OneOldCheckpoint) {
 	ASSERT_EQ(history.val->checkpoints[0].account_id, 1);
 	ASSERT_EQ(history.val->checkpoints[0].amount, currency{100});
 
-	ASSERT_EQ(history.val->transactions[0].transaction.id(), 2);
+	ASSERT_EQ(history.val->transactions[0].record.id(), 2);
 	ASSERT_EQ(history.val->transactions[0].balance, currency{78});
 	ASSERT_EQ(history.val->transactions[0].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[1].transaction.id(), 3);
+	ASSERT_EQ(history.val->transactions[1].record.id(), 3);
 	ASSERT_EQ(history.val->transactions[1].balance, currency{100});
 	ASSERT_EQ(history.val->transactions[1].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[2].transaction.id(), 4);
+	ASSERT_EQ(history.val->transactions[2].record.id(), 4);
 	ASSERT_EQ(history.val->transactions[2].balance, currency{133});
 	ASSERT_EQ(history.val->transactions[2].balance_is_speculative, true);
 	
-	ASSERT_EQ(history.val->transactions[3].transaction.id(), 5);
+	ASSERT_EQ(history.val->transactions[3].record.id(), 5);
 	ASSERT_EQ(history.val->transactions[3].balance, currency{177});
 	ASSERT_EQ(history.val->transactions[3].balance_is_speculative, true);
 }
@@ -1195,19 +1195,19 @@ TEST(DbQuery, AccountHistory_OneOldAndOneNewCheckpoint) {
 	ASSERT_EQ(history.val->checkpoints[1].transactions[0].id, 5);
 	ASSERT_EQ(history.val->checkpoints[1].transactions[1].id, 6);
 
-	ASSERT_EQ(history.val->transactions[0].transaction.id(), 2);
+	ASSERT_EQ(history.val->transactions[0].record.id(), 2);
 	ASSERT_EQ(history.val->transactions[0].balance, currency{78});
 	ASSERT_EQ(history.val->transactions[0].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[1].transaction.id(), 3);
+	ASSERT_EQ(history.val->transactions[1].record.id(), 3);
 	ASSERT_EQ(history.val->transactions[1].balance, currency{100});
 	ASSERT_EQ(history.val->transactions[1].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[2].transaction.id(), 4);
+	ASSERT_EQ(history.val->transactions[2].record.id(), 4);
 	ASSERT_EQ(history.val->transactions[2].balance, std::nullopt);
 	ASSERT_EQ(history.val->transactions[2].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[3].transaction.id(), 5);
+	ASSERT_EQ(history.val->transactions[3].record.id(), 5);
 	ASSERT_EQ(history.val->transactions[3].balance, currency{145});
 	ASSERT_EQ(history.val->transactions[3].balance_is_speculative, false);
 }
