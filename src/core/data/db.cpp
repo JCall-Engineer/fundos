@@ -366,6 +366,132 @@ struct statements {
 		WHERE id = ? AND superseded_by IS NULL
 	)sql" };
 
+	statement_slot filter_transactions { .sql = R"sql(
+		SELECT
+			transactions.id,
+			transactions.amount,
+			transactions.date,
+			transactions.cleared,
+			transactions.memo,
+			transactions.fitid,
+			transactions.corrects_fitid,
+			transactions.correct_action,
+			transactions.corrects_id,
+			transactions.superseded_by,
+			CASE
+				WHEN transactions.corrects_id IS NULL AND transactions.corrects_fitid IS NULL
+					THEN transactions.amount
+				WHEN transactions.corrects_id IS NOT NULL AND transactions.correct_action = 'deletes'
+					THEN -corrected.amount
+				WHEN transactions.corrects_id IS NOT NULL
+					THEN transactions.amount - corrected.amount
+				ELSE NULL
+			END AS effective_amount
+		FROM
+			transactions
+			LEFT JOIN transactions AS corrected ON transactions.corrects_id = corrected.id
+		WHERE transactions.account_id = ? AND COALESCE(transactions.cleared, transactions.date) BETWEEN ? AND ?
+		ORDER BY COALESCE(transactions.cleared, transactions.date)
+	)sql" };
+
+	statement_slot filter_transactions_checkpoints { .sql = R"sql(
+		SELECT
+			balance_checkpoints.id,
+			balance_checkpoints.amount,
+			balance_checkpoints.date
+		FROM balance_checkpoints
+		WHERE balance_checkpoints.account_id = ?
+		AND EXISTS (
+			SELECT 1
+			FROM balance_checkpoint_transactions
+			JOIN transactions ON balance_checkpoint_transactions.transaction_id = transactions.id
+			WHERE balance_checkpoint_transactions.checkpoint_id = balance_checkpoints.id
+			AND COALESCE(transactions.cleared, transactions.date) BETWEEN ? AND ?
+		)
+		ORDER BY balance_checkpoints.date
+	)sql" };
+
+	statement_slot get_checkpoint_transactions { .sql = R"sql(
+		SELECT
+			transactions.id,
+			transactions.amount
+		FROM balance_checkpoint_transactions
+		JOIN transactions ON balance_checkpoint_transactions.transaction_id = transactions.id
+		WHERE balance_checkpoint_transactions.checkpoint_id = ?
+		ORDER BY transactions.cleared
+	)sql" };
+
+	/// Computes the running balance anchor for account_history.
+	/// The anchor is the starting balance from which per-transaction balances are accumulated.
+	/// If a checkpoint exists at or before `after`, the anchor is:
+	///   - checkpoint.amount (ledger balance as of checkpoint.date) +
+	///   - sum of effective transaction amounts strictly after checkpoint.date and strictly before `after`
+	///
+	/// If no checkpoint exists, the anchor is the sum of all transactions strictly before `after` (speculative, from zero).
+	/// Bind order: account_id, after, account_id, after.
+	statement_slot get_transaction_balance_anchor { .sql = R"sql(
+		WITH latest_checkpoint AS (
+			-- Most recent checkpoint whose date is at or before the window start.
+			-- Its amount represents the known ledger balance as of that date.
+			SELECT amount, date FROM balance_checkpoints
+			WHERE account_id = ?
+			AND date <= ?
+			ORDER BY date DESC
+			LIMIT 1
+		)
+		SELECT
+			COALESCE((SELECT amount FROM latest_checkpoint), 0)
+			+ COALESCE(txn_sum.total, 0) AS anchor_balance,
+			CASE
+				WHEN (SELECT date FROM latest_checkpoint) IS NULL
+					THEN 0
+				ELSE 1
+			END AS has_checkpoint
+		FROM (
+			SELECT SUM(
+				CASE
+					-- Normal transaction: contributes its own amount.
+					WHEN transactions.corrects_id IS NULL AND transactions.corrects_fitid IS NULL
+						THEN transactions.amount
+					-- Deletion correction: negates the original transaction's amount.
+					WHEN transactions.corrects_id IS NOT NULL AND transactions.correct_action = 'deletes'
+						THEN -corrected.amount
+					-- Replacement correction: contributes the delta (new amount minus original).
+					WHEN transactions.corrects_id IS NOT NULL
+						THEN transactions.amount - corrected.amount
+					-- Orphaned correction (corrects_fitid only, original not yet imported): contributes 0.
+					-- This avoids poisoning the sum with NULL while acknowledging the amount is unknown.
+					ELSE 0
+				END
+			) AS total
+			FROM transactions
+			LEFT JOIN transactions AS corrected ON transactions.corrects_id = corrected.id
+			WHERE transactions.account_id = ?
+			-- Exclude transactions already superseded by a correction.
+			AND transactions.superseded_by IS NULL
+			-- Exclude transactions already accounted for by the checkpoint.
+			-- If no checkpoint, COALESCE(-1) ensures no transaction is incorrectly excluded.
+			AND COALESCE(transactions.cleared, transactions.date) > COALESCE((SELECT date FROM latest_checkpoint), -1)
+			-- Exclude transactions inside the query window; those are accumulated separately.
+			AND COALESCE(transactions.cleared, transactions.date) < ?
+		) AS txn_sum
+	)sql" };
+
+	/// Used to determine if balance speculation is legal
+	statement_slot check_for_newer_checkpoints { .sql = R"sql(
+		SELECT 1 FROM balance_checkpoints
+		WHERE account_id = ?
+		AND date > ?
+		LIMIT 1
+	)sql" };
+
+	statement_slot get_transaction_allocations { .sql = R"sql(
+		SELECT id, fund_id, amount FROM allocations WHERE transaction_id = ?
+	)sql" };
+	statement_slot get_fund_allocation { .sql = R"sql(
+		SELECT id, amount FROM allocations WHERE transaction_id = ? AND fund_id = ?
+	)sql" };
+
 	/// Used to validate allocations
 	statement_slot get_transaction_amount { .sql = R"sql(
 		SELECT amount FROM transactions WHERE id = ?
@@ -1863,11 +1989,144 @@ db::error db::allocate_transaction(std::vector<allocation>& allocations) {
 	});
 }
 
-/*
 db::result<db::transaction_history> db::account_history(int64_t account_id, datetime after, datetime before) {
+	using transaction = transaction_history::allocated_transaction;
+	auto ERROR = [](db::error err) { return result<transaction_history>{ .err = err }; };
+	auto fetched_transactions = sql_fetch_many<transaction>(
+		prepared->named.filter_transactions.statement,
+		[&](sqlite3_stmt* stmt) -> void {
+			sqlite3_bind_int64(stmt, 1, account_id);
+			sqlite3_bind_int64(stmt, 2, after.milliseconds_since_epoch);
+			sqlite3_bind_int64(stmt, 3, before.milliseconds_since_epoch);
+		},
+		[&](sqlite3_stmt* stmt) -> transaction {
+			transaction out;
+			out.transaction.account_id = account_id;
+			out.transaction.id_            =                                         sqlite3_column_int64  (stmt, 0);
+			out.transaction.amount         =                               currency {sqlite3_column_int64  (stmt, 1)};
+			out.transaction.date           =                               datetime {sqlite3_column_int64  (stmt, 2)};
+			out.transaction.cleared        =                   as_optional<datetime>(extract_optional_int64(stmt, 3));
+			out.transaction.memo           =                                         extract_text          (stmt, 4);
+			out.transaction.fitid          =                                         extract_optional_text (stmt, 5);
+			out.transaction.corrects_fitid =                                         extract_optional_text (stmt, 6);
+			out.transaction.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 7));
+			out.transaction.corrects_id    =                                         extract_optional_int64(stmt, 8);
+			out.transaction.superseded_by  =                                         extract_optional_int64(stmt, 9);
+			std::optional<currency> effective_amount =         as_optional<currency>(extract_optional_int64(stmt, 10));
+			if (effective_amount) {
+				out.transaction.amount = *effective_amount;
+			} else {
+				out.orphaned_correction = true;
+			}
+			return out;
+		}
+	);
+	if (fetched_transactions.err != error::none) { return ERROR(fetched_transactions.err); }
+	if (fetched_transactions.not_found()) { return ERROR(error::internal); }
+	for (auto& transaction : *fetched_transactions.val) {
+		auto fetched_allocations = sql_fetch_many<allocation>(
+			prepared->named.get_transaction_allocations.statement,
+			[&](sqlite3_stmt* stmt) -> void {
+				sqlite3_bind_int64(stmt, 1, transaction.transaction.id_);
+			},
+			[&](sqlite3_stmt* stmt) -> allocation {
+				allocation out;
+				out.transaction_id = transaction.transaction.id_;
+				out.id_     =          sqlite3_column_int64(stmt, 0);
+				out.fund_id =          sqlite3_column_int64(stmt, 1);
+				out.amount  = currency{sqlite3_column_int64(stmt, 2)};
+				return out;
+			}
+		);
+		if (fetched_allocations.err != error::none) { return ERROR(fetched_allocations.err); }
+		if (fetched_allocations.not_found()) { return ERROR(error::internal); }
+		transaction.allocations = std::move(*fetched_allocations.val);
+	}
 
+	auto fetched_checkpoints = sql_fetch_many<balance_checkpoint>(
+		prepared->named.filter_transactions_checkpoints.statement,
+		[&](sqlite3_stmt* stmt) -> void {
+			sqlite3_bind_int64(stmt, 1, account_id);
+			sqlite3_bind_int64(stmt, 2, after.milliseconds_since_epoch);
+			sqlite3_bind_int64(stmt, 3, before.milliseconds_since_epoch);
+		},
+		[&](sqlite3_stmt* stmt) -> balance_checkpoint {
+			balance_checkpoint out;
+			out.account_id = account_id;
+			out.id_    =          sqlite3_column_int64(stmt, 0);
+			out.amount = currency{sqlite3_column_int64(stmt, 1)};
+			out.date   = datetime{sqlite3_column_int64(stmt, 2)};
+			return out;
+		}
+	);
+	if (fetched_checkpoints.err != error::none) { return ERROR(fetched_checkpoints.err); }
+	if (fetched_checkpoints.not_found()) { return ERROR(error::internal); }
+	for (auto& checkpoint : *fetched_checkpoints.val) {
+		auto fetched_checkpoint_transactions = sql_fetch_many<balance_checkpoint::checkpoint_entry>(
+			prepared->named.get_checkpoint_transactions.statement,
+			[&](sqlite3_stmt* stmt) -> void {
+				sqlite3_bind_int64(stmt, 1, checkpoint.id_);
+			},
+			[&](sqlite3_stmt* stmt) -> balance_checkpoint::checkpoint_entry {
+				return {
+					.id     =          sqlite3_column_int64(stmt, 0),
+					.amount = currency{sqlite3_column_int64(stmt, 1)},
+				};
+			}
+		);
+		if (fetched_checkpoint_transactions.err != error::none) { return ERROR(fetched_checkpoint_transactions.err); }
+		if (fetched_checkpoint_transactions.not_found()) { return ERROR(error::internal); }
+		checkpoint.transactions = std::move(*fetched_checkpoint_transactions.val);
+	}
+
+	auto fetch_anchor = sql_fetch_one<std::pair<currency, bool>>(
+		prepared->named.get_transaction_balance_anchor.statement,
+		[&](sqlite3_stmt* stmt) -> void {
+			sqlite3_bind_int64(stmt, 1, account_id);
+			sqlite3_bind_int64(stmt, 2, after.milliseconds_since_epoch);
+			sqlite3_bind_int64(stmt, 3, account_id);
+			sqlite3_bind_int64(stmt, 4, after.milliseconds_since_epoch);
+		},
+		[&](sqlite3_stmt* stmt) -> std::pair<currency, bool> {
+			return std::make_pair(
+				currency{sqlite3_column_int64(stmt, 0)},
+				sqlite3_column_int(stmt, 1)
+			);
+		}
+	);
+	if (fetch_anchor.err != error::none) { return ERROR(fetch_anchor.err); }
+	if (fetch_anchor.not_found()) { return ERROR(error::internal); }
+	const auto [anchor_balance, anchor_has_checkpoint] = *fetch_anchor.val;
+
+	auto fetch_future_checkpoint = sql_fetch_one<bool>(
+		prepared->named.check_for_newer_checkpoints.statement,
+		[&](sqlite3_stmt* stmt) -> void {
+			sqlite3_bind_int64(stmt, 1, account_id);
+			sqlite3_bind_int64(stmt, 2, before.milliseconds_since_epoch);
+		},
+		[&](sqlite3_stmt* stmt) -> bool {
+			return true;
+		}
+	);
+	if (fetch_future_checkpoint.err != error::none) { return ERROR(fetch_future_checkpoint.err); }
+	const bool has_future_checkpoint = !fetch_future_checkpoint.not_found();
+
+	// Compute resulting balance of each transaction
+	enum class balance_state : uint8_t {
+		anchored,
+		speculative,
+		dark
+	};
+
+	return result<transaction_history>{
+		.val = transaction_history{
+			.transactions = std::move(*fetched_transactions.val),
+			.checkpoints = std::move(*fetched_checkpoints.val),
+		}
+	};
 }
 
+/*
 db::result<db::allocation_history> db::fund_history(int64_t fund_id, datetime after, datetime before) {
 
 }

@@ -269,12 +269,14 @@ TEST(DbOpen, FundDbNewerSchema) {
 	auto database = std::make_shared<db>(connection, db::owns_connection{}); \
 	ASSERT_EQ(database->is_ready(), true);
 
-static constexpr datetime CLOSED_AT = {
-	std::chrono::duration_cast<std::chrono::milliseconds>(
-		std::chrono::sys_days{std::chrono::year{2024} / std::chrono::June / 1}
+static constexpr datetime date(const int& year, const std::chrono::month& month, const int& day) {
+	return datetime{std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::sys_days{std::chrono::year{year} / month / day}
 		.time_since_epoch()
-	).count()
-};
+	).count()};
+}
+
+static constexpr datetime CLOSED_AT = date(2024, std::chrono::June, 1);
 
 TEST(DbQuery, ReadEntities) {
 	FUNDOS_TEST_DB();
@@ -1031,6 +1033,183 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budgets"),       1);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM budget_phases"), 1);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets"), 3);
+}
+
+TEST(DbQuery, AccountHistory_NoCheckpoints) {
+	FUNDOS_TEST_DB();
+	int rc = sqlite3_exec(connection, std::format(R"sql(
+		INSERT INTO accounts (id, name) VALUES (1, 'Checking');
+		INSERT INTO transactions (id, account_id, amount, date, memo)
+			VALUES
+				(1, 1, 100, {}, 'First Transaction'),
+				(2, 1,  11, {}, 'Second Transaction'),
+				(3, 1,  22, {}, 'Third Transaction'),
+				(4, 1,  33, {}, 'Fourth Transaction'),
+				(5, 1,  44, {}, 'Fifth Transaction');
+	)sql",
+		  (date(2026, std::chrono::January,   1) + timedelta::hours(11) + timedelta::minutes(12) + timedelta::seconds(13)).milliseconds_since_epoch
+		, (date(2026, std::chrono::January,  15) + timedelta::hours(12) + timedelta::minutes(34) + timedelta::seconds(24)).milliseconds_since_epoch
+		, (date(2026, std::chrono::February,  1) + timedelta::hours(13) + timedelta::minutes(56) + timedelta::seconds(35)).milliseconds_since_epoch
+		, (date(2026, std::chrono::February, 15) + timedelta::hours(14) + timedelta::minutes(18) + timedelta::seconds(46)).milliseconds_since_epoch
+		, (date(2026, std::chrono::March,     1) + timedelta::hours(15) + timedelta::minutes(29) + timedelta::seconds(57)).milliseconds_since_epoch
+	).c_str(), nullptr, nullptr, nullptr);
+	ASSERT_EQ(rc, SQLITE_OK);
+
+	auto history = database->account_history(1, date(2026, std::chrono::February, 1), date(2026, std::chrono::March, 1));
+	ASSERT_EQ(history.err, db::error::none);
+	ASSERT_EQ(history.not_found(), false);
+
+	ASSERT_EQ(history.val->checkpoints.size(), 0);
+	ASSERT_EQ(history.val->transactions.size(), 2);
+
+	ASSERT_EQ(history.val->transactions[0].transaction.id(), 3);
+	ASSERT_EQ(history.val->transactions[0].balance, currency{133});
+	
+	ASSERT_EQ(history.val->transactions[1].transaction.id(), 4);
+	ASSERT_EQ(history.val->transactions[1].balance, currency{166});
+}
+
+TEST(DbQuery, AccountHistory_OneOldCheckpoint) {
+	FUNDOS_TEST_DB();
+	int rc = sqlite3_exec(connection, std::format(R"sql(
+		INSERT INTO accounts (id, name) VALUES (1, 'Checking');
+		INSERT INTO transactions (id, account_id, amount, date, memo)
+			VALUES
+				(1, 1, 100, {}, 'First Transaction'),
+				(2, 1,  11, {}, 'Second Transaction'),
+				(3, 1,  22, {}, 'Third Transaction'),
+				(4, 1,  33, {}, 'Fourth Transaction'),
+				(5, 1,  44, {}, 'Fifth Transaction');
+		INSERT INTO balance_checkpoints (id, account_id, amount, date)
+			VALUES (1, 1, 100, {});
+		INSERT INTO balance_checkpoint_transactions (checkpoint_id, transaction_id)
+			VALUES
+				(1, 1),
+				(1, 2),
+				(1, 3);
+	)sql",
+		  (date(2026, std::chrono::January,   1) + timedelta::hours(11) + timedelta::minutes(12) + timedelta::seconds(13)).milliseconds_since_epoch // transaction 1
+		, (date(2026, std::chrono::January,  15) + timedelta::hours(12) + timedelta::minutes(34) + timedelta::seconds(24)).milliseconds_since_epoch // transaction 2
+		, (date(2026, std::chrono::February,  1) + timedelta::hours(13) + timedelta::minutes(56) + timedelta::seconds(35)).milliseconds_since_epoch // transaction 3
+		, (date(2026, std::chrono::February, 15) + timedelta::hours(14) + timedelta::minutes(18) + timedelta::seconds(46)).milliseconds_since_epoch // transaction 4
+		, (date(2026, std::chrono::March,     1) + timedelta::hours(15) + timedelta::minutes(29) + timedelta::seconds(57)).milliseconds_since_epoch // transaction 5
+		, (date(2026, std::chrono::February, 11) + timedelta::hours(16) + timedelta::minutes(30) + timedelta::seconds( 8)).milliseconds_since_epoch // checkpoint 1
+	).c_str(), nullptr, nullptr, nullptr);
+	ASSERT_EQ(rc, SQLITE_OK);
+
+	auto history = database->account_history(1, date(2026, std::chrono::January, 10), date(2026, std::chrono::March, 10));
+	ASSERT_EQ(history.err, db::error::none);
+	ASSERT_EQ(history.not_found(), false);
+
+	ASSERT_EQ(history.val->checkpoints.size(), 1);
+	ASSERT_EQ(history.val->transactions.size(), 4);
+
+	ASSERT_EQ(history.val->checkpoints[0].id(), 1);
+	ASSERT_EQ(history.val->checkpoints[0].account_id, 1);
+	ASSERT_EQ(history.val->checkpoints[0].amount, currency{100});
+
+	ASSERT_EQ(history.val->transactions[0].transaction.id(), 2);
+	ASSERT_EQ(history.val->transactions[0].balance, currency{78});
+	ASSERT_EQ(history.val->transactions[0].balance_is_speculative, false);
+	
+	ASSERT_EQ(history.val->transactions[1].transaction.id(), 3);
+	ASSERT_EQ(history.val->transactions[1].balance, currency{100});
+	ASSERT_EQ(history.val->transactions[1].balance_is_speculative, false);
+	
+	ASSERT_EQ(history.val->transactions[2].transaction.id(), 4);
+	ASSERT_EQ(history.val->transactions[2].balance, currency{133});
+	ASSERT_EQ(history.val->transactions[2].balance_is_speculative, true);
+	
+	ASSERT_EQ(history.val->transactions[3].transaction.id(), 5);
+	ASSERT_EQ(history.val->transactions[3].balance, currency{177});
+	ASSERT_EQ(history.val->transactions[3].balance_is_speculative, true);
+}
+
+TEST(DbQuery, AccountHistory_OneOldAndOneNewCheckpoint) {
+	FUNDOS_TEST_DB();
+	static constexpr datetime
+		jan1  = date(2026, std::chrono::January,   1) + timedelta::hours(11) + timedelta::minutes(12) + timedelta::seconds(13), // transaction 1
+		jan15 = date(2026, std::chrono::January,  15) + timedelta::hours(12) + timedelta::minutes(34) + timedelta::seconds(24), // transaction 2
+		feb1  = date(2026, std::chrono::February,  1) + timedelta::hours(13) + timedelta::minutes(56) + timedelta::seconds(35), // transaction 3
+		feb15 = date(2026, std::chrono::February, 15) + timedelta::hours(14) + timedelta::minutes(18) + timedelta::seconds(46), // transaction 4
+		mar1  = date(2026, std::chrono::March,     1) + timedelta::hours(15) + timedelta::minutes(29) + timedelta::seconds(57), // transaction 5
+		mar15 = date(2026, std::chrono::March,    15) + timedelta::hours(14) + timedelta::minutes(29) + timedelta::seconds( 8), // transaction 6
+		feb11 = date(2026, std::chrono::February, 11) + timedelta::hours(16) + timedelta::minutes(30) + timedelta::seconds( 8), // checkpoint 1
+		mar25 = date(2026, std::chrono::March,    25) + timedelta::hours(15) + timedelta::minutes(15) + timedelta::seconds(15); // checkpoint 2
+	int rc = sqlite3_exec(connection, std::format(R"sql(
+		INSERT INTO accounts (id, name) VALUES (1, 'Checking');
+		INSERT INTO transactions (id, account_id, amount, date, memo)
+			VALUES
+				(1, 1, 100, {}, 'First Transaction'),
+				(2, 1,  11, {}, 'Second Transaction'),
+				(3, 1,  22, {}, 'Third Transaction'),
+				(4, 1,  33, {}, 'Fourth Transaction'),
+				(5, 1,  44, {}, 'Fifth Transaction'),
+				(6, 1,  55, {}, 'Sixth Transaction');
+		INSERT INTO balance_checkpoints (id, account_id, amount, date)
+			VALUES
+				(1, 1, 100, {}),
+				(2, 1, 200, {});
+		INSERT INTO balance_checkpoint_transactions (checkpoint_id, transaction_id)
+			VALUES
+				(1, 1),
+				(1, 2),
+				(1, 3);
+		INSERT INTO balance_checkpoint_transactions (checkpoint_id, transaction_id)
+			VALUES
+				(2, 5),
+				(2, 6);
+	)sql",
+		  jan1.milliseconds_since_epoch  // transaction 1
+		, jan15.milliseconds_since_epoch // transaction 2
+		, feb1.milliseconds_since_epoch  // transaction 3
+		, feb15.milliseconds_since_epoch // transaction 4
+		, mar1.milliseconds_since_epoch  // transaction 5
+		, mar15.milliseconds_since_epoch // transaction 6
+		, feb11.milliseconds_since_epoch // checkpoint 1
+		, mar25.milliseconds_since_epoch // checkpoint 2
+	).c_str(), nullptr, nullptr, nullptr);
+	ASSERT_EQ(rc, SQLITE_OK);
+
+	auto history = database->account_history(1, date(2026, std::chrono::January, 10), date(2026, std::chrono::March, 10));
+	ASSERT_EQ(history.err, db::error::none);
+	ASSERT_EQ(history.not_found(), false);
+
+	ASSERT_EQ(history.val->checkpoints.size(), 2);
+	ASSERT_EQ(history.val->transactions.size(), 4);
+
+	ASSERT_EQ(history.val->checkpoints[0].id(), 1);
+	ASSERT_EQ(history.val->checkpoints[0].account_id, 1);
+	ASSERT_EQ(history.val->checkpoints[0].amount, currency{100});
+	ASSERT_EQ(history.val->checkpoints[0].date, feb11);
+	ASSERT_EQ(history.val->checkpoints[0].transactions.size(), 3);
+	ASSERT_EQ(history.val->checkpoints[0].transactions[0].id, 1);
+	ASSERT_EQ(history.val->checkpoints[0].transactions[1].id, 2);
+	ASSERT_EQ(history.val->checkpoints[0].transactions[2].id, 3);
+
+	ASSERT_EQ(history.val->checkpoints[1].id(), 2);
+	ASSERT_EQ(history.val->checkpoints[1].account_id, 1);
+	ASSERT_EQ(history.val->checkpoints[1].amount, currency{200});
+	ASSERT_EQ(history.val->checkpoints[1].date, mar25);
+	ASSERT_EQ(history.val->checkpoints[1].transactions.size(), 2);
+	ASSERT_EQ(history.val->checkpoints[1].transactions[0].id, 5);
+	ASSERT_EQ(history.val->checkpoints[1].transactions[1].id, 6);
+
+	ASSERT_EQ(history.val->transactions[0].transaction.id(), 2);
+	ASSERT_EQ(history.val->transactions[0].balance, currency{78});
+	ASSERT_EQ(history.val->transactions[0].balance_is_speculative, false);
+	
+	ASSERT_EQ(history.val->transactions[1].transaction.id(), 3);
+	ASSERT_EQ(history.val->transactions[1].balance, currency{100});
+	ASSERT_EQ(history.val->transactions[1].balance_is_speculative, false);
+	
+	ASSERT_EQ(history.val->transactions[2].transaction.id(), 4);
+	ASSERT_EQ(history.val->transactions[2].balance, std::nullopt);
+	ASSERT_EQ(history.val->transactions[2].balance_is_speculative, false);
+	
+	ASSERT_EQ(history.val->transactions[3].transaction.id(), 5);
+	ASSERT_EQ(history.val->transactions[3].balance, currency{145});
+	ASSERT_EQ(history.val->transactions[3].balance_is_speculative, false);
 }
 
 /// Previous iterations used a helper function instead of a macro but that loses the ability to assert in a test

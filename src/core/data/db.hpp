@@ -271,9 +271,14 @@ public:
 	/// Checkpoints allow the UI to identify imported transaction ranges and detect gaps where bank data was never imported.
 	/// A transaction absent from all checkpoint sets was not part of any OFX import.
 	struct transaction_history {
-		using allocated_transaction = std::pair<transaction, std::vector<allocation>>;
+		struct allocated_transaction {
+			transaction transaction;
+			bool orphaned_correction = false;
+			bool balance_is_speculative = false;
+			std::optional<currency> balance;
+			std::vector<allocation> allocations;
+		};
 
-		currency starting_balance;
 		std::vector<allocated_transaction> transactions;
 		std::vector<balance_checkpoint> checkpoints;
 	};

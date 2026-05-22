@@ -60,7 +60,11 @@ struct balance_checkpoint : db_managed {
 	int64_t account_id = 0;
 	currency amount;
 	datetime date;
-	std::vector<int64_t> transaction_ids;
+	struct checkpoint_entry {
+		int64_t id = 0;
+		currency amount;
+	};
+	std::vector<checkpoint_entry> transactions;
 };
 
 namespace import {
