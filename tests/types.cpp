@@ -75,7 +75,6 @@ TEST(PercentageStringConversions, ToString) {
 
 TEST(TypeArithmetic, PercentBasic) { // necessary? debatable
 	percentage a{21}, b{4300}, c, d;
-	int64_t scalar1 = 2, scalar2 = 10;
 
 	c = a + b;
 	d = a; d += b;

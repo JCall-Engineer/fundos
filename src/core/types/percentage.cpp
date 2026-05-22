@@ -16,7 +16,7 @@ std::optional<int32_t> parse_percentage(const std::string& text) {
 	// percentage strings longer than 255 characters (even 9, really - see format_percentage) are considered malformed.
 	if (text.length() > 255) { return std::nullopt; }
 
-	for (uint8_t i = 0, len = text.length(); i < len; ++i) {
+	for (uint8_t i = 0, len = static_cast<uint8_t>(text.length()); i < len; ++i) {
 		char c = text[i];
 		bool is_decimal_separator = c == '.' || c == ',';
 		bool is_digit = c >= '0' && c <= '9';
@@ -68,7 +68,7 @@ std::string format_percentage(int32_t basis_points, const percentage_locale::spe
 		(uint8_t)( basis_points % 10),
 	};
 
-	auto digit_char = [](uint8_t digit) { return '0' + digit; };
+	auto digit_char = [](uint8_t digit) { return static_cast<char>('0' + digit); };
 	auto push = [&buffer, &buffer_n](char character) {
 		buffer[buffer_n++] = character;
 	};

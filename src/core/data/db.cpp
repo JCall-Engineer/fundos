@@ -634,7 +634,8 @@ db::error db::sql_count_check(const std::string& sql, size_t expected, executor 
 	if (result.err != error::none) { return result.err; }
 	if (result.not_found()) { return error::internal; }
 	if (!result.val) { return error::internal; }
-	if (*result.val != expected) { return error::rejected; }
+	if (*result.val < 0) { return error::internal; }
+	if (static_cast<size_t>(*result.val) != expected) { return error::rejected; }
 	return error::none;
 }
 
@@ -657,7 +658,7 @@ db::error db::sql_delete_except(const db::delete_except_params& params) {
 	error result = sql_execute(stmt, [&](sqlite3_stmt* stmt) {
 		sqlite3_bind_int64(stmt, 1, params.filter_value);
 		for (size_t i = 0; i < params.preserve_ids.size(); ++i) {
-			sqlite3_bind_int64(stmt, i + 2, params.preserve_ids[i]);
+			sqlite3_bind_int64(stmt, static_cast<int>(i) + 2, params.preserve_ids[i]);
 		}
 	});
 	sqlite3_finalize(stmt);
@@ -823,7 +824,7 @@ db::result<currency_locale::spec> db::get_currency_locale() {
 	static auto NOT_FOUND = result<currency_locale::spec>{}; // not_found: err==none, val==nullopt
 	static auto ERROR = [](error err) { return result<currency_locale::spec>{ .err = err }; };
 	static const std::unordered_map<std::string, int16_t> valid_scales = {
-		{ "1", 1 }, { "10", 10 }, { "100", 100 }, { "1000", 1000 },
+		{ "1", int16_t{1} }, { "10", int16_t{10} }, { "100", int16_t{100} }, { "1000", int16_t{1000} },
 	};
 
 	auto preset_result = get_meta(locale_meta.currency_locale_key);
@@ -1283,7 +1284,7 @@ db::result<std::vector<budget>> db::get_budgets() {
 
 	auto budget_result = sql_fetch_many<budget>(
 		prepared->named.get_budgets.statement,
-		[](sqlite3_stmt* stmt) {},
+		[](sqlite3_stmt*) {},
 		[](sqlite3_stmt* stmt) -> budget {
 			budget out;
 			out.id_           = sqlite3_column_int64(stmt, 0);
@@ -1384,7 +1385,7 @@ db::error db::save_budget(budget& saving) {
 		// Delete phases not found in budget anymore
 		{
 			std::vector<int64_t> preserve_ids;
-			saving.each_phase([&preserve_ids](int pos, any_budget_phase* phase) -> bool {
+			saving.each_phase([&preserve_ids](int, any_budget_phase* phase) -> bool {
 				std::visit([&](auto& typed_phase) {
 					if (typed_phase.is_persisted()) {
 						preserve_ids.push_back(typed_phase.id_);
@@ -1441,7 +1442,7 @@ db::error db::save_budget(budget& saving) {
 		// TIL: since c++14 lambdas with auto parameters are templated functions
 		static auto collect_target_ids = [](auto* phase) -> std::vector<int64_t> {
 			std::vector<int64_t> preserve_ids;
-			phase->each_target([&preserve_ids](int pos, auto* target) {
+			phase->each_target([&preserve_ids](int, auto* target) {
 				if (target->is_persisted()) {
 					preserve_ids.push_back(target->id_);
 				}
@@ -1930,7 +1931,7 @@ db::error db::allocate_transaction(std::vector<allocation>& allocations) {
 			allocations.size(),
 			[&](sqlite3_stmt* stmt) {
 				for (size_t i = 0; i < allocations.size(); ++i) {
-					sqlite3_bind_int64(stmt, i + 1, allocations[i].fund_id);
+					sqlite3_bind_int64(stmt, static_cast<int>(i) + 1, allocations[i].fund_id);
 				}
 			}
 		);
@@ -1944,7 +1945,7 @@ db::error db::allocate_transaction(std::vector<allocation>& allocations) {
 				[&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int64(stmt, 1, transaction_id);
 					for (size_t i = 0; i < preserve_ids.size(); ++i) {
-						sqlite3_bind_int64(stmt, i + 2, preserve_ids[i]);
+						sqlite3_bind_int64(stmt, static_cast<int>(i) + 2, preserve_ids[i]);
 					}
 				}
 			);
@@ -2104,7 +2105,7 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 			sqlite3_bind_int64(stmt, 1, account_id);
 			sqlite3_bind_int64(stmt, 2, before.milliseconds_since_epoch);
 		},
-		[&](sqlite3_stmt* stmt) -> bool {
+		[&](sqlite3_stmt*) -> bool {
 			return true;
 		}
 	);

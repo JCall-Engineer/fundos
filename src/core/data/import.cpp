@@ -89,7 +89,9 @@ std::optional<datetime> parse_ofx_datetime(const std::string& text) {
 }
 
 std::string& upper(std::string& text) {
-	std::transform(text.begin(), text.end(), text.begin(), ::toupper);
+	std::transform(text.begin(), text.end(), text.begin(), [](unsigned char character) {
+		return static_cast<char>(std::toupper(character));
+	});
 	return text;
 }
 
@@ -127,14 +129,14 @@ std::string cp1252_to_utf8(const std::string& input) {
 			codepoint = byte; // 0xA0-0xFF identical to ISO-8859-1
 		}
 		if (codepoint < 0x80) {
-			output.push_back(codepoint);
+			output.push_back(static_cast<char>(codepoint));
 		} else if (codepoint < 0x800) {
-			output.push_back(0xC0 | (codepoint >> 6));
-			output.push_back(0x80 | (codepoint & 0x3F));
+			output.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+			output.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
 		} else {
-			output.push_back(0xE0 | (codepoint >> 12));
-			output.push_back(0x80 | ((codepoint >> 6) & 0x3F));
-			output.push_back(0x80 | (codepoint & 0x3F));
+			output.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+			output.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+			output.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
 		}
 	}
 	return output;

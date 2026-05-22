@@ -19,7 +19,7 @@ std::optional<int64_t> parse_currency(const std::string& text, const currency_lo
 	// Currency strings longer than 255 characters (even 32, really - see format_currency) are considered malformed.
 	if (text.length() > 255) { return std::nullopt; }
 
-	for (uint8_t i = 0, len = text.length(); i < len; ++i) {
+	for (uint8_t i = 0, len = static_cast<uint8_t>(text.length()); i < len; ++i) {
 		char c = text[i];
 		bool is_digit = c >= '0' && c <= '9';
 		int64_t digit = c - '0';
@@ -48,7 +48,7 @@ std::optional<int64_t> parse_currency(const std::string& text, const currency_lo
 	while (digits < max_digits) { remainder *= 10; ++digits; } // max_digits guarantees this doesn't overflow
 
 	// check for a trailing - ) or >
-	for (int16_t i = text.length() - 1; i >= 0; --i) {
+	for (int16_t i = static_cast<int16_t>(text.length()) - 1; i >= 0; --i) {
 		char c = text[i];
 		if (c >= '0' && c <= '9') { break; }
 		if (c == '-' || c == ')' || c == '>') { sign = -1; break; }
@@ -87,7 +87,7 @@ std::string format_currency(int64_t minor_units, const currency_locale::spec& lo
 	}
 
 	if (locale.scale > 1) {
-		uint8_t minor_scale = locale.scale / 10;
+		int16_t minor_scale = locale.scale / 10;
 		while (minor_scale > 0) {
 			buffer[buffer_n++] = '0' + (minor_units % 10);
 			minor_units /= 10;

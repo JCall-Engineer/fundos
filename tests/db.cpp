@@ -1426,6 +1426,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	); \
 	ASSERT_EQ(sqlite3_exec(connection, previous_import_sql.c_str(), nullptr, nullptr, nullptr), SQLITE_OK); \
 	int64_t previous_import_id = sqlite3_last_insert_rowid(connection); \
+	(void)previous_import_id; \
 	import::imported_transaction matched_import; \
 	matched_import.importing.fitid   = previous_import.fitid; \
 	matched_import.importing.cleared = previous_import.cleared; \
