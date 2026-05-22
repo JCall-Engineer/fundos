@@ -5,6 +5,18 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)
 
+if(MSVC)
+	add_compile_options(
+		/W4
+		/permissive-
+		/Zc:__cplusplus  # Report correct __cplusplus value
+		/Zc:inline       # Remove unreferenced functions/data
+		/Zc:throwingNew  # Assume operator new throws
+	)
+else()
+	add_compile_options(-Wall -Wextra)
+endif()
+
 set(VALID_PLATFORMS desktop android)
 if(NOT FUNDOS_PLATFORM IN_LIST VALID_PLATFORMS)
 	message(FATAL_ERROR "Set FUNDOS_PLATFORM to one of: ${VALID_PLATFORMS}")
