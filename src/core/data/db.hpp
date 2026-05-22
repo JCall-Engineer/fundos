@@ -160,9 +160,9 @@ private:
 	error               set_meta(std::string key, std::string value);
 
 public:
-	result<currency_locale::info>   get_currency_locale();
+	result<currency_locale::spec>   get_currency_locale();
 	error                           set_currency_locale_preset(const currency_locale::slot&);
-	error                           set_currency_locale(const currency_locale::info&);
+	error                           set_currency_locale(const currency_locale::spec&);
 
 	result<percentage_locale::info> get_percentage_locale();
 	error                           set_percentage_locale_preset(const percentage_locale::slot&);

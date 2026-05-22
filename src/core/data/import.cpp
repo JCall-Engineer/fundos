@@ -151,7 +151,7 @@ enum class codec {
 struct parse_context {
 	std::ifstream& file;
 	codec encoding;
-	const currency_locale::info& locale;
+	const currency_locale::spec& locale;
 	result& output;
 };
 
@@ -426,7 +426,7 @@ void import_ofx(parse_context& context) {
 #pragma endregion
 #pragma region Dispatch Helpers
 
-static result dispatch(std::ifstream& file, const currency_locale::info& locale, codec encoding) {
+static result dispatch(std::ifstream& file, const currency_locale::spec& locale, codec encoding) {
 	result output;
 	parse_context context { file, encoding, locale, output };
 	import_ofx(context);
@@ -481,7 +481,7 @@ static std::optional<codec> resolve_legacy_header(std::ifstream& file) {
 #pragma endregion
 
 static const std::string legacy_header = "OFXHEADER:";
-result import_ofx(const std::string& filepath, const currency_locale::info& locale) {
+result import_ofx(const std::string& filepath, const currency_locale::spec& locale) {
 	std::ifstream file(filepath);
 	if (!file.is_open()) { return result(error::io_error); }
 

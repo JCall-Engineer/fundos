@@ -5,7 +5,7 @@
 
 namespace fundos::currency_locale {
 
-struct info {
+struct spec {
 	enum class symbol_placement : uint8_t {
 		before,
 		after
@@ -28,7 +28,7 @@ struct info {
 
 struct slot {
 	const char* identifier;
-	info info;
+	spec info;
 };
 
 struct data {
@@ -38,8 +38,8 @@ struct data {
 			.symbol               = "$",
 			.thousands_separator  = ',',
 			.decimal_separator    = '.',
-			.symbol_position      = info::symbol_placement::before,
-			.negative_format      = info::negative_notation::parentheses,
+			.symbol_position      = spec::symbol_placement::before,
+			.negative_format      = spec::negative_notation::parentheses,
 		}
 	};
 	slot CAD {
@@ -48,8 +48,8 @@ struct data {
 			.symbol               = "CA$",
 			.thousands_separator  = ',',
 			.decimal_separator    = '.',
-			.symbol_position      = info::symbol_placement::before,
-			.negative_format      = info::negative_notation::parentheses,
+			.symbol_position      = spec::symbol_placement::before,
+			.negative_format      = spec::negative_notation::parentheses,
 		}
 	};
 	slot GBP {
@@ -58,8 +58,8 @@ struct data {
 			.symbol               = "\xc2\xa3", // £ in UTF-8
 			.thousands_separator  = ',',
 			.decimal_separator    = '.',
-			.symbol_position      = info::symbol_placement::before,
-			.negative_format      = info::negative_notation::leading_minus,
+			.symbol_position      = spec::symbol_placement::before,
+			.negative_format      = spec::negative_notation::leading_minus,
 		}
 	};
 	slot EUR {
@@ -68,8 +68,8 @@ struct data {
 			.symbol               = "\xe2\x82\xac", // € in UTF-8
 			.thousands_separator  = '.',
 			.decimal_separator    = ',',
-			.symbol_position      = info::symbol_placement::after,
-			.negative_format      = info::negative_notation::leading_minus,
+			.symbol_position      = spec::symbol_placement::after,
+			.negative_format      = spec::negative_notation::leading_minus,
 		}
 	};
 	slot AUD {
@@ -78,8 +78,8 @@ struct data {
 			.symbol               = "A$",
 			.thousands_separator  = ',',
 			.decimal_separator    = '.',
-			.symbol_position      = info::symbol_placement::before,
-			.negative_format      = info::negative_notation::parentheses,
+			.symbol_position      = spec::symbol_placement::before,
+			.negative_format      = spec::negative_notation::parentheses,
 		}
 	};
 	slot JPY {
@@ -88,8 +88,8 @@ struct data {
 			.symbol               = "\xc2\xa5", // ¥ in UTF-8
 			.thousands_separator  = ',',
 			.decimal_separator    = '.', // Unused given scale=1
-			.symbol_position      = info::symbol_placement::before,
-			.negative_format      = info::negative_notation::leading_minus,
+			.symbol_position      = spec::symbol_placement::before,
+			.negative_format      = spec::negative_notation::leading_minus,
 		}
 	};
 	slot CNY {
@@ -98,8 +98,8 @@ struct data {
 			.symbol               = "CN\xc2\xa5", // CN¥ in UTF-8
 			.thousands_separator  = ',',
 			.decimal_separator    = '.',
-			.symbol_position      = info::symbol_placement::before,
-			.negative_format      = info::negative_notation::leading_minus,
+			.symbol_position      = spec::symbol_placement::before,
+			.negative_format      = spec::negative_notation::leading_minus,
 		}
 	};
 };
@@ -115,7 +115,7 @@ union registry {
 };
 extern const registry locales;
 
-static inline std::optional<info> get_locale(std::string_view identifier) {
+static inline std::optional<spec> get_locale(std::string_view identifier) {
 	for (std::size_t i = 0; i < num_locales; i++) {
 		if (locales.slots[i].identifier == identifier)
 			return locales.slots[i].info;

@@ -806,22 +806,22 @@ static const enum_string_map<percentage_locale::info::symbol_placement, num_symb
 	{ percentage_locale::info::symbol_placement::before, "before" },
 	{ percentage_locale::info::symbol_placement::after,  "after"  },
 }};
-static const enum_string_map<currency_locale::info::symbol_placement, num_symbol_placement> currency_symbol_placement_map = {{
-	{ currency_locale::info::symbol_placement::before, "before" },
-	{ currency_locale::info::symbol_placement::after,  "after"  },
+static const enum_string_map<currency_locale::spec::symbol_placement, num_symbol_placement> currency_symbol_placement_map = {{
+	{ currency_locale::spec::symbol_placement::before, "before" },
+	{ currency_locale::spec::symbol_placement::after,  "after"  },
 }};
 
 static constexpr size_t num_negative_format = 4;
-static const enum_string_map<currency_locale::info::negative_notation, num_negative_format> currency_negative_notation_map = {{
-	{ currency_locale::info::negative_notation::parentheses,    "parentheses"    },
-	{ currency_locale::info::negative_notation::angle_brackets, "angle_brackets" },
-	{ currency_locale::info::negative_notation::leading_minus,  "leading_minus"  },
-	{ currency_locale::info::negative_notation::trailing_minus, "trailing_minus" },
+static const enum_string_map<currency_locale::spec::negative_notation, num_negative_format> currency_negative_notation_map = {{
+	{ currency_locale::spec::negative_notation::parentheses,    "parentheses"    },
+	{ currency_locale::spec::negative_notation::angle_brackets, "angle_brackets" },
+	{ currency_locale::spec::negative_notation::leading_minus,  "leading_minus"  },
+	{ currency_locale::spec::negative_notation::trailing_minus, "trailing_minus" },
 }};
 
-db::result<currency_locale::info> db::get_currency_locale() {
-	static auto NOT_FOUND = result<currency_locale::info>{}; // not_found: err==none, val==nullopt
-	static auto ERROR = [](error err) { return result<currency_locale::info>{ .err = err }; };
+db::result<currency_locale::spec> db::get_currency_locale() {
+	static auto NOT_FOUND = result<currency_locale::spec>{}; // not_found: err==none, val==nullopt
+	static auto ERROR = [](error err) { return result<currency_locale::spec>{ .err = err }; };
 	static const std::unordered_map<std::string, int16_t> valid_scales = {
 		{ "1", 1 }, { "10", 10 }, { "100", 100 }, { "1000", 1000 },
 	};
@@ -868,7 +868,7 @@ db::result<currency_locale::info> db::get_currency_locale() {
 		if (position_result.not_found()) { return NOT_FOUND; }
 		auto position_enum = string_to_enum(currency_symbol_placement_map, position_result.val.value());
 		if (!position_enum.has_value()) { return NOT_FOUND; }
-		currency_locale::info::symbol_placement symbol_position = position_enum.value();
+		currency_locale::spec::symbol_placement symbol_position = position_enum.value();
 
 		// Extract negative format from meta
 		auto negative_result = get_meta(locale_meta.currency_locale_negative_format_key);
@@ -876,9 +876,9 @@ db::result<currency_locale::info> db::get_currency_locale() {
 		if (negative_result.not_found()) { return NOT_FOUND; }
 		auto negative_enum = string_to_enum(currency_negative_notation_map, negative_result.val.value());
 		if (!negative_enum.has_value()) { return NOT_FOUND; }
-		currency_locale::info::negative_notation negative_format = negative_enum.value();
+		currency_locale::spec::negative_notation negative_format = negative_enum.value();
 
-		return result<currency_locale::info>{ .val = currency_locale::info{
+		return result<currency_locale::spec>{ .val = currency_locale::spec{
 			.scale = scale,
 			.symbol = symbol,
 			.thousands_separator = thousands_separator,
@@ -889,14 +889,14 @@ db::result<currency_locale::info> db::get_currency_locale() {
 	}
 	auto locale = currency_locale::get_locale(preset_value);
 	if (locale.has_value()) {
-		return result<currency_locale::info>{ .val = locale.value() };
+		return result<currency_locale::spec>{ .val = locale.value() };
 	}
 	return NOT_FOUND;
 }
 db::error db::set_currency_locale_preset(const currency_locale::slot& slot) {
 	return set_meta(locale_meta.currency_locale_key, slot.identifier);
 }
-db::error db::set_currency_locale(const currency_locale::info& locale) {
+db::error db::set_currency_locale(const currency_locale::spec& locale) {
 	return sql_transaction([&](std::vector<std::function<void()>>&) -> error {
 		error result = set_meta(locale_meta.currency_locale_key, locale_meta.custom_sentinel_val);
 		if (result != error::none) { return result; }

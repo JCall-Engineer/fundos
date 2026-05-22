@@ -39,6 +39,6 @@ struct result {
 	bool ok() const { return err == error::none; }
 };
 
-result import_ofx(const std::string& filepath, const currency_locale::info& locale);
+result import_ofx(const std::string& filepath, const currency_locale::spec& locale);
 
 } // fundos::import

@@ -579,13 +579,13 @@ TEST(DbQuery, MetaLocales) {
 		EXPECT_EQ(p_locale.symbol_position,         percentage_locale::locales.named.en.info.symbol_position);
 	}
 	{
-		currency_locale::info custom_currency = {
+		currency_locale::spec custom_currency = {
 			.scale = 1000,
 			.symbol = "L",
 			.thousands_separator = ';',
 			.decimal_separator = ':',
-			.symbol_position = currency_locale::info::symbol_placement::before,
-			.negative_format = currency_locale::info::negative_notation::leading_minus,
+			.symbol_position = currency_locale::spec::symbol_placement::before,
+			.negative_format = currency_locale::spec::negative_notation::leading_minus,
 		};
 		percentage_locale::info custom_percentage = {
 			.decimal_separator = ':',
