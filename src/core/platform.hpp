@@ -13,7 +13,15 @@
 #endif
 
 #if defined(_MSC_VER)
-	#define FUNDOS_UNREACHABLE() __assume(false)
+	#define FUNDOS_UNREACHABLE_IMPL() __assume(false)
+#elif defined(__GNUC__) || defined(__clang__)
+	#define FUNDOS_UNREACHABLE_IMPL() __builtin_unreachable()
 #else
-	#define FUNDOS_UNREACHABLE() __builtin_unreachable()
+	#error "FUNDOS_UNREACHABLE_IMPL not implemented for this compiler"
+#endif
+
+#ifdef NDEBUG
+	#define FUNDOS_UNREACHABLE() FUNDOS_UNREACHABLE_IMPL()
+#else
+	#define FUNDOS_UNREACHABLE() FUNDOS_ASSERT(false, "Unreachable code executed")
 #endif

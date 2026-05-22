@@ -35,9 +35,50 @@ public:
 		out_of_memory,   // potentially transient error
 		disk_full,       // potentially transient error
 		constraint,      // either a FOREIGN KEY or UNIQUE violation
+		not_found,       // query did not yield resulting data
 		bad_request,     // incorrect API usage
 		rejected,        // data does not satisfy preconditions
 		internal,        // an unexpected situation that would abort a debug build
+	};
+
+	struct message {
+		std::variant<const char*, std::shared_ptr<std::string>> content;
+
+		/// implicit construction from string literals — no allocation
+		message(const char* literal) : content(literal) {}
+
+		/// from existing shared sqlite error string
+		message(std::shared_ptr<std::string> dynamic) : content(std::move(dynamic)) {}
+
+		/// implicit construction from string literals — no allocation
+		static std::optional<message> make(const char* literal) {
+			return literal ? std::optional<message>(literal) : std::nullopt;
+		}
+
+		/// from existing shared sqlite error string
+		static std::optional<message> make(std::shared_ptr<std::string> dynamic) {
+			return dynamic ? std::optional<message>(std::move(dynamic)) : std::nullopt;
+		}
+
+		std::string_view view() const {
+			return std::visit([](auto& value) -> std::string_view {
+				using ValueType = std::decay_t<decltype(value)>;
+				if constexpr (std::is_same_v<ValueType, const char*>) {
+					return value ? std::string_view(value) : std::string_view{};
+				} else {
+					return value ? std::string_view(*value) : std::string_view{};
+				}
+			}, content);
+		}
+	};
+
+	struct outcome {
+		error code = error::none;
+		std::optional<message> msg;
+		operator bool() const { return code == error::none; }
+
+		outcome() = default;
+		outcome(error e, std::optional<message> m = std::nullopt) : code{e}, msg(std::move(m)) {}
 	};
 
 	struct status {
@@ -55,7 +96,7 @@ public:
 
 		code         result        = code::ok;
 		schema_state schema_status = schema_state::none;
-		error        sqlite3_error = error::none;
+		outcome      sqlite3_outcome;
 
 		bool is_ok()           const { return result == code::ok; }
 		bool has_error()       const { return result >= first_error; }
@@ -69,15 +110,34 @@ private:
 
 	uint64_t schema = 0;
 	status open_result = {};
-	std::shared_ptr<std::string> errmsg = nullptr;
 
-	inline void get_sqlite3_error() {
+	inline std::optional<message> sqlite_error_message() { return sqlite_error_message(connection); }
+	static inline std::optional<message> sqlite_error_message(sqlite3* connection) {
 		const char* msg = sqlite3_errmsg(connection);
-		errmsg =
-			msg == nullptr || std::string_view(msg) == "not an error"
-			? nullptr
-			: std::make_shared<std::string>(msg);
+		return msg == nullptr || std::string_view(msg) == "not an error"
+			? std::nullopt
+			: message::make(std::make_shared<std::string>(msg));
 	}
+
+	inline outcome not_ready() {
+		if (connection == nullptr) {
+			return outcome(error::not_ready, "The database connection is closed");
+		}
+		FUNDOS_ASSERT(!open_result.is_ok(), "not_ready() was called when the database is ready");
+		if (open_result.needs_migration()) {
+			return outcome(error::not_ready, "Database must be migrated before it can be used");
+		}
+		FUNDOS_UNREACHABLE();
+		return outcome(error::not_ready, "Database is not ready, see db::get_status() for more details");
+	}
+
+	static inline outcome success() { return outcome(error::none); }
+
+	static error classify_sqlite_open_error(int rc);
+	inline outcome sqlite_open_error(int rc) { return outcome(classify_sqlite_open_error(rc), sqlite_error_message()); }
+
+	error classify_sqlite_runtime_error(int rc);
+	inline outcome sqlite_runtime_error(int rc) { return outcome(classify_sqlite_runtime_error(rc), sqlite_error_message()); }
 
 public:
 	/// Opens or creates a database file at the given path.
@@ -88,7 +148,7 @@ public:
 
 	/// Opens in a permanently errored state; used by factory functions to return a failed-but-valid db object.
 	/// Prefer open_file() or open_memory() over this.
-	explicit db(error);
+	explicit db(outcome);
 
 	/// Borrows an existing sqlite3 connection; caller responsible for lifetime, no sqlite3_close on destruction.
 	explicit db(sqlite3*);
@@ -103,29 +163,41 @@ public:
 	db(const db&) = delete;
 	db& operator=(const db&) = delete;
 
-	std::shared_ptr<std::string> get_errmsg()   const { return errmsg; }
 	const status&                get_status()   const { return open_result; }
 	bool                         is_connected() const { return connection != nullptr; }
 	bool                         is_ready()     const { return open_result.is_ok() && is_connected(); }
 
 #pragma region Query methods
 
-	/// Three-state return type for query operations.
-	/// - ok() + value: record found.
-	/// - ok() + no value (not_found()): query succeeded but no matching record exists.
-	/// - !ok(): a db::error is set; value is empty.
+	/// @brief Lightweight C++20 alternative to std::expected for database operations.
+	///
+	/// Represents either a successful result containing a value of type T, or a failure represented by db::outcome.
+	///
+	/// This is a strict discriminated union where exactly one of (T, outcome) is active at any time.
+	/// No empty or double-value states exist.
+	///
+	/// @warning This type does not enforce safe access at runtime.
+	/// Calling value() or status() in the wrong state triggers std::bad_variant_access.
+	/// The caller is responsible for checking the state before access.
+	///
+	/// Success is determined via the boolean conversion operator; if(result) indicates that a value is present.
 	template<typename T>
 	struct result {
-		error err = error::none;
-		std::optional<T> val;
-		operator bool()  const { return val.has_value(); }
-		bool ok()        const { return err == error::none; }
-		bool not_found() const { return err == error::none && !val.has_value(); }
+		std::variant<T, outcome> data;
+
+		result() = delete;
+		result(T v) : data(std::move(v)) {}
+		result(outcome o) : data(std::move(o)) {}
+
+		explicit operator bool() const { return std::holds_alternative<T>(data); }
+
+		      T& value()       & { return std::get<T>(data); }
+		const T& value() const & { return std::get<T>(data); }
+
+		const outcome& status() const { return std::get<outcome>(data); }
 	};
 
 private:
-	error classify_sqlite_runtime_error(int rc);
-
 	using executor = std::function<void(sqlite3_stmt*)>;
 
 	template<typename T>
@@ -138,13 +210,13 @@ private:
 		int64_t filter_value;
 		std::span<const int64_t> preserve_ids;
 	};
-	error sql_delete_except(const delete_except_params&);
+	outcome sql_delete_except(const delete_except_params&);
 
 	// "select COUNT(*) where id IN" checks
-	error sql_count_check(const std::string& sql, size_t expected, executor bind);
+	outcome sql_count_check(const std::string& sql, size_t expected, executor bind, message on_failure);
 
 	// insert/update/delete
-	error sql_execute(sqlite3_stmt* stmt, executor bind);
+	outcome sql_execute(sqlite3_stmt* stmt, executor bind);
 
 	// single row or no result
 	template<typename T>
@@ -154,69 +226,69 @@ private:
 	template<typename T>
 	result<std::vector<T>> sql_fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract);
 
-	error sql_transaction(std::function<error(std::vector<std::function<void()>>&)> work);
+	outcome sql_transaction(std::function<outcome(std::vector<std::function<void()>>&)> work);
 
 	result<std::string> get_meta(std::string key);
-	error               set_meta(std::string key, std::string value);
+	outcome             set_meta(std::string key, std::string value);
 
 public:
 	result<currency_locale::spec>   get_currency_locale();
-	error                           set_currency_locale_preset(const currency_locale::slot&);
-	error                           set_currency_locale(const currency_locale::spec&);
+	outcome                         set_currency_locale_preset(const currency_locale::slot&);
+	outcome                         set_currency_locale(const currency_locale::spec&);
 
 	result<percentage_locale::spec> get_percentage_locale();
-	error                           set_percentage_locale_preset(const percentage_locale::slot&);
-	error                           set_percentage_locale(const percentage_locale::spec&);
+	outcome                         set_percentage_locale_preset(const percentage_locale::slot&);
+	outcome                         set_percentage_locale(const percentage_locale::spec&);
 
 	result<std::vector<user>>    get_users();
 
 	/// Inserts or updates the given user.
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
-	error                        save_user(user& saving);
-	error                        delete_user(int64_t user_id);
+	outcome                      save_user(user& saving);
+	outcome                      delete_user(int64_t user_id);
 
 	result<std::vector<account>> get_accounts();
 
 	/// Inserts or updates the given account.
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
-	error                        save_account(account& saving);
+	outcome                      save_account(account& saving);
 
 	result<std::vector<fund>>    get_funds();
 
 	/// Inserts or updates the given fund.
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
-	error                        save_fund(fund& saving);
+	outcome                      save_fund(fund& saving);
 
 	result<std::vector<account>> get_account_memberships(int64_t user_id);
 	result<std::vector<account>> get_account_nonmemberships(int64_t user_id);
 	result<std::vector<user>>    get_account_members(int64_t account_id);
 	result<std::vector<user>>    get_account_nonmembers(int64_t account_id);
-	error                        add_user_to_account(int64_t account_id, int64_t user_id);
-	error                        remove_user_from_account(int64_t account_id, int64_t user_id);
+	outcome                      add_user_to_account(int64_t account_id, int64_t user_id);
+	outcome                      remove_user_from_account(int64_t account_id, int64_t user_id);
 
 	result<std::vector<fund>>    get_fund_memberships(int64_t user_id);
 	result<std::vector<fund>>    get_fund_nonmemberships(int64_t user_id);
 	result<std::vector<user>>    get_fund_members(int64_t fund_id);
 	result<std::vector<user>>    get_fund_nonmembers(int64_t fund_id);
-	error                        add_user_to_fund(int64_t fund_id, int64_t user_id);
-	error                        remove_user_from_fund(int64_t fund_id, int64_t user_id);
+	outcome                      add_user_to_fund(int64_t fund_id, int64_t user_id);
+	outcome                      remove_user_from_fund(int64_t fund_id, int64_t user_id);
 
 	result<std::vector<budget>>  get_budgets();
 
 	/// Inserts or updates the budget and performs a deep save of its phases and targets.
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
-	error                        save_budget(budget& saving);
+	outcome                      save_budget(budget& saving);
 
 private:
 	/// Resolves correction links between transactions after an OFX import.
 	/// - Sets superseded_by on original transactions that have been corrected.
 	/// - Sets corrects_id on correction transactions that reference a known fitid.
 	/// Should be called after each OFX import.
-	error                        resolve_corrections();
+	outcome                      resolve_corrections();
 
 	/// Used internally to pull all fields from a transaction needed for validating safe updates to the db
 	result<transaction>          fetch_transaction(int64_t id);
@@ -226,7 +298,7 @@ public:
 	/// Resolves each bank_account's acct_id to an account_id via bank_account_id.
 	/// @return rejected if any acct_id does not match a known account.
 	/// @return bad_request if any imported transaction is missing fitid or cleared.
-	error                        prepare_import(import::pending_import& pending);
+	outcome                      prepare_import(import::pending_import& pending);
 
 	/// Commits each imported_transaction in the pending import.
 	/// The committed record is assembled from multiple sources rather than saving verbatim:
@@ -238,7 +310,7 @@ public:
 	/// @note Callers must not modify fitid, corrects_fitid, correct_action, cleared, or amount on saving.
 	/// @note Callers must not bypass set_match() to alter definitive matches.
 	/// @return bad_request if any imported transaction's import state is corrupt.
-	error                        perform_import(import::pending_import& pending);
+	outcome                      perform_import(import::pending_import& pending);
 
 	/// Saves a user-created or user-edited transaction.
 	/// Insert (id == 0): persists account_id, amount, date, memo, corrects_id, correct_action.
@@ -248,7 +320,7 @@ public:
 	/// Update (id != 0): persists date and memo only.
 	///   Returns rejected if account_id, amount, cleared, fitid, corrects_fitid, correct_action, corrects_id, or superseded_by differ from the persisted record.
 	///   Returns bad_request if the record does not exist.
-	error                        save_transaction(transaction& saving);
+	outcome                      save_transaction(transaction& saving);
 
 	/// Replaces the allocations for a transaction atomically.
 	/// - Existing allocations not present in the vector are deleted.
@@ -263,7 +335,7 @@ public:
 	/// @return bad_request if empty, transaction_id is zero, fund_ids are duplicated or zero, or allocations span multiple transactions.
 	/// @return rejected if amounts do not sum to the transaction amount, or the transaction does not exist.
 	/// @return constraint, unavailable, or other db::error on storage failure.
-	error                        allocate_transaction(std::vector<allocation>& allocations);
+	outcome                      allocate_transaction(std::vector<allocation>& allocations);
 
 	/// Result type for account-level transaction views.
 	/// Account balance and transactions for a date range.
@@ -309,7 +381,7 @@ public:
 	/// @return none if already current or migration succeeded.
 	/// @return corrupted if schema drift or a constraint violation is detected; connection is closed.
 	/// @return other db::error on storage failure.
-	error migrate();
+	outcome migrate();
 };
 
 } // fundos

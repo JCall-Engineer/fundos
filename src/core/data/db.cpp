@@ -526,7 +526,7 @@ using enum_string_map = std::array<std::pair<Enum, std::string>, N>;
 
 template<typename Enum, std::size_t N>
 static inline std::optional<std::string> enum_to_string(const enum_string_map<Enum, N>& map, Enum value) {
-	for (const auto& pair : map) {
+	for (const auto &pair : map) {
 		if (pair.first == value) { return pair.second; }
 	}
 	return std::nullopt;
@@ -534,7 +534,7 @@ static inline std::optional<std::string> enum_to_string(const enum_string_map<En
 
 template<typename Enum, std::size_t N>
 static inline std::optional<Enum> string_to_enum(const enum_string_map<Enum, N>& map, std::string_view value) {
-	for (const auto& pair : map) {
+	for (const auto &pair : map) {
 		if (pair.second == value) { return pair.first; }
 	}
 	return std::nullopt;
@@ -618,7 +618,7 @@ db::error db::classify_sqlite_runtime_error(int rc) {
 	}
 }
 
-db::error db::sql_count_check(const std::string& sql, size_t expected, executor bind) {
+db::outcome db::sql_count_check(const std::string& sql, size_t expected, executor bind, message on_failure) {
 	if (!is_ready()) { return db::error::not_ready; }
 	sqlite3_stmt* stmt = nullptr;
 	int rc = sqlite3_prepare_v2(connection, sql.c_str(), -1, &stmt, nullptr);
@@ -631,15 +631,13 @@ db::error db::sql_count_check(const std::string& sql, size_t expected, executor 
 	);
 	sqlite3_finalize(stmt);
 
-	if (result.err != error::none) { return result.err; }
-	if (result.not_found()) { return error::internal; }
-	if (!result.val) { return error::internal; }
-	if (*result.val < 0) { return error::internal; }
-	if (static_cast<size_t>(*result.val) != expected) { return error::rejected; }
-	return error::none;
+	if (!result) { return result.status(); }
+	if (result.value() < 0) { return outcome(error::internal, "Query returned negative rows?"); }
+	if (static_cast<size_t>(result.value()) != expected) { return outcome(error::rejected, on_failure); }
+	return success();
 }
 
-db::error db::sql_delete_except(const db::delete_except_params& params) {
+db::outcome db::sql_delete_except(const db::delete_except_params& params) {
 	if (!is_ready()) { return db::error::not_ready; }
 	std::string sql = std::format("DELETE FROM {} WHERE {} = ?", params.table, params.filter_column);
 
@@ -655,7 +653,7 @@ db::error db::sql_delete_except(const db::delete_except_params& params) {
 	int rc = sqlite3_prepare_v2(connection, sql.c_str(), -1, &stmt, nullptr);
 	if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
 
-	error result = sql_execute(stmt, [&](sqlite3_stmt* stmt) {
+	outcome result = sql_execute(stmt, [&](sqlite3_stmt* stmt) {
 		sqlite3_bind_int64(stmt, 1, params.filter_value);
 		for (size_t i = 0; i < params.preserve_ids.size(); ++i) {
 			sqlite3_bind_int64(stmt, static_cast<int>(i) + 2, params.preserve_ids[i]);
@@ -665,43 +663,41 @@ db::error db::sql_delete_except(const db::delete_except_params& params) {
 	return result;
 }
 
-db::error db::sql_execute(sqlite3_stmt* stmt, executor bind) {
+db::outcome db::sql_execute(sqlite3_stmt* stmt, executor bind) {
 	if (!is_ready()) { return db::error::not_ready; }
 	bind(stmt);
 	int rc = sqlite3_step(stmt);
 	sqlite3_reset(stmt);
 	if (SQLITE_DONE != rc) {
-		get_sqlite3_error();
-		return classify_sqlite_runtime_error(rc);
+		return sqlite_runtime_error(rc);
 	}
 	return db::error::none;
 }
 
 template<typename T>
 db::result<T> db::sql_fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
-	if (!is_ready()) { return result<T> { .err = db::error::not_ready }; }
+	if (!is_ready()) { return not_ready(); }
 	bind(stmt);
 	int rc = sqlite3_step(stmt);
 	switch (rc) {
 		case SQLITE_ROW: {
 			T value = extract(stmt);
 			sqlite3_reset(stmt);
-			return result<T> { .val = value };
+			return value;
 		}
 		case SQLITE_DONE:
 			sqlite3_reset(stmt);
-			return result<T> {}; // not_found: err==none, val==nullopt
+			return outcome(error::not_found);
 		default:
-			get_sqlite3_error();
+			auto msg = sqlite_error_message();
 			sqlite3_reset(stmt);
-			return result<T> { .err = classify_sqlite_runtime_error(rc) };
-
+			return outcome(classify_sqlite_runtime_error(rc), msg);
 	}
 }
 
 template<typename T>
 db::result<std::vector<T>> db::sql_fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
-	if (!is_ready()) { return result<std::vector<T>> { .err = db::error::not_ready }; }
+	if (!is_ready()) { return not_ready(); }
 	bind(stmt);
 	int rc;
 	std::vector<T> rows;
@@ -710,10 +706,9 @@ db::result<std::vector<T>> db::sql_fetch_many(sqlite3_stmt* stmt, executor bind,
 	}
 	sqlite3_reset(stmt);
 	if (SQLITE_DONE != rc) {
-		get_sqlite3_error();
-		return result<std::vector<T>> { .err = classify_sqlite_runtime_error(rc) };
+		return sqlite_runtime_error(rc);
 	}
-	return result<std::vector<T>> { .val = rows };
+	return rows;
 }
 
 //--------------------------------------------------------------------------------------+
@@ -721,37 +716,36 @@ db::result<std::vector<T>> db::sql_fetch_many(sqlite3_stmt* stmt, executor bind,
 // error::corrupted being returned to skip COMMIT/ROLLBACK on a closed connection.      |
 // Do not silently swallow errors from execute/fetch_one/fetch_many inside work().      |
 //--------------------------------------------------------------------------------------+
-db::error db::sql_transaction(std::function<error(std::vector<std::function<void()>>&)> work) {
-	if (!is_ready()) { return error::not_ready; }
+db::outcome db::sql_transaction(std::function<outcome(std::vector<std::function<void()>>&)> work) {
+	if (!is_ready()) { return not_ready(); }
 	int rc = sqlite3_exec(connection, "BEGIN", nullptr, nullptr, nullptr);
 	if (rc != SQLITE_OK) {
-		get_sqlite3_error();
-		return classify_sqlite_runtime_error(rc);
+		return sqlite_runtime_error(rc);
 	}
 	std::vector<std::function<void()>> rollback;
-	error result = work(rollback);
-	if (result != error::none) {
+	outcome result = work(rollback);
+	if (!result) {
 		// undo in reverse order for correctness (debatable if necessary)
 		for (auto it = rollback.rbegin(); it != rollback.rend(); ++it) { (*it)(); }
 	}
-	switch (result) {
+	switch (result.code) {
 		case error::none:
 			rc = sqlite3_exec(connection, "COMMIT", nullptr, nullptr, nullptr);
 			if (rc != SQLITE_OK) {
-				get_sqlite3_error();
-				return classify_sqlite_runtime_error(rc);
+				return sqlite_runtime_error(rc);
 			}
-			return error::none;
-		default:
+			return success();
+		default: {
 			rc = sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
 			if (SQLITE_OK == rc) {
 				return result;
 			}
-			get_sqlite3_error();
+			auto msg = sqlite_error_message();
 			close(); // failed rollback means untrustworthy state regardless of cause
-			[[fallthrough]];
+			return outcome(error::corrupted, msg);
+		}
 		case error::corrupted:
-			return error::corrupted;
+			return result;
 	}
 }
 
@@ -766,7 +760,7 @@ db::result<std::string> db::get_meta(std::string key) {
 		}
 	);
 }
-db::error db::set_meta(std::string key, std::string value) {
+db::outcome db::set_meta(std::string key, std::string value) {
 	return sql_execute(
 		prepared->named.set_meta.statement,
 		[&](sqlite3_stmt* stmt) {
@@ -821,91 +815,81 @@ static const enum_string_map<currency_locale::spec::negative_notation, num_negat
 }};
 
 db::result<currency_locale::spec> db::get_currency_locale() {
-	static auto NOT_FOUND = result<currency_locale::spec>{}; // not_found: err==none, val==nullopt
-	static auto ERROR = [](error err) { return result<currency_locale::spec>{ .err = err }; };
 	static const std::unordered_map<std::string, int16_t> valid_scales = {
 		{ "1", int16_t{1} }, { "10", int16_t{10} }, { "100", int16_t{100} }, { "1000", int16_t{1000} },
 	};
 
 	auto preset_result = get_meta(locale_meta.currency_locale_key);
-	if (preset_result.err != error::none) { return ERROR(preset_result.err); }
-	if (preset_result.not_found()) { return NOT_FOUND; }
+	if (!preset_result) { return preset_result.status(); }
 
-	std::string preset_value = preset_result.val.value();
-	// It looks ugly, I know, but it's the best I could do for functionality
+	std::string &preset_value = preset_result.value();
 	if (preset_value == locale_meta.custom_sentinel_val) {
 		// Extract scale from meta
 		auto scale_result = get_meta(locale_meta.currency_locale_scale_key);
-		if (scale_result.err != error::none) { return ERROR(scale_result.err); }
-		if (scale_result.not_found()) { return NOT_FOUND; }
-		auto scale_it = valid_scales.find(scale_result.val.value());
-		if (scale_it == valid_scales.end()) { return NOT_FOUND; }
+		if (!scale_result) { return scale_result.status(); }
+		auto scale_it = valid_scales.find(scale_result.value());
+		if (scale_it == valid_scales.end()) { return outcome(error::not_found, "Recorded currency scale is invalid"); }
 		int16_t scale = scale_it->second;
 
 		// Extract symbol from meta
 		auto symbol_result = get_meta(locale_meta.currency_locale_symbol_key);
-		if (symbol_result.err != error::none) { return ERROR(symbol_result.err); }
-		if (symbol_result.not_found()) { return NOT_FOUND; }
-		std::string symbol = symbol_result.val.value();
-		if (symbol.length() > 4) { return NOT_FOUND; } // This is an implicit assumption for currency::to_string
+		if (!symbol_result) { return symbol_result.status(); }
+		std::string& symbol = symbol_result.value();
+		if (symbol.length() > 4) { return outcome(error::not_found, "Recorded currency symbol is too long"); } // This is an implicit assumption for currency::to_string
 
 		// Extract thousands_separator from meta
 		auto thousands_result = get_meta(locale_meta.currency_locale_thousands_separator_key);
-		if (thousands_result.err != error::none) { return ERROR(thousands_result.err); }
-		if (thousands_result.not_found()) { return NOT_FOUND; }
-		if (thousands_result.val.value().empty()) { return NOT_FOUND; }
-		char thousands_separator = thousands_result.val.value()[0];
+		if (!thousands_result) { return thousands_result.status(); }
+		if (thousands_result.value().empty()) { return outcome(error::not_found, "Recorded thousands separator is empty"); }
+		char thousands_separator = thousands_result.value()[0];
 
 		// Extract decimal_separator from meta
 		auto decimal_result = get_meta(locale_meta.currency_locale_decimal_separator_key);
-		if (decimal_result.err != error::none) { return ERROR(decimal_result.err); }
-		if (decimal_result.not_found()) { return NOT_FOUND; }
-		if (decimal_result.val.value().empty()) { return NOT_FOUND; }
-		char decimal_separator = decimal_result.val.value()[0];
+		if (!decimal_result) { return decimal_result.status(); }
+		if (decimal_result.value().empty()) { return outcome(error::not_found, "Recorded decimal separator is empty"); }
+		char decimal_separator = decimal_result.value()[0];
 
 		// Extract symbol position from meta
 		auto position_result = get_meta(locale_meta.currency_locale_symbol_position_key);
-		if (position_result.err != error::none) { return ERROR(position_result.err); }
-		if (position_result.not_found()) { return NOT_FOUND; }
-		auto position_enum = string_to_enum(currency_symbol_placement_map, position_result.val.value());
-		if (!position_enum.has_value()) { return NOT_FOUND; }
+		if (!position_result) { return position_result.status(); }
+		auto position_enum = string_to_enum(currency_symbol_placement_map, position_result.value());
+		if (!position_enum.has_value()) { return outcome(error::not_found, "Recorded symbol position is not a recognized string"); }
 		currency_locale::spec::symbol_placement symbol_position = position_enum.value();
 
 		// Extract negative format from meta
 		auto negative_result = get_meta(locale_meta.currency_locale_negative_format_key);
-		if (negative_result.err != error::none) { return ERROR(negative_result.err); }
-		if (negative_result.not_found()) { return NOT_FOUND; }
-		auto negative_enum = string_to_enum(currency_negative_notation_map, negative_result.val.value());
-		if (!negative_enum.has_value()) { return NOT_FOUND; }
+		if (!negative_result) { return negative_result.status(); }
+		auto negative_enum = string_to_enum(currency_negative_notation_map, negative_result.value());
+		if (!negative_enum.has_value()) { return outcome(error::not_found, "Recorded negative format is not a recognized string"); }
 		currency_locale::spec::negative_notation negative_format = negative_enum.value();
 
-		return result<currency_locale::spec>{ .val = currency_locale::spec{
+		return currency_locale::spec{
 			.scale = scale,
 			.symbol = symbol,
 			.thousands_separator = thousands_separator,
 			.decimal_separator = decimal_separator,
 			.symbol_position = symbol_position,
 			.negative_format = negative_format,
-		}};
+		};
 	}
 	auto locale = currency_locale::get_locale(preset_value);
 	if (locale.has_value()) {
-		return result<currency_locale::spec>{ .val = locale.value() };
+		return locale.value();
 	}
-	return NOT_FOUND;
+	return outcome(error::not_found, "Recorded currency locale preset is not a recognized string");
 }
-db::error db::set_currency_locale_preset(const currency_locale::slot& slot) {
+db::outcome db::set_currency_locale_preset(const currency_locale::slot& slot) {
 	return set_meta(locale_meta.currency_locale_key, slot.identifier);
 }
-db::error db::set_currency_locale(const currency_locale::spec& locale) {
-	return sql_transaction([&](std::vector<std::function<void()>>&) -> error {
-		error result = set_meta(locale_meta.currency_locale_key, locale_meta.custom_sentinel_val);
-		if (result != error::none) { return result; }
+db::outcome db::set_currency_locale(const currency_locale::spec& locale) {
+	return sql_transaction([&](std::vector<std::function<void()>>&) -> outcome {
+		outcome result = set_meta(locale_meta.currency_locale_key, locale_meta.custom_sentinel_val);
+		if (!result) { return result; }
 
 		switch (locale.scale) {
 			case 1: case 10: case 100: case 1000:
 				result = set_meta(locale_meta.currency_locale_scale_key, std::to_string(locale.scale));
-				if (result != error::none) { return result; }
+				if (!result) { return result; }
 				break;
 			default:
 				return error::internal;
@@ -913,91 +897,84 @@ db::error db::set_currency_locale(const currency_locale::spec& locale) {
 
 		if (locale.symbol.length() > 4) { return error::internal; }
 		result = set_meta(locale_meta.currency_locale_symbol_key, locale.symbol);
-		if (result != error::none) { return result; }
+		if (!result) { return result; }
 
 		result = set_meta(locale_meta.currency_locale_thousands_separator_key, std::string(1, locale.thousands_separator));
-		if (result != error::none) { return result; }
+		if (!result) { return result; }
 
 		result = set_meta(locale_meta.currency_locale_decimal_separator_key, std::string(1, locale.decimal_separator));
-		if (result != error::none) { return result; }
+		if (!result) { return result; }
 
 		auto symbol_pos = enum_to_string(currency_symbol_placement_map, locale.symbol_position);
 		if (!symbol_pos.has_value()) { return error::internal; }
 		result = set_meta(locale_meta.currency_locale_symbol_position_key, symbol_pos.value());
-		if (result != error::none) { return result; }
+		if (!result) { return result; }
 
 		auto negative_format = enum_to_string(currency_negative_notation_map, locale.negative_format);
 		if (!negative_format.has_value()) { return error::internal; }
 		result = set_meta(locale_meta.currency_locale_negative_format_key, negative_format.value());
-		if (result != error::none) { return result; }
+		if (!result) { return result; }
 
-		return error::none;
+		return success();
 	});
 }
 
 db::result<percentage_locale::spec> db::get_percentage_locale() {
-	static auto NOT_FOUND = result<percentage_locale::spec>{}; // not_found: err==none, val==nullopt
-	static auto ERROR = [](error err) { return result<percentage_locale::spec>{ .err = err }; };
-
 	auto preset_result = get_meta(locale_meta.percentage_locale_key);
-	if (preset_result.err != error::none) { return ERROR(preset_result.err); }
-	if (preset_result.not_found()) { return NOT_FOUND; }
+	if (!preset_result) { return preset_result.status(); }
 
-	std::string preset_value = preset_result.val.value();
+	std::string &preset_value = preset_result.value();
 	if (preset_value == locale_meta.custom_sentinel_val) {
 		// Extract decimal_separator from meta
 		auto decimal_result = get_meta(locale_meta.percentage_locale_decimal_separator_key);
-		if (decimal_result.err != error::none) { return ERROR(decimal_result.err); }
-		if (decimal_result.not_found()) { return NOT_FOUND; }
-		if (decimal_result.val.value().empty()) { return NOT_FOUND; }
-		char decimal_separator = decimal_result.val.value()[0];
+		if (!decimal_result) { return decimal_result.status(); }
+		if (decimal_result.value().empty()) { return outcome(error::not_found, "Recorded decimal separator is empty"); }
+		char decimal_separator = decimal_result.value()[0];
 
 		// Extract has_space from meta
 		auto space_result = get_meta(locale_meta.percentage_locale_has_space_key);
-		if (space_result.err != error::none) { return ERROR(space_result.err); }
-		if (space_result.not_found()) { return NOT_FOUND; }
-		bool has_space_around_number = space_result.val.value() == "1";
+		if (!space_result) { return space_result.status(); }
+		bool has_space_around_number = space_result.value() == "1";
 
 		// Extract symbol position from meta
 		auto position_result = get_meta(locale_meta.percentage_locale_symbol_position_key);
-		if (position_result.err != error::none) { return ERROR(position_result.err); }
-		if (position_result.not_found()) { return NOT_FOUND; }
-		auto position_enum = string_to_enum(percentage_symbol_placement_map, position_result.val.value());
-		if (!position_enum.has_value()) { return NOT_FOUND; }
+		if (!position_result) { return position_result.status(); }
+		auto position_enum = string_to_enum(percentage_symbol_placement_map, position_result.value());
+		if (!position_enum.has_value()) { return outcome(error::not_found, "Recorded symbol position is not a recognized string"); }
 		percentage_locale::spec::symbol_placement symbol_position = position_enum.value();
 
-		return result<percentage_locale::spec>{ .val = percentage_locale::spec{
+		return percentage_locale::spec{
 			.decimal_separator = decimal_separator,
 			.has_space_around_number = has_space_around_number,
 			.symbol_position = symbol_position,
-		}};
+		};
 	}
 	auto locale = percentage_locale::get_locale(preset_value);
 	if (locale.has_value()) {
-		return result<percentage_locale::spec>{ .val = locale.value() };
+		return locale.value();
 	}
-	return NOT_FOUND;
+	return outcome(error::not_found, "Recorded percentage locale preset is not a recognized string");
 }
-db::error db::set_percentage_locale_preset(const percentage_locale::slot& slot) {
+db::outcome db::set_percentage_locale_preset(const percentage_locale::slot& slot) {
 	return set_meta(locale_meta.percentage_locale_key, slot.identifier);
 }
-db::error db::set_percentage_locale(const percentage_locale::spec& locale) {
-	return sql_transaction([&](std::vector<std::function<void()>>&) -> error {
-		error result = set_meta(locale_meta.percentage_locale_key, locale_meta.custom_sentinel_val);
-		if (result != error::none) { return result; }
+db::outcome db::set_percentage_locale(const percentage_locale::spec& locale) {
+	return sql_transaction([&](std::vector<std::function<void()>>&) -> outcome {
+		outcome result = set_meta(locale_meta.percentage_locale_key, locale_meta.custom_sentinel_val);
+		if (!result) { return result; }
 
 		result = set_meta(locale_meta.percentage_locale_decimal_separator_key, std::string(1, locale.decimal_separator));
-		if (result != error::none) { return result; }
+		if (!result) { return result; }
 
 		result = set_meta(locale_meta.percentage_locale_has_space_key, locale.has_space_around_number ? "1" : "0");
-		if (result != error::none) { return result; }
+		if (!result) { return result; }
 
 		auto symbol_pos = enum_to_string(percentage_symbol_placement_map, locale.symbol_position);
 		if (!symbol_pos.has_value()) { return error::internal; }
 		result = set_meta(locale_meta.percentage_locale_symbol_position_key, symbol_pos.value());
-		if (result != error::none) { return result; }
+		if (!result) { return result; }
 
-		return error::none;
+		return success();
 	});
 }
 
@@ -1013,28 +990,32 @@ db::result<std::vector<user>> db::get_users() {
 		}
 	);
 }
-db::error db::save_user(user& saving) {
+db::outcome db::save_user(user& saving) {
 	if (!saving.is_persisted()) {
-		error err = sql_execute(
+		outcome insert = sql_execute(
 			prepared->named.insert_user.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text(stmt, 1, saving.name);
 			}
 		);
-		if (err != error::none) { return err; }
+		if (!insert) { return insert; }
 		saving.id_= sqlite3_last_insert_rowid(connection);
-		return error::none;
 	} else {
-		return sql_execute(
+		outcome update = sql_execute(
 			prepared->named.update_user.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text         (stmt, 1, saving.name);
 				sqlite3_bind_int64(stmt, 2, saving.id_);
 			}
 		);
+		if (!update) { return update; }
+		if (sqlite3_changes(connection) != 1) {
+			return outcome(error::not_found, "Cannot update user which does not exist");
+		}
 	}
+	return success();
 }
-db::error db::delete_user(int64_t user_id) {
+db::outcome db::delete_user(int64_t user_id) {
 	return sql_execute(
 		prepared->named.delete_user.statement,
 		[&](sqlite3_stmt* stmt) {
@@ -1105,7 +1086,7 @@ db::result<std::vector<user>> db::get_account_nonmembers(int64_t account_id) {
 	);
 }
 
-db::error db::add_user_to_account(int64_t account_id, int64_t user_id) {
+db::outcome db::add_user_to_account(int64_t account_id, int64_t user_id) {
 	return sql_execute(
 		prepared->named.add_user_to_account.statement,
 		[&](sqlite3_stmt* stmt) {
@@ -1114,7 +1095,7 @@ db::error db::add_user_to_account(int64_t account_id, int64_t user_id) {
 		}
 	);
 }
-db::error db::remove_user_from_account(int64_t account_id, int64_t user_id) {
+db::outcome db::remove_user_from_account(int64_t account_id, int64_t user_id) {
 	return sql_execute(
 		prepared->named.remove_user_from_account.statement,
 		[&](sqlite3_stmt* stmt) {
@@ -1183,7 +1164,7 @@ db::result<std::vector<user>> db::get_fund_nonmembers(int64_t fund_id) {
 	);
 }
 
-db::error db::add_user_to_fund(int64_t fund_id, int64_t user_id) {
+db::outcome db::add_user_to_fund(int64_t fund_id, int64_t user_id) {
 	return sql_execute(
 		prepared->named.add_user_to_fund.statement,
 		[&](sqlite3_stmt* stmt) {
@@ -1192,7 +1173,7 @@ db::error db::add_user_to_fund(int64_t fund_id, int64_t user_id) {
 		}
 	);
 }
-db::error db::remove_user_from_fund(int64_t fund_id, int64_t user_id) {
+db::outcome db::remove_user_from_fund(int64_t fund_id, int64_t user_id) {
 	return sql_execute(
 		prepared->named.remove_user_from_fund.statement,
 		[&](sqlite3_stmt* stmt) {
@@ -1215,19 +1196,18 @@ db::result<std::vector<fund>> db::get_funds() {
 		}
 	);
 }
-db::error db::save_fund(fund& saving) {
+db::outcome db::save_fund(fund& saving) {
 	if (!saving.is_persisted()) {
-		error err = sql_execute(
+		outcome insert = sql_execute(
 			prepared->named.insert_fund.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text(stmt, 1, saving.name);
 			}
 		);
-		if (err != error::none) { return err; }
+		if (!insert) { return insert; }
 		saving.id_= sqlite3_last_insert_rowid(connection);
-		return error::none;
 	} else {
-		return sql_execute(
+		outcome update = sql_execute(
 			prepared->named.update_fund.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text          (stmt, 1, saving.name);
@@ -1235,7 +1215,12 @@ db::error db::save_fund(fund& saving) {
 				sqlite3_bind_int64 (stmt, 3, saving.id_);
 			}
 		);
+		if (!update) { return update; }
+		if (sqlite3_changes(connection) != 1) {
+			return outcome(error::not_found, "Cannot update fund which does not exist");
+		}
 	}
+	return success();
 }
 
 db::result<std::vector<account>> db::get_accounts() {
@@ -1252,20 +1237,19 @@ db::result<std::vector<account>> db::get_accounts() {
 		}
 	);
 }
-db::error db::save_account(account& saving) {
+db::outcome db::save_account(account& saving) {
 	if (!saving.is_persisted()) {
-		error err = sql_execute(
+		outcome insert = sql_execute(
 			prepared->named.insert_account.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text         (stmt, 1, saving.name);
 				bind_optional_text(stmt, 2, saving.bank_account_id);
 			}
 		);
-		if (err != error::none) { return err; }
+		if (!insert) { return insert; }
 		saving.id_= sqlite3_last_insert_rowid(connection);
-		return error::none;
 	} else {
-		return sql_execute(
+		outcome update = sql_execute(
 			prepared->named.update_account.statement,
 			[&](sqlite3_stmt* stmt) {
 				bind_text          (stmt, 1, saving.name);
@@ -1274,14 +1258,17 @@ db::error db::save_account(account& saving) {
 				sqlite3_bind_int64 (stmt, 4, saving.id_);
 			}
 		);
+		if (!update) { return update; }
+		if (sqlite3_changes(connection) != 1) {
+			return outcome(error::not_found, "Cannot update account which does not exist");
+		}
 	}
+	return success();
 }
 
 static const std::string fixed_phase_identifier = "fixed";
 static const std::string percentage_phase_identifier = "percentage";
 db::result<std::vector<budget>> db::get_budgets() {
-	static auto ERROR = [](error err) { return result<std::vector<budget>> { .err = err }; };
-
 	auto budget_result = sql_fetch_many<budget>(
 		prepared->named.get_budgets.statement,
 		[](sqlite3_stmt*) {},
@@ -1293,10 +1280,10 @@ db::result<std::vector<budget>> db::get_budgets() {
 			return out;
 		}
 	);
-	if (budget_result.err != error::none) { return ERROR(budget_result.err); }
+	if (!budget_result) { return budget_result.status(); }
 	
-	std::vector<budget> &out = budget_result.val.value(); // fetch_many guarantees a value if no error
-	for (auto& budget : out) {
+	std::vector<budget> &out = budget_result.value(); // fetch_many guarantees a value if no error
+	for (auto &budget : out) {
 		auto phase_result = sql_fetch_many<any_budget_phase>(
 			prepared->named.get_phases.statement,
 			[&budget](sqlite3_stmt* stmt) {
@@ -1315,10 +1302,10 @@ db::result<std::vector<budget>> db::get_budgets() {
 				return phase;
 			}
 		);
-		if (phase_result.err != error::none) { return ERROR(phase_result.err); }
-		error phase_error = error::none;
-		for (auto& phase : phase_result.val.value()) {
-			std::visit([&](auto& typed_phase) {
+		if (!phase_result) { return phase_result.status(); }
+		outcome phase_error = error::none;
+		for (auto &phase : phase_result.value()) {
+			std::visit([&](auto &typed_phase) {
 				using TargetType = typename std::decay_t<decltype(typed_phase.targets)>::value_type;
 				auto target_result = sql_fetch_many<TargetType>(
 					prepared->named.get_targets.statement,
@@ -1339,24 +1326,24 @@ db::result<std::vector<budget>> db::get_budgets() {
 						return target;
 					}
 				);
-				if (target_result.err != error::none) {
-					phase_error = target_result.err;
+				if (!target_result) {
+					phase_error = target_result.status();
 					return;
 				}
 				typed_phase.targets = std::list<TargetType>(
-					std::make_move_iterator(target_result.val.value().begin()),
-					std::make_move_iterator(target_result.val.value().end())
+					std::make_move_iterator(target_result.value().begin()),
+					std::make_move_iterator(target_result.value().end())
 				);
 				budget.phases.push_back(std::move(typed_phase));
 			}, phase);
-			if (phase_error != db::error::none) { return ERROR(phase_error); }
+			if (!phase_error) { return phase_error; }
 		}
 	}
-	return result<std::vector<budget>>{ .val = std::move(out) };
+	return out;
 }
-db::error db::save_budget(budget& saving) {
-	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
-		error result;
+db::outcome db::save_budget(budget& saving) {
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
+		outcome result;
 
 		// Update budget
 		if (!saving.is_persisted()) {
@@ -1367,7 +1354,7 @@ db::error db::save_budget(budget& saving) {
 					sqlite3_bind_int64(stmt, 2, saving.overflow_fund);
 				}
 			);
-			if (result != error::none) { return result; }
+			if (!result) { return result; }
 			saving.id_= sqlite3_last_insert_rowid(connection);
 			rollback.push_back([&saving]() { saving.id_ = 0; });
 		} else {
@@ -1379,14 +1366,17 @@ db::error db::save_budget(budget& saving) {
 					sqlite3_bind_int64(stmt, 3, saving.id_);
 				}
 			);
-			if (result != error::none) { return result; }
+			if (!result) { return result; }
+			if (sqlite3_changes(connection) != 1) {
+				return outcome(error::not_found, "Cannot update budget which does not exist");
+			}
 		}
 
 		// Delete phases not found in budget anymore
 		{
 			std::vector<int64_t> preserve_ids;
 			saving.each_phase([&preserve_ids](int, any_budget_phase* phase) -> bool {
-				std::visit([&](auto& typed_phase) {
+				std::visit([&](auto &typed_phase) {
 					if (typed_phase.is_persisted()) {
 						preserve_ids.push_back(typed_phase.id_);
 					}
@@ -1400,11 +1390,11 @@ db::error db::save_budget(budget& saving) {
 				.filter_value = saving.id_,
 				.preserve_ids = preserve_ids,
 			});
-			if (result != error::none) { return result; }
+			if (!result) { return result; }
 		}
 
 		// Deletes targets not found in a phase anymore
-		auto delete_orphaned_targets = [&](int64_t phase_id, const std::vector<int64_t>& preserve_ids) -> error {
+		auto delete_orphaned_targets = [&](int64_t phase_id, const std::vector<int64_t>& preserve_ids) -> outcome {
 			return sql_delete_except({
 				.table = "phase_targets",
 				.filter_column = "phase_id",
@@ -1421,9 +1411,9 @@ db::error db::save_budget(budget& saving) {
 					sqlite3_bind_int64(stmt, 2, phase_managed->id_);
 					sqlite3_bind_int64(stmt, 3, saving.id_);
 				});
-				if (result != error::none) { return true; }
+				if (!result) { return true; }
 				if (sqlite3_changes(connection) != 1) {
-					result = error::internal;
+					result = outcome(error::not_found, "Cannot update phase which does not exist");
 					return true;
 				}
 			} else {
@@ -1432,7 +1422,7 @@ db::error db::save_budget(budget& saving) {
 					sqlite3_bind_int  (stmt, 2, pos);
 					bind_text         (stmt, 3, kind);
 				});
-				if (result != error::none) { return true; }
+				if (!result) { return true; }
 				phase_managed->id_ = sqlite3_last_insert_rowid(connection);
 				rollback.push_back([phase_managed]() { phase_managed->id_ = 0; });
 			}
@@ -1462,9 +1452,9 @@ db::error db::save_budget(budget& saving) {
 					sqlite3_bind_int64 (stmt, 6, target->id_);
 					sqlite3_bind_int64 (stmt, 7, phase_id);
 				});
-				if (result != error::none) { return true; }
+				if (!result) { return true; }
 				if (sqlite3_changes(connection) != 1) {
-					result = error::internal;
+					result = outcome(error::not_found, "Cannot update target which does not exist");
 					return true;
 				}
 			} else {
@@ -1476,7 +1466,7 @@ db::error db::save_budget(budget& saving) {
 					bind_optional_int64(stmt, 5, as_optional_int64(target->cap));
 					sqlite3_bind_int   (stmt, 6, target->allow_overdraw);
 				});
-				if (result != error::none) { return true; }
+				if (!result) { return true; }
 				target->id_ = sqlite3_last_insert_rowid(connection);
 				rollback.push_back([target]() { target->id_ = 0; });
 			}
@@ -1489,7 +1479,7 @@ db::error db::save_budget(budget& saving) {
 				if (upsert_phase(pos, phase, fixed_phase_identifier)) { return true; }
 
 				result = delete_orphaned_targets(phase->id_, collect_target_ids(phase));
-				if (result != error::none) { return true; }
+				if (!result) { return true; }
 
 				// "finding" errors as we save targets
 				auto target_err = phase->find_target([&](int pos, fixed_target* target) -> bool {
@@ -1503,7 +1493,7 @@ db::error db::save_budget(budget& saving) {
 				if (upsert_phase(pos, phase, percentage_phase_identifier)) { return true; }
 
 				result = delete_orphaned_targets(phase->id_, collect_target_ids(phase));
-				if (result != error::none) { return true; }
+				if (!result) { return true; }
 
 				// "finding" errors as we save targets
 				auto target_err = phase->find_target([&](int pos, percentage_target* target) -> bool {
@@ -1516,7 +1506,7 @@ db::error db::save_budget(budget& saving) {
 		);
 		// Exit transaction on error
 		if (phase_err != nullptr) { return result; }
-		return error::none;
+		return success();
 	});
 }
 
@@ -1526,7 +1516,7 @@ static const enum_string_map<transaction::correction_type, num_correct_actions> 
 	{ transaction::correction_type::replaces,  "replace" },
 }};
 
-db::error db::resolve_corrections() {
+db::outcome db::resolve_corrections() {
 	static const char* update_corrections_sql = R"sql(
 UPDATE transactions
 SET superseded_by = (
@@ -1550,10 +1540,9 @@ AND corrects_id IS NULL;
 )sql";
 	int rc = sqlite3_exec(connection, update_corrections_sql, nullptr, nullptr, nullptr);
 	if (SQLITE_OK != rc) {
-		get_sqlite3_error();
-		return classify_sqlite_runtime_error(rc);
+		return sqlite_runtime_error(rc);
 	}
-	return error::none;
+	return success();
 }
 
 db::result<transaction> db::fetch_transaction(int64_t id) {
@@ -1591,8 +1580,8 @@ static inline bool safe_match(const transaction& lhs, const transaction& rhs) {
 	);
 }
 
-db::error db::prepare_import(import::pending_import& pending) {
-	for (auto& account : pending.accounts) {
+db::outcome db::prepare_import(import::pending_import& pending) {
+	for (auto &account : pending.accounts) {
 		auto account_query = sql_fetch_one<int64_t>(
 			prepared->named.find_account_by_bank_id.statement,
 			[&] (sqlite3_stmt* stmt) -> void {
@@ -1602,9 +1591,8 @@ db::error db::prepare_import(import::pending_import& pending) {
 				return sqlite3_column_int64(stmt, 0);
 			}
 		);
-		if (account_query.err != error::none) { return account_query.err; }
-		if (account_query.not_found()) { return error::rejected; }
-		account.account_id = *account_query.val;
+		if (!account_query) { return account_query.status(); }
+		account.account_id = account_query.value();
 
 		{ // Collect candidates
 			auto candidate_query = sql_fetch_many<transaction>(
@@ -1628,9 +1616,12 @@ db::error db::prepare_import(import::pending_import& pending) {
 					return out;
 				}
 			);
-			if (candidate_query.err != error::none) { return candidate_query.err; }
-			if (!candidate_query.not_found()) {
-				account.candidates = std::move(*candidate_query.val);
+			if (!candidate_query) {
+				if (candidate_query.status().code != error::not_found) {
+					return candidate_query.status();
+				}
+			} else {
+				account.candidates = std::move(candidate_query.value());
 			}
 		}
 
@@ -1638,7 +1629,7 @@ db::error db::prepare_import(import::pending_import& pending) {
 		account.candidates.reserve(account.candidates.size() + account.transactions.size());
 
 		// Search for matching records for each imported transaction
-		for (auto& txn : account.transactions) {
+		for (auto &txn : account.transactions) {
 			if (!txn.importing.fitid || !txn.importing.cleared) {
 				return error::bad_request;
 			}
@@ -1669,10 +1660,10 @@ db::error db::prepare_import(import::pending_import& pending) {
 					return out;
 				}
 			);
-			if (fitid_query.err != error::none) { return fitid_query.err; }
+			if (!fitid_query && fitid_query.status().code != error::not_found) { return fitid_query.status(); }
 			txn.saving.date = txn.importing.date;
 			txn.saving.memo = txn.importing.memo;
-			if (fitid_query.not_found()) {
+			if (!fitid_query && fitid_query.status().code == error::not_found) {
 				auto view = account.unclaimed_candidates();
 				for (auto* candidate : view) {
 					if (candidate->amount == txn.importing.amount) {
@@ -1683,17 +1674,17 @@ db::error db::prepare_import(import::pending_import& pending) {
 					}
 				}
 			} else {
-				auto& matched = account.candidates.emplace_back(std::move(*fitid_query.val));
+				auto &matched = account.candidates.emplace_back(std::move(fitid_query.value()));
 				match(&matched);
 			}
 		}
 	}
 
-	return error::none;
+	return success();
 }
 
-db::error db::perform_import(import::pending_import& pending) {
-	for (auto& account : pending.accounts) {
+db::outcome db::perform_import(import::pending_import& pending) {
+	for (auto &account : pending.accounts) {
 		auto account_query = sql_fetch_one<int64_t>(
 			prepared->named.find_account_by_bank_id.statement,
 			[&] (sqlite3_stmt* stmt) -> void {
@@ -1703,12 +1694,16 @@ db::error db::perform_import(import::pending_import& pending) {
 				return sqlite3_column_int64(stmt, 0);
 			}
 		);
-		if (account_query.err != error::none) { return account_query.err; }
-		if (account_query.not_found()) { return error::bad_request; }
-		if (*account_query.val != account.account_id) { return error::bad_request; }
+		if (!account_query) {
+			if (account_query.status().code == error::not_found) {
+				return outcome(error::bad_request, "Imported acct_id not recognized");
+			}
+			return account_query.status();
+		}
+		if (account_query.value() != account.account_id) { return outcome(error::bad_request, "Imported account_id does not match database"); }
 
-		for (auto& transaction : account.transactions) {
-			if (!transaction.importing.cleared) { return error::bad_request; }
+		for (auto &transaction : account.transactions) {
+			if (!transaction.importing.cleared) { return outcome(error::bad_request, "Imported transaction does not report a cleared date"); }
 			transaction.saving.id_ = 0;
 			transaction.saving.account_id = account.account_id;
 			transaction.saving.amount = transaction.importing.amount;
@@ -1719,26 +1714,30 @@ db::error db::perform_import(import::pending_import& pending) {
 
 			if (transaction.get_match() != nullptr) {
 				auto match = fetch_transaction(transaction.get_match()->id_);
-				if (match.err != error::none) { return match.err; }
-				if (match.not_found()) { return error::bad_request; }
-				if (!safe_match(*transaction.get_match(), *match.val)) { return error::bad_request; }
+				if (!match) {
+					if (match.status().code == error::not_found) {
+						return outcome(error::bad_request, "Matched transaction does not exist");
+					}
+					return match.status();
+				}
+				if (!safe_match(*transaction.get_match(), match.value())) { return outcome(error::bad_request, "Matched transaction has deviated from the database"); }
 
-				transaction.saving.id_ = match.val->id_;
-				if (match.val->account_id != account.account_id) { return error::bad_request; }
-				if (match.val->fitid && match.val->fitid != transaction.importing.fitid) { return error::bad_request; }
-				if (match.val->fitid) {
-					if (match.val->correct_action != transaction.importing.correct_action) { return error::bad_request; }
-					if (match.val->corrects_fitid != transaction.importing.corrects_fitid) { return error::bad_request; }
+				transaction.saving.id_ = match.value().id_;
+				if (match.value().account_id != account.account_id) { return outcome(error::bad_request, "Matched transaction belongs to a different account"); }
+				if (match.value().fitid && match.value().fitid != transaction.importing.fitid) { return outcome(error::bad_request, "Matched transaction has a different fitid"); }
+				if (match.value().fitid) {
+					if (match.value().correct_action != transaction.importing.correct_action) { return outcome(error::bad_request, "Matched transaction has a different correct action"); }
+					if (match.value().corrects_fitid != transaction.importing.corrects_fitid) { return outcome(error::bad_request, "Matched transaction corrects a different fitid"); }
 				} else {
-					if (match.val->correct_action || match.val->corrects_id || match.val->superseded_by) { return error::bad_request; }
+					if (match.value().correct_action || match.value().corrects_id || match.value().superseded_by) { return outcome(error::bad_request, "Matched transaction is a manual correction transaction"); }
 				}
 			}
 		}
 	}
 
-	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
-		for (auto& account : pending.accounts) {
-			error err = sql_execute(
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
+		for (auto &account : pending.accounts) {
+			outcome insert_checkpoint = sql_execute(
 				prepared->named.insert_balance_checkpoint.statement,
 				[&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int64(stmt, 1, account.account_id);
@@ -1746,13 +1745,13 @@ db::error db::perform_import(import::pending_import& pending) {
 					sqlite3_bind_int64(stmt, 3, account.as_of.milliseconds_since_epoch);
 				}
 			);
-			if (err != error::none) { return err; }
+			if (!insert_checkpoint) { return insert_checkpoint; }
 			int64_t checkpoint_id = sqlite3_last_insert_rowid(connection);
 
-			for (auto& importing : account.transactions) {
+			for (auto &importing : account.transactions) {
 				transaction& saving = importing.saving;
 				if (!saving.is_persisted()) {
-					err = sql_execute(
+					outcome insert_transaction = sql_execute(
 						prepared->named.insert_transaction_import.statement,
 						[&](sqlite3_stmt* stmt) {
 							sqlite3_bind_int64 (stmt, 1, saving.account_id);
@@ -1765,12 +1764,11 @@ db::error db::perform_import(import::pending_import& pending) {
 							bind_optional_text (stmt, 8, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, saving.correct_action));
 						}
 					);
-					if (err != error::none) { return err; }
+					if (!insert_transaction) { return insert_transaction; }
 					saving.id_= sqlite3_last_insert_rowid(connection);
 					rollback.push_back([&saving]() { saving.id_ = 0; });
-
 				} else {
-					err = sql_execute(
+					outcome update_transaction = sql_execute(
 						prepared->named.update_transaction_import.statement,
 						[&](sqlite3_stmt* stmt) {
 							sqlite3_bind_int64 (stmt, 1, saving.amount.minor_units);
@@ -1783,23 +1781,26 @@ db::error db::perform_import(import::pending_import& pending) {
 							sqlite3_bind_int64 (stmt, 8, saving.id_);
 						}
 					);
-					if (err != error::none) { return err; }
+					if (!update_transaction) { return update_transaction; }
+					if (sqlite3_changes(connection) != 1) {
+						return outcome(error::not_found, "Cannot update transaction which does not exist");
+					}
 				}
-				err = sql_execute(
+				outcome insert_checkpoint_transaction = sql_execute(
 					prepared->named.insert_checkpoint_transaction.statement,
 					[&](sqlite3_stmt* stmt) {
 						sqlite3_bind_int64(stmt, 1, checkpoint_id);
 						sqlite3_bind_int64(stmt, 2, saving.id_);
 					}
 				);
-				if (err != error::none) { return err; }
+				if (!insert_checkpoint_transaction) { return insert_checkpoint_transaction; }
 			}
 		}
 		return resolve_corrections();
 	});
 }
 
-db::error db::save_transaction(transaction& saving) {
+db::outcome db::save_transaction(transaction& saving) {
 	if (!saving.is_persisted()) {
 		if (saving.corrects_id.has_value() != saving.correct_action.has_value()) {
 			return error::bad_request;
@@ -1807,15 +1808,19 @@ db::error db::save_transaction(transaction& saving) {
 		std::optional<result<fundos::transaction>> corrects;
 		if (saving.corrects_id) {
 			corrects = fetch_transaction(*saving.corrects_id);
-			if (corrects->err != error::none) { return corrects->err; }
-			if (corrects->not_found()) { return error::bad_request; }
-			if (corrects->val->account_id != saving.account_id) { return error::bad_request; }
-			if (corrects->val->fitid.has_value()) { return error::rejected; }
-			if (corrects->val->superseded_by.has_value()) { return error::rejected; }
+			if (!*corrects) {
+				if (corrects->status().code == error::not_found) {
+					return outcome(error::bad_request, "Transaction corrects a record that doesn't exist");
+				}
+				return corrects->status();
+			}
+			if (corrects->value().account_id != saving.account_id) { return outcome(error::bad_request, "Transaction corrects a record from a different account"); }
+			if (corrects->value().fitid.has_value()) { return outcome(error::rejected, "Manual transaction corrects a record that is reported by the bank"); }
+			if (corrects->value().superseded_by.has_value()) { return outcome(error::rejected, "Transaction corrects a record that is already superseded"); }
 		}
 
-		return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
-			error err = sql_execute(
+		return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
+			outcome insert_transaction = sql_execute(
 				prepared->named.insert_transaction_user.statement,
 				[&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int64 (stmt, 1, saving.account_id);
@@ -1826,25 +1831,33 @@ db::error db::save_transaction(transaction& saving) {
 					bind_optional_text (stmt, 6, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, saving.correct_action));
 				}
 			);
-			if (err != error::none) { return err; }
+			if (!insert_transaction) { return insert_transaction; }
 			saving.id_= sqlite3_last_insert_rowid(connection);
 			rollback.push_back([&saving]() { saving.id_ = 0; });
 
-			if (!corrects) { return error::none; }
-			return sql_execute(
+			if (!corrects) { return success(); }
+			outcome update = sql_execute(
 				prepared->named.update_transaction_correction.statement,
 				[&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int64(stmt, 1, saving.id_);
-					sqlite3_bind_int64(stmt, 2, corrects->val->id_);
+					sqlite3_bind_int64(stmt, 2, corrects->value().id_);
 				}
 			);
+			if (!update) { return update; }
+			if (sqlite3_changes(connection) != 1) {
+				return outcome(error::not_found, "Cannot correct a transaction which does not exist or is already superseded");
+			}
 		});
 	} else {
 		auto existing = fetch_transaction(saving.id_);
-		if (existing.err != error::none) { return existing.err; }
-		if (existing.not_found()) { return error::bad_request; }
-		if (!safe_match(saving, *existing.val)) { return error::rejected; }
-		return sql_execute(
+		if (!existing) {
+			if (existing.status().code == error::not_found) {
+				return outcome(error::bad_request, "Cannot update a transaction that no longer exists");
+			}
+			return existing.status();
+		}
+		if (!safe_match(saving, existing.value())) { return outcome(error::rejected, "End user cannot manually alter protected fields on a transaction"); }
+		outcome update = sql_execute(
 			prepared->named.update_transaction_user.statement,
 			[&](sqlite3_stmt* stmt) {
 				sqlite3_bind_int64 (stmt, 1, saving.date.milliseconds_since_epoch);
@@ -1852,10 +1865,15 @@ db::error db::save_transaction(transaction& saving) {
 				sqlite3_bind_int64 (stmt, 3, saving.id_);
 			}
 		);
+		if (!update) { return update; }
+		if (sqlite3_changes(connection) != 1) {
+			return outcome(error::not_found, "Cannot update transaction which does not exist");
+		}
+		return success();
 	}
 }
 
-db::error db::allocate_transaction(std::vector<allocation>& allocations) {
+db::outcome db::allocate_transaction(std::vector<allocation>& allocations) {
 	if (allocations.empty()) { return error::bad_request; }
 	int64_t transaction_id = allocations[0].transaction_id;
 	std::vector<int64_t> preserve_ids;
@@ -1872,11 +1890,14 @@ db::error db::allocate_transaction(std::vector<allocation>& allocations) {
 				return {sqlite3_column_int64(stmt, 0)};
 			}
 		);
-		if (transaction_result.err != error::none) { return transaction_result.err; }
-		if (transaction_result.not_found()) { return error::rejected; }
-		if (!transaction_result.val) { return error::internal; }
+		if (!transaction_result) {
+			if (transaction_result.status().code == error::not_found) {
+				return outcome(error::rejected, "Cannot allocate transaction that does not exist.");
+			}
+			return transaction_result.status();
+		}
 
-		currency total = *transaction_result.val;
+		currency total = transaction_result.value();
 		currency sum = {0};
 
 		// Validate the funds
@@ -1894,13 +1915,13 @@ db::error db::allocate_transaction(std::vector<allocation>& allocations) {
 			AND id IN (
 		)sql";
 
-		for (const auto& allocation : allocations) {
+		for (const auto &allocation : allocations) {
 			if (allocation.transaction_id != transaction_id) {
-				return error::bad_request;
+				return outcome(error::bad_request, "Can only allocate for one transaction at a time");
 			}
 
 			if (allocation.fund_id == 0) {
-				return error::bad_request;
+				return outcome(error::bad_request, "Allocation must include a fund");
 			}
 
 			// Gather ids to preserve in upsert and build sql to validate allocations belong the correct transaction
@@ -1926,20 +1947,21 @@ db::error db::allocate_transaction(std::vector<allocation>& allocations) {
 		allocation_finder_sql += ")";
 
 		// Make sure funds exist and are not closed
-		error result = sql_count_check(
+		outcome find_funds = sql_count_check(
 			fund_finder_sql,
 			allocations.size(),
 			[&](sqlite3_stmt* stmt) {
 				for (size_t i = 0; i < allocations.size(); ++i) {
 					sqlite3_bind_int64(stmt, static_cast<int>(i) + 1, allocations[i].fund_id);
 				}
-			}
+			},
+			"Attempted to allocate to one or more funds which do not exist or are closed"
 		);
-		if (result != error::none) { return result; }
+		if (!find_funds) { return find_funds; }
 
 		// Make sure persisted allocations exist and do not belong to a different transaction
 		if (!preserve_ids.empty()) {
-			result = sql_count_check(
+			outcome existing_allocations = sql_count_check(
 				allocation_finder_sql,
 				preserve_ids.size(),
 				[&](sqlite3_stmt* stmt) {
@@ -1947,52 +1969,52 @@ db::error db::allocate_transaction(std::vector<allocation>& allocations) {
 					for (size_t i = 0; i < preserve_ids.size(); ++i) {
 						sqlite3_bind_int64(stmt, static_cast<int>(i) + 2, preserve_ids[i]);
 					}
-				}
+				},
+				"Attempted to modify an allocation which does not exist"
 			);
-			if (result != error::none) { return result; }
+			if (!existing_allocations) { return existing_allocations; }
 		}
 	}
 
-	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> error {
-		error result = sql_delete_except({
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
+		outcome delete_extra_allocations = sql_delete_except({
 			.table = "allocations",
 			.filter_column = "transaction_id",
 			.filter_value = transaction_id,
 			.preserve_ids = preserve_ids,
 		});
-		if (result != error::none) { return result; }
+		if (!delete_extra_allocations) { return delete_extra_allocations; }
 
-		for (auto& allocation : allocations) {
-			if (allocation.is_persisted()) {
-				result = sql_execute(prepared->named.update_allocation.statement, [&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int64 (stmt, 1, allocation.fund_id);
-					sqlite3_bind_int64 (stmt, 2, allocation.amount.minor_units);
-					sqlite3_bind_int64 (stmt, 3, allocation.id_);
-				});
-				if (result != error::none) { return result; }
-				if (sqlite3_changes(connection) != 1) {
-					return error::internal;
-				}
-			} else {
-				result = sql_execute(prepared->named.insert_allocation.statement, [&](sqlite3_stmt* stmt) {
+		for (auto &allocation : allocations) {
+			if (!allocation.is_persisted()) {
+				outcome insert_allocation = sql_execute(prepared->named.insert_allocation.statement, [&](sqlite3_stmt* stmt) {
 					sqlite3_bind_int64 (stmt, 1, transaction_id);
 					sqlite3_bind_int64 (stmt, 2, allocation.fund_id);
 					sqlite3_bind_int64 (stmt, 3, allocation.amount.minor_units);
 				});
-				if (result != error::none) { return result; }
+				if (!insert_allocation) { return insert_allocation; }
 				allocation.id_ = sqlite3_last_insert_rowid(connection);
 				auto* ptr = &allocation; // We need a persistent reference that outlives the transaction call
 				rollback.push_back([ptr]() { ptr->id_ = 0; });
+			} else {
+				outcome update_allocation = sql_execute(prepared->named.update_allocation.statement, [&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64 (stmt, 1, allocation.fund_id);
+					sqlite3_bind_int64 (stmt, 2, allocation.amount.minor_units);
+					sqlite3_bind_int64 (stmt, 3, allocation.id_);
+				});
+				if (!update_allocation) { return update_allocation; }
+				if (sqlite3_changes(connection) != 1) {
+					return outcome(error::internal, "Cannot update allocation which does not exist");
+				}
 			}
 		}
 
-		return error::none;
+		return success();
 	});
 }
 
 db::result<db::transaction_history> db::account_history(int64_t account_id, datetime after, datetime before) {
 	using transaction = transaction_history::allocated_transaction;
-	auto ERROR = [](db::error err) { return result<transaction_history>{ .err = err }; };
 	auto fetched_transactions = sql_fetch_many<transaction>(
 		prepared->named.filter_transactions.statement,
 		[&](sqlite3_stmt* stmt) -> void {
@@ -2022,9 +2044,8 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 			return out;
 		}
 	);
-	if (fetched_transactions.err != error::none) { return ERROR(fetched_transactions.err); }
-	if (fetched_transactions.not_found()) { return ERROR(error::internal); }
-	for (auto& transaction : *fetched_transactions.val) {
+	if (!fetched_transactions) { return fetched_transactions.status(); }
+	for (auto &transaction : fetched_transactions.value()) {
 		auto fetched_allocations = sql_fetch_many<allocation>(
 			prepared->named.get_transaction_allocations.statement,
 			[&](sqlite3_stmt* stmt) -> void {
@@ -2039,9 +2060,8 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 				return out;
 			}
 		);
-		if (fetched_allocations.err != error::none) { return ERROR(fetched_allocations.err); }
-		if (fetched_allocations.not_found()) { return ERROR(error::internal); }
-		transaction.allocations = std::move(*fetched_allocations.val);
+		if (!fetched_allocations) { return fetched_allocations.status(); }
+		transaction.allocations = std::move(fetched_allocations.value());
 	}
 
 	auto fetched_checkpoints = sql_fetch_many<balance_checkpoint>(
@@ -2060,9 +2080,8 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 			return out;
 		}
 	);
-	if (fetched_checkpoints.err != error::none) { return ERROR(fetched_checkpoints.err); }
-	if (fetched_checkpoints.not_found()) { return ERROR(error::internal); }
-	for (auto& checkpoint : *fetched_checkpoints.val) {
+	if (!fetched_checkpoints) { return fetched_checkpoints.status(); }
+	for (auto &checkpoint : fetched_checkpoints.value()) {
 		auto fetched_checkpoint_transactions = sql_fetch_many<balance_checkpoint::checkpoint_entry>(
 			prepared->named.get_checkpoint_transactions.statement,
 			[&](sqlite3_stmt* stmt) -> void {
@@ -2075,9 +2094,8 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 				};
 			}
 		);
-		if (fetched_checkpoint_transactions.err != error::none) { return ERROR(fetched_checkpoint_transactions.err); }
-		if (fetched_checkpoint_transactions.not_found()) { return ERROR(error::internal); }
-		checkpoint.transactions = std::move(*fetched_checkpoint_transactions.val);
+		if (!fetched_checkpoint_transactions) { return fetched_checkpoint_transactions.status(); }
+		checkpoint.transactions = std::move(fetched_checkpoint_transactions.value());
 	}
 
 	auto fetch_anchor = sql_fetch_one<std::pair<currency, bool>>(
@@ -2095,9 +2113,8 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 			);
 		}
 	);
-	if (fetch_anchor.err != error::none) { return ERROR(fetch_anchor.err); }
-	if (fetch_anchor.not_found()) { return ERROR(error::internal); }
-	const auto [anchor_balance, anchor_has_checkpoint] = *fetch_anchor.val;
+	if (!fetch_anchor) { return fetch_anchor.status(); }
+	const auto [anchor_balance, anchor_has_checkpoint] = fetch_anchor.value();
 
 	auto fetch_future_checkpoint = sql_fetch_one<bool>(
 		prepared->named.check_for_newer_checkpoints.statement,
@@ -2109,8 +2126,10 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 			return true;
 		}
 	);
-	if (fetch_future_checkpoint.err != error::none) { return ERROR(fetch_future_checkpoint.err); }
-	const bool has_future_checkpoint = !fetch_future_checkpoint.not_found();
+	if (!fetch_future_checkpoint && fetch_future_checkpoint.status().code != error::not_found) {
+		return fetch_future_checkpoint.status();
+	}
+	const bool has_future_checkpoint = static_cast<bool>(fetch_future_checkpoint);
 
 	// Compute resulting balance of each transaction
 	enum class balance_state : uint8_t {
@@ -2119,11 +2138,9 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 		dark
 	};
 
-	return result<transaction_history>{
-		.val = transaction_history{
-			.transactions = std::move(*fetched_transactions.val),
-			.checkpoints = std::move(*fetched_checkpoints.val),
-		}
+	return transaction_history{
+		.transactions = std::move(fetched_transactions.value()),
+		.checkpoints = std::move(fetched_checkpoints.value()),
 	};
 }
 
@@ -2137,7 +2154,7 @@ db::result<db::allocation_history> db::fund_history(int64_t fund_id, datetime af
 
 #pragma region Lifecycle
 
-static inline db::error classify_sqlite_open_error(int rc) {
+db::error db::classify_sqlite_open_error(int rc) {
 	switch (rc) {
 		case SQLITE_FULL:
 			return db::error::disk_full;
@@ -2161,8 +2178,9 @@ std::shared_ptr<db> db::open_file(std::string path) {
 	sqlite3* connection;
 	int rc = sqlite3_open(path.c_str(), &connection);
 	if (rc != SQLITE_OK) {
+		auto msg = db::sqlite_error_message(connection);
 		sqlite3_close(connection); // must still close even on failure
-		return std::make_shared<db>(classify_sqlite_open_error(rc));
+		return std::make_shared<db>(outcome(classify_sqlite_open_error(rc), msg));
 	}
 	sqlite3_busy_timeout(connection, 5000);
 	return std::make_shared<db>(connection, owns_connection{});
@@ -2172,8 +2190,9 @@ std::shared_ptr<db> db::open_memory() {
 	sqlite3* connection;
 	int rc = sqlite3_open(":memory:", &connection);
 	if (rc != SQLITE_OK) {
+		auto msg = db::sqlite_error_message(connection);
 		sqlite3_close(connection); // must still close even on failure
-		return std::make_shared<db>(classify_sqlite_open_error(rc));
+		return std::make_shared<db>(outcome(classify_sqlite_open_error(rc), msg));
 	}
 	return std::make_shared<db>(connection, owns_connection{});
 }
@@ -2190,33 +2209,33 @@ void db::prepare() {
 		);
 		if (SQLITE_OK == rc) { continue; }
 
-		get_sqlite3_error();
+		auto msg = sqlite_error_message();
 		close(); // prepare is only called during initialization; closing unconditionally is safe since there is no path for the caller to retry
 		if (SQLITE_ERROR == rc) { // SQL referenced a table/column that doesn't exist — schema drift
 			open_result.result = status::code::schema_error;
 			open_result.schema_status = schema_state::schema_mismatch;
 		} else {
 			open_result.result = status::code::sqlite3_error;
-			open_result.sqlite3_error = classify_sqlite_open_error(rc);
+			open_result.sqlite3_outcome = outcome(classify_sqlite_open_error(rc), msg);
 		}
 		return;
 	}
 }
 
-db::error db::migrate() {
+db::outcome db::migrate() {
+	if (!is_connected()) { return not_ready(); }
 	switch (open_result.schema_status) {
 		case schema_state::created:
 		case schema_state::older_schema:
 			break;
 		default:
-			return error::none;
+			return success();
 	}
 	for (; schema < schema_latest_version; ++schema) {
 		const char* migration = schema_migrations[schema].data();
 		int rc = sqlite3_exec(connection, migration, nullptr, nullptr, nullptr);
 		if (SQLITE_OK == rc) { continue; }
 
-		get_sqlite3_error();
 		error out = error::none;
 		switch (rc) {
 			case SQLITE_ERROR: // Treat the db as corrupted if there is schema drift during migration
@@ -2228,10 +2247,10 @@ db::error db::migrate() {
 		}
 		if (out == error::corrupted) {
 			open_result.result = status::code::sqlite3_error;
-			open_result.sqlite3_error = error::corrupted;
+			open_result.sqlite3_outcome = outcome(error::corrupted, "Database is in an inconsistent state during migration");
 			close();
 		}
-		return out;
+		return outcome(out, sqlite_error_message());
 	}
 	if (open_result.schema_status == schema_state::older_schema) {
 		open_result.schema_status = schema_state::migrated;
@@ -2243,7 +2262,7 @@ db::error db::migrate() {
 	prepare();
 	return open_result.result == status::code::schema_error
 		? error::corrupted
-		: open_result.sqlite3_error;
+		: open_result.sqlite3_outcome;
 }
 
 void db::open() {
@@ -2256,18 +2275,16 @@ void db::open() {
 
 	int rc = sqlite3_exec(connection, "PRAGMA locking_mode = EXCLUSIVE;", nullptr, nullptr, nullptr); // Just adds an extra assurance that the db isn't going to change while we have it open
 	if (SQLITE_OK != rc) {
-		get_sqlite3_error();
 		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_open_error(rc);
+		open_result.sqlite3_outcome = sqlite_open_error(rc);
 		close();
 		return;
 	}
 
 	rc = sqlite3_exec(connection, "PRAGMA foreign_keys = ON", nullptr, nullptr, nullptr); // required for cascade delete
 	if (SQLITE_OK != rc) {
-		get_sqlite3_error();
 		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_open_error(rc);
+		open_result.sqlite3_outcome = sqlite_open_error(rc);
 		close();
 		return;
 	}
@@ -2282,17 +2299,16 @@ void db::open() {
 		},
 		&schema_objects, nullptr);
 	if (SQLITE_OK != rc) {
-		get_sqlite3_error();
 		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_open_error(rc);
+		open_result.sqlite3_outcome = sqlite_open_error(rc);
 		close();
 		return;
 	}
 
 	if (schema_objects == 0) {
 		open_result.schema_status = schema_state::created;
-		error err = migrate();
-		switch (err) {
+		outcome from_migration = migrate();
+		switch (from_migration.code) {
 			default:
 				FUNDOS_ASSERT(false, "unhandled migration error");
 				[[fallthrough]];
@@ -2319,7 +2335,6 @@ void db::open() {
 		},
 		&app, nullptr);
 	if (SQLITE_OK != rc) {
-		get_sqlite3_error();
 		switch (rc) {
 			case SQLITE_ERROR: // meta table exists but doesn't have key column or value column
 			case SQLITE_ABORT: // meta table has application key but its value is null
@@ -2328,7 +2343,7 @@ void db::open() {
 				break;
 			default:
 				open_result.result = status::code::sqlite3_error;
-				open_result.sqlite3_error = classify_sqlite_open_error(rc);
+				open_result.sqlite3_outcome = sqlite_open_error(rc);
 		}
 		close();
 		return;
@@ -2347,9 +2362,8 @@ void db::open() {
 		"SELECT value FROM meta WHERE key='schema_version'", -1, // length, -1 = read to null terminator
 		&schema_statement, nullptr); // pzTail is only used for multi-statement strings
 	if (SQLITE_OK != rc) { // Previous queries have ruled out sql errors, let classify_sqlite_error default if they occur
-		get_sqlite3_error();
 		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_open_error(rc);
+		open_result.sqlite3_outcome = sqlite_open_error(rc);
 		close();
 		return;
 	}
@@ -2359,15 +2373,14 @@ void db::open() {
 		sqlite3_finalize(schema_statement);
 		open_result.result = status::code::schema_error;
 		open_result.schema_status = schema_state::schema_mismatch;
-		open_result.sqlite3_error = error::corrupted;
+		open_result.sqlite3_outcome = outcome(error::corrupted, "Database is missing schema identifier");
 		close();
 		return;
 	}
 	if (rc != SQLITE_ROW) { // Unexpected sql error
-		get_sqlite3_error();
 		sqlite3_finalize(schema_statement);
 		open_result.result = status::code::sqlite3_error;
-		open_result.sqlite3_error = classify_sqlite_open_error(rc);
+		open_result.sqlite3_outcome = sqlite_open_error(rc);
 		close();
 		return;
 	}
@@ -2378,7 +2391,7 @@ void db::open() {
 	if (version <= 0) { // db was affected by 3rd party in unpredictable way
 		open_result.result = status::code::schema_error;
 		open_result.schema_status = schema_state::schema_mismatch;
-		open_result.sqlite3_error = error::corrupted;
+		open_result.sqlite3_outcome = outcome(error::corrupted, "Database reports negative schema");
 		close();
 		return;
 	}
@@ -2412,9 +2425,9 @@ void db::close() {
 	connection = nullptr;
 }
 
-db::db(error err) : connection(nullptr), managed(false), prepared(nullptr) {
+db::db(outcome err) : connection(nullptr), managed(false), prepared(nullptr) {
 	open_result.result = status::code::sqlite3_error;
-	open_result.sqlite3_error = err;
+	open_result.sqlite3_outcome = std::move(err);
 }
 db::db(sqlite3* c)                  : connection(c), managed(false), prepared(new db_prepared_statements()) { open(); }
 db::db(sqlite3* c, owns_connection) : connection(c), managed(true),  prepared(new db_prepared_statements()) { open(); }

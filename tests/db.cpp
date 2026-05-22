@@ -20,7 +20,7 @@ TEST(DbOpen, EmptyOrCurrentDb) {
 		EXPECT_EQ(database->is_connected(), true);
 		EXPECT_EQ(status.result, db::status::code::ok);
 		EXPECT_EQ(status.schema_status, db::schema_state::created);
-		EXPECT_EQ(status.sqlite3_error, db::error::none);
+		EXPECT_TRUE(static_cast<bool>(status.sqlite3_outcome));
 		EXPECT_EQ(status.is_ok(), true);
 		EXPECT_EQ(status.has_error(), false);
 		EXPECT_EQ(status.needs_migration(), false);
@@ -43,7 +43,7 @@ TEST(DbOpen, EmptyOrCurrentDb) {
 		EXPECT_EQ(database->is_connected(), true);
 		EXPECT_EQ(status.result, db::status::code::ok);
 		EXPECT_EQ(status.schema_status, db::schema_state::current);
-		EXPECT_EQ(status.sqlite3_error, db::error::none);
+		EXPECT_TRUE(static_cast<bool>(status.sqlite3_outcome));
 		EXPECT_EQ(status.is_ok(), true);
 		EXPECT_EQ(status.has_error(), false);
 		EXPECT_EQ(status.needs_migration(), false);
@@ -58,7 +58,7 @@ TEST(DbOpen, NullDb) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::null_db);
 	EXPECT_EQ(status.schema_status, db::schema_state::none);
-	EXPECT_EQ(status.sqlite3_error, db::error::none);
+	EXPECT_TRUE(static_cast<bool>(status.sqlite3_outcome));
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -79,7 +79,7 @@ TEST(DbOpen, ForeignDbNoMeta) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::app_mismatch);
-	EXPECT_EQ(status.sqlite3_error, db::error::none);
+	EXPECT_EQ(status.sqlite3_outcome.code, db::error::none);
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -100,7 +100,7 @@ TEST(DbOpen, ForeignDbBadMeta) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::app_mismatch);
-	EXPECT_EQ(status.sqlite3_error, db::error::none);
+	EXPECT_EQ(status.sqlite3_outcome.code, db::error::none);
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -121,7 +121,7 @@ TEST(DbOpen, ForeignDbNoApplication) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::app_mismatch);
-	EXPECT_EQ(status.sqlite3_error, db::error::none);
+	EXPECT_EQ(status.sqlite3_outcome.code, db::error::none);
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -143,7 +143,7 @@ TEST(DbOpen, ForeignDbWrongApplication) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::app_mismatch);
-	EXPECT_EQ(status.sqlite3_error, db::error::none);
+	EXPECT_EQ(status.sqlite3_outcome.code, db::error::none);
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -165,7 +165,7 @@ TEST(DbOpen, FundDbNoSchema) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::schema_mismatch);
-	EXPECT_EQ(status.sqlite3_error, db::error::corrupted);
+	EXPECT_EQ(status.sqlite3_outcome.code, db::error::corrupted);
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -188,7 +188,7 @@ TEST(DbOpen, FundDbNanSchema) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::schema_mismatch);
-	EXPECT_EQ(status.sqlite3_error, db::error::corrupted);
+	EXPECT_EQ(status.sqlite3_outcome.code, db::error::corrupted);
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -211,7 +211,7 @@ TEST(DbOpen, FundDbNegSchema) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::schema_mismatch);
-	EXPECT_EQ(status.sqlite3_error, db::error::corrupted);
+	EXPECT_EQ(status.sqlite3_outcome.code, db::error::corrupted);
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -234,7 +234,7 @@ TEST(DbOpen, FundDbSchema0) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::schema_mismatch);
-	EXPECT_EQ(status.sqlite3_error, db::error::corrupted);
+	EXPECT_EQ(status.sqlite3_outcome.code, db::error::corrupted);
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -257,7 +257,7 @@ TEST(DbOpen, FundDbNewerSchema) {
 	EXPECT_EQ(database->is_connected(), false);
 	EXPECT_EQ(status.result, db::status::code::schema_error);
 	EXPECT_EQ(status.schema_status, db::schema_state::newer_schema);
-	EXPECT_EQ(status.sqlite3_error, db::error::none);
+	EXPECT_EQ(status.sqlite3_outcome.code, db::error::none);
 	EXPECT_EQ(status.is_ok(), false);
 	EXPECT_EQ(status.has_error(), true);
 	EXPECT_EQ(status.needs_migration(), false);
@@ -294,25 +294,25 @@ TEST(DbQuery, ReadEntities) {
 
 	{
 		auto result = database->get_users();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 2);
-		auto alice = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 2);
+		auto alice = result.value()[0];
 		EXPECT_EQ(alice.id(), 1);
 		EXPECT_EQ(alice.name, "Alice");
-		auto bob = (*result.val)[1];
+		auto bob = result.value()[1];
 		EXPECT_EQ(bob.id(), 2);
 		EXPECT_EQ(bob.name, "Bob");
 	}
 
 	{
 		auto result = database->get_funds();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 2);
-		auto emergency = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 2);
+		auto emergency = result.value()[0];
 		EXPECT_EQ(emergency.id(), 10);
 		EXPECT_EQ(emergency.name, "Emergency");
 		EXPECT_EQ(emergency.closed_at, std::nullopt);
-		auto vacation = (*result.val)[1];
+		auto vacation = result.value()[1];
 		EXPECT_EQ(vacation.id(), 11);
 		EXPECT_EQ(vacation.name, "Vacation");
 		EXPECT_EQ(vacation.closed_at, CLOSED_AT);
@@ -320,14 +320,14 @@ TEST(DbQuery, ReadEntities) {
 
 	{
 		auto result = database->get_accounts();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 2);
-		auto checking = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 2);
+		auto checking = result.value()[0];
 		EXPECT_EQ(checking.id(), 20);
 		EXPECT_EQ(checking.name, "Checking");
 		EXPECT_EQ(checking.closed_at, std::nullopt);
 		EXPECT_EQ(checking.bank_account_id, "ref1");
-		auto savings = (*result.val)[1];
+		auto savings = result.value()[1];
 		EXPECT_EQ(savings.id(), 21);
 		EXPECT_EQ(savings.name, "Savings");
 		EXPECT_EQ(savings.closed_at, CLOSED_AT);
@@ -337,58 +337,58 @@ TEST(DbQuery, ReadEntities) {
 	{
 		// Alice is member of Emergency (open), not Vacation (closed) — memberships excludes closed
 		auto memberships = database->get_fund_memberships(1);
-		ASSERT_TRUE(memberships.ok());
-		ASSERT_EQ(memberships.val->size(), 1);
-		EXPECT_EQ((*memberships.val)[0].id(), 10);
-		EXPECT_EQ((*memberships.val)[0].name, "Emergency");
+		ASSERT_TRUE(static_cast<bool>(memberships));
+		ASSERT_EQ(memberships.value().size(), 1);
+		EXPECT_EQ(memberships.value()[0].id(), 10);
+		EXPECT_EQ(memberships.value()[0].name, "Emergency");
 
 		// nonmemberships excludes closed funds too, so no rows return for Alice
 		auto nonmemberships = database->get_fund_nonmemberships(1);
-		ASSERT_TRUE(nonmemberships.ok());
-		ASSERT_EQ(nonmemberships.val->size(), 0);
+		ASSERT_TRUE(static_cast<bool>(nonmemberships));
+		ASSERT_EQ(nonmemberships.value().size(), 0);
 
 		// Bob is not a member of the only open fund open fund
 		auto bob_nonmemberships = database->get_fund_nonmemberships(2);
-		ASSERT_TRUE(bob_nonmemberships.ok());
-		ASSERT_EQ(bob_nonmemberships.val->size(), 1);
-		EXPECT_EQ((*bob_nonmemberships.val)[0].id(), 10);
+		ASSERT_TRUE(static_cast<bool>(bob_nonmemberships));
+		ASSERT_EQ(bob_nonmemberships.value().size(), 1);
+		EXPECT_EQ(bob_nonmemberships.value()[0].id(), 10);
 
 		auto members = database->get_fund_members(10);
-		ASSERT_TRUE(members.ok());
-		ASSERT_EQ(members.val->size(), 1);
-		EXPECT_EQ((*members.val)[0].id(), 1);
-		EXPECT_EQ((*members.val)[0].name, "Alice");
+		ASSERT_TRUE(static_cast<bool>(members));
+		ASSERT_EQ(members.value().size(), 1);
+		EXPECT_EQ(members.value()[0].id(), 1);
+		EXPECT_EQ(members.value()[0].name, "Alice");
 
 		auto nonmembers = database->get_fund_nonmembers(10);
-		ASSERT_TRUE(nonmembers.ok());
-		ASSERT_EQ(nonmembers.val->size(), 1);
-		EXPECT_EQ((*nonmembers.val)[0].id(), 2);
-		EXPECT_EQ((*nonmembers.val)[0].name, "Bob");
+		ASSERT_TRUE(static_cast<bool>(nonmembers));
+		ASSERT_EQ(nonmembers.value().size(), 1);
+		EXPECT_EQ(nonmembers.value()[0].id(), 2);
+		EXPECT_EQ(nonmembers.value()[0].name, "Bob");
 	}
 
 	{
 		auto memberships = database->get_account_memberships(1);
-		ASSERT_TRUE(memberships.ok());
-		ASSERT_EQ(memberships.val->size(), 1);
-		EXPECT_EQ((*memberships.val)[0].id(), 20);
-		EXPECT_EQ((*memberships.val)[0].name, "Checking");
-		EXPECT_EQ((*memberships.val)[0].bank_account_id, "ref1");
+		ASSERT_TRUE(static_cast<bool>(memberships));
+		ASSERT_EQ(memberships.value().size(), 1);
+		EXPECT_EQ(memberships.value()[0].id(), 20);
+		EXPECT_EQ(memberships.value()[0].name, "Checking");
+		EXPECT_EQ(memberships.value()[0].bank_account_id, "ref1");
 
 		auto nonmemberships = database->get_account_nonmemberships(1);
-		ASSERT_TRUE(nonmemberships.ok());
-		ASSERT_EQ(nonmemberships.val->size(), 0);
+		ASSERT_TRUE(static_cast<bool>(nonmemberships));
+		ASSERT_EQ(nonmemberships.value().size(), 0);
 
 		auto members = database->get_account_members(20);
-		ASSERT_TRUE(members.ok());
-		ASSERT_EQ(members.val->size(), 1);
-		EXPECT_EQ((*members.val)[0].id(), 1);
-		EXPECT_EQ((*members.val)[0].name, "Alice");
+		ASSERT_TRUE(static_cast<bool>(members));
+		ASSERT_EQ(members.value().size(), 1);
+		EXPECT_EQ(members.value()[0].id(), 1);
+		EXPECT_EQ(members.value()[0].name, "Alice");
 
 		auto nonmembers = database->get_account_nonmembers(20);
-		ASSERT_TRUE(nonmembers.ok());
-		ASSERT_EQ(nonmembers.val->size(), 1);
-		EXPECT_EQ((*nonmembers.val)[0].id(), 2);
-		EXPECT_EQ((*nonmembers.val)[0].name, "Bob");
+		ASSERT_TRUE(static_cast<bool>(nonmembers));
+		ASSERT_EQ(nonmembers.value().size(), 1);
+		EXPECT_EQ(nonmembers.value()[0].id(), 2);
+		EXPECT_EQ(nonmembers.value()[0].name, "Bob");
 	}
 }
 
@@ -397,41 +397,41 @@ TEST(DbQuery, SaveEntities) {
 
 	user alice;
 	alice.name = "Alice";
-	ASSERT_EQ(database->save_user(alice), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_user(alice)));
 	EXPECT_NE(alice.id(), 0);
 
 	fund emergency;
 	emergency.name = "Emergency";
-	ASSERT_EQ(database->save_fund(emergency), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(emergency)));
 	EXPECT_NE(emergency.id(), 0);
 
 	account checking;
 	checking.name = "Checking";
-	ASSERT_EQ(database->save_account(checking), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_account(checking)));
 	EXPECT_NE(checking.id(), 0);
 
 	{
 		auto result = database->get_users();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), alice.id());
 		EXPECT_EQ(row.name, alice.name);
 	}
 	{
 		auto result = database->get_funds();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), emergency.id());
 		EXPECT_EQ(row.name, emergency.name);
 		EXPECT_EQ(row.closed_at, emergency.closed_at);
 	}
 	{
 		auto result = database->get_accounts();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), checking.id());
 		EXPECT_EQ(row.name, checking.name);
 		EXPECT_EQ(row.closed_at, checking.closed_at);
@@ -439,88 +439,87 @@ TEST(DbQuery, SaveEntities) {
 	}
 
 	// Verify membership additions and removals
-	ASSERT_EQ(database->add_user_to_account(checking.id(), alice.id()), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->add_user_to_account(checking.id(), alice.id())));
 	{
 		auto result = database->get_account_members(checking.id());
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), alice.id());
 		EXPECT_EQ(row.name, alice.name);
 	}
 	{
 		auto result = database->get_account_memberships(alice.id());
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), checking.id());
 		EXPECT_EQ(row.name, checking.name);
 		EXPECT_EQ(row.closed_at, checking.closed_at);
 		EXPECT_EQ(row.bank_account_id, checking.bank_account_id);
 	}
-	ASSERT_EQ(database->remove_user_from_account(checking.id(), alice.id()), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->remove_user_from_account(checking.id(), alice.id())));
 	{
 		auto result = database->get_account_members(checking.id());
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 0);
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 0);
 	}
 	{
 		auto result = database->get_account_memberships(alice.id());
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 0);
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 0);
 	}
 
-	ASSERT_EQ(database->add_user_to_fund(emergency.id(), alice.id()), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->add_user_to_fund(emergency.id(), alice.id())));
 	{
 		auto result = database->get_fund_members(emergency.id());
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), alice.id());
 		EXPECT_EQ(row.name, alice.name);
 	}
 	{
 		auto result = database->get_fund_memberships(alice.id());
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), emergency.id());
 		EXPECT_EQ(row.name, emergency.name);
 		EXPECT_EQ(row.closed_at, emergency.closed_at);
 	}
-	ASSERT_EQ(database->remove_user_from_fund(emergency.id(), alice.id()), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->remove_user_from_fund(emergency.id(), alice.id())));
 	{
 		auto result = database->get_fund_members(emergency.id());
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 0);
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 0);
 	}
 	{
 		auto result = database->get_fund_memberships(alice.id());
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 0);
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 0);
 	}
 
 	// Verify update path
 	alice.name = "Alicia";
-	ASSERT_EQ(database->save_user(alice), db::error::none);
-
+	ASSERT_TRUE(static_cast<bool>(database->save_user(alice)));
 	{
 		auto result = database->get_users();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), alice.id());
 		EXPECT_EQ(row.name, "Alicia");
 	}
 
 	emergency.name = "Rainy Day";
 	emergency.closed_at = CLOSED_AT;
-	ASSERT_EQ(database->save_fund(emergency), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(emergency)));
 	{
 		auto result = database->get_funds();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), emergency.id());
 		EXPECT_EQ(row.name, "Rainy Day");
 		EXPECT_EQ(row.closed_at, CLOSED_AT);
@@ -529,12 +528,12 @@ TEST(DbQuery, SaveEntities) {
 	checking.name = "Debit Card";
 	checking.bank_account_id = "ref1";
 	checking.closed_at = CLOSED_AT;
-	ASSERT_EQ(database->save_account(checking), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_account(checking)));
 	{
 		auto result = database->get_accounts();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
-		auto& row = (*result.val)[0];
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
+		auto& row = result.value()[0];
 		EXPECT_EQ(row.id(), checking.id());
 		EXPECT_EQ(row.name, "Debit Card");
 		EXPECT_EQ(row.bank_account_id, "ref1");
@@ -548,24 +547,26 @@ TEST(DbQuery, MetaLocales) {
 		auto saved_currency   = database->get_currency_locale();
 		auto saved_percentage = database->get_percentage_locale();
 
-		EXPECT_EQ(saved_currency.not_found(),   true);
-		EXPECT_EQ(saved_percentage.not_found(), true);
+		ASSERT_FALSE(saved_currency);
+		ASSERT_FALSE(saved_percentage);
+		EXPECT_EQ(saved_currency.status().code, db::error::not_found);
+		EXPECT_EQ(saved_percentage.status().code, db::error::not_found);
 	}
 	{
 		auto currency_result   = database->set_currency_locale_preset(currency_locale::locales.named.USD);
 		auto percentage_result = database->set_percentage_locale_preset(percentage_locale::locales.named.en);
 
-		EXPECT_EQ(currency_result, db::error::none);
-		EXPECT_EQ(percentage_result, db::error::none);
+		ASSERT_TRUE(static_cast<bool>(currency_result));
+		ASSERT_TRUE(static_cast<bool>(percentage_result));
 
 		auto saved_currency   = database->get_currency_locale();
 		auto saved_percentage = database->get_percentage_locale();
 
-		EXPECT_EQ(saved_currency.ok(),   true);
-		EXPECT_EQ(saved_percentage.ok(), true);
+		ASSERT_TRUE(static_cast<bool>(saved_currency));
+		ASSERT_TRUE(static_cast<bool>(saved_percentage));
 
-		auto c_locale = saved_currency.val.value();
-		auto p_locale = saved_percentage.val.value();
+		auto c_locale = saved_currency.value();
+		auto p_locale = saved_percentage.value();
 
 		EXPECT_EQ(c_locale.scale,               currency_locale::locales.named.USD.info.scale);
 		EXPECT_EQ(c_locale.symbol,              currency_locale::locales.named.USD.info.symbol);
@@ -595,17 +596,17 @@ TEST(DbQuery, MetaLocales) {
 		auto currency_result   = database->set_currency_locale(custom_currency);
 		auto percentage_result = database->set_percentage_locale(custom_percentage);
 
-		EXPECT_EQ(currency_result, db::error::none);
-		EXPECT_EQ(percentage_result, db::error::none);
+		ASSERT_TRUE(static_cast<bool>(currency_result));
+		ASSERT_TRUE(static_cast<bool>(percentage_result));
 
 		auto saved_currency   = database->get_currency_locale();
 		auto saved_percentage = database->get_percentage_locale();
 
-		EXPECT_EQ(saved_currency.ok(),   true);
-		EXPECT_EQ(saved_percentage.ok(), true);
+		ASSERT_TRUE(static_cast<bool>(saved_currency));
+		ASSERT_TRUE(static_cast<bool>(saved_percentage));
 
-		auto c_locale = saved_currency.val.value();
-		auto p_locale = saved_percentage.val.value();
+		auto c_locale = saved_currency.value();
+		auto p_locale = saved_percentage.value();
 
 		EXPECT_EQ(c_locale.scale,               custom_currency.scale);
 		EXPECT_EQ(c_locale.symbol,              custom_currency.symbol);
@@ -639,11 +640,11 @@ TEST(DbQuery, SaveBudget_ReadBack) {
 	fund investments;       investments.name       = "Investments";
 	fund flex_spending;     flex_spending.name     = "Flex Spending";
 	fund rent;              rent.name              = "Rent";
-	ASSERT_EQ(database->save_fund(emergency_savings), db::error::none);
-	ASSERT_EQ(database->save_fund(food),              db::error::none);
-	ASSERT_EQ(database->save_fund(investments),       db::error::none);
-	ASSERT_EQ(database->save_fund(flex_spending),     db::error::none);
-	ASSERT_EQ(database->save_fund(rent),              db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(emergency_savings)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(food)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(investments)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(flex_spending)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(rent)));
 
 	// Manually build initial budget state in SQL
 	// budget: "Default", overflow -> emergency_savings
@@ -693,10 +694,10 @@ TEST(DbQuery, SaveBudget_ReadBack) {
 	// Verify get_budgets round-trip before any save
 	{
 		auto result = database->get_budgets();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
 
-		auto& budget = (*result.val)[0];
+		auto& budget = result.value()[0];
 		EXPECT_EQ(budget.id(),           1);
 		EXPECT_EQ(budget.name,           "Default");
 		EXPECT_EQ(budget.overflow_fund,  emergency_savings.id());
@@ -771,11 +772,11 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 	fund investments;       investments.name       = "Investments";
 	fund flex_spending;     flex_spending.name     = "Flex Spending";
 	fund rent;              rent.name              = "Rent";
-	ASSERT_EQ(database->save_fund(emergency_savings), db::error::none);
-	ASSERT_EQ(database->save_fund(food),              db::error::none);
-	ASSERT_EQ(database->save_fund(investments),       db::error::none);
-	ASSERT_EQ(database->save_fund(flex_spending),     db::error::none);
-	ASSERT_EQ(database->save_fund(rent),              db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(emergency_savings)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(food)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(investments)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(flex_spending)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(rent)));
 
 	{
 		sqlite3_stmt* stmt = nullptr;
@@ -809,9 +810,9 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 	}
 
 	auto get_result = database->get_budgets();
-	ASSERT_TRUE(get_result.ok());
-	ASSERT_EQ(get_result.val->size(), 1);
-	budget default_budget = (*get_result.val)[0];
+	ASSERT_TRUE(static_cast<bool>(get_result));
+	ASSERT_EQ(get_result.value().size(), 1);
+	budget default_budget = get_result.value()[0];
 
 	int64_t original_budget_id  = default_budget.id();
 	int64_t original_pct_phase_id = 0;
@@ -856,7 +857,7 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 
 	default_budget.phases.push_back(new_fixed_phase);
 
-	ASSERT_EQ(database->save_budget(default_budget), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_budget(default_budget)));
 
 	// Verify id stability for surviving rows
 	EXPECT_EQ(default_budget.id(), original_budget_id);
@@ -896,10 +897,10 @@ TEST(DbQuery, SaveBudget_PartialUpdate) {
 	// get_budgets round-trip
 	{
 		auto result = database->get_budgets();
-		ASSERT_TRUE(result.ok());
-		ASSERT_EQ(result.val->size(), 1);
+		ASSERT_TRUE(static_cast<bool>(result));
+		ASSERT_EQ(result.value().size(), 1);
 
-		auto& budget = (*result.val)[0];
+		auto& budget = result.value()[0];
 		EXPECT_EQ(budget.id(),          original_budget_id);
 		EXPECT_EQ(budget.name,          "Default");
 		EXPECT_EQ(budget.overflow_fund, emergency_savings.id());
@@ -952,9 +953,9 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 	fund emergency_savings; emergency_savings.name = "Emergency Savings";
 	fund flex_spending;     flex_spending.name     = "Flex Spending";
 	fund investments;       investments.name       = "Investments";
-	ASSERT_EQ(database->save_fund(emergency_savings), db::error::none);
-	ASSERT_EQ(database->save_fund(flex_spending),     db::error::none);
-	ASSERT_EQ(database->save_fund(investments),       db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(emergency_savings)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(flex_spending)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(investments)));
 
 	// Build a fresh budget with one percentage phase, three targets,
 	// last target references a nonexistent fund to trigger FK violation
@@ -989,7 +990,7 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 
 	// Capture pre-save ids (all zero) for rollback verification
 	auto result = database->save_budget(bad_budget);
-	EXPECT_NE(result, db::error::none);
+	EXPECT_FALSE(static_cast<bool>(result));
 
 	// All ids must be rolled back to zero
 	EXPECT_EQ(bad_budget.id(), 0);
@@ -1017,7 +1018,7 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 		fixed_phase->targets.back().fund_id = investments.id();
 	}
 
-	ASSERT_EQ(database->save_budget(bad_budget), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_budget(bad_budget)));
 	EXPECT_NE(bad_budget.id(), 0);
 	{
 		auto& phase_variant = *bad_budget.phases.begin();
@@ -1056,17 +1057,16 @@ TEST(DbQuery, AccountHistory_NoCheckpoints) {
 	ASSERT_EQ(rc, SQLITE_OK);
 
 	auto history = database->account_history(1, date(2026, std::chrono::February, 1), date(2026, std::chrono::March, 1));
-	ASSERT_EQ(history.err, db::error::none);
-	ASSERT_EQ(history.not_found(), false);
+	ASSERT_TRUE(static_cast<bool>(history));
 
-	ASSERT_EQ(history.val->checkpoints.size(), 0);
-	ASSERT_EQ(history.val->transactions.size(), 2);
+	ASSERT_EQ(history.value().checkpoints.size(), 0);
+	ASSERT_EQ(history.value().transactions.size(), 2);
 
-	ASSERT_EQ(history.val->transactions[0].record.id(), 3);
-	ASSERT_EQ(history.val->transactions[0].balance, currency{133});
+	ASSERT_EQ(history.value().transactions[0].record.id(), 3);
+	ASSERT_EQ(history.value().transactions[0].balance, currency{133});
 	
-	ASSERT_EQ(history.val->transactions[1].record.id(), 4);
-	ASSERT_EQ(history.val->transactions[1].balance, currency{166});
+	ASSERT_EQ(history.value().transactions[1].record.id(), 4);
+	ASSERT_EQ(history.value().transactions[1].balance, currency{166});
 }
 
 TEST(DbQuery, AccountHistory_OneOldCheckpoint) {
@@ -1098,31 +1098,30 @@ TEST(DbQuery, AccountHistory_OneOldCheckpoint) {
 	ASSERT_EQ(rc, SQLITE_OK);
 
 	auto history = database->account_history(1, date(2026, std::chrono::January, 10), date(2026, std::chrono::March, 10));
-	ASSERT_EQ(history.err, db::error::none);
-	ASSERT_EQ(history.not_found(), false);
+	ASSERT_TRUE(static_cast<bool>(history));
 
-	ASSERT_EQ(history.val->checkpoints.size(), 1);
-	ASSERT_EQ(history.val->transactions.size(), 4);
+	ASSERT_EQ(history.value().checkpoints.size(), 1);
+	ASSERT_EQ(history.value().transactions.size(), 4);
 
-	ASSERT_EQ(history.val->checkpoints[0].id(), 1);
-	ASSERT_EQ(history.val->checkpoints[0].account_id, 1);
-	ASSERT_EQ(history.val->checkpoints[0].amount, currency{100});
+	ASSERT_EQ(history.value().checkpoints[0].id(), 1);
+	ASSERT_EQ(history.value().checkpoints[0].account_id, 1);
+	ASSERT_EQ(history.value().checkpoints[0].amount, currency{100});
 
-	ASSERT_EQ(history.val->transactions[0].record.id(), 2);
-	ASSERT_EQ(history.val->transactions[0].balance, currency{78});
-	ASSERT_EQ(history.val->transactions[0].balance_is_speculative, false);
+	ASSERT_EQ(history.value().transactions[0].record.id(), 2);
+	ASSERT_EQ(history.value().transactions[0].balance, currency{78});
+	ASSERT_EQ(history.value().transactions[0].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[1].record.id(), 3);
-	ASSERT_EQ(history.val->transactions[1].balance, currency{100});
-	ASSERT_EQ(history.val->transactions[1].balance_is_speculative, false);
+	ASSERT_EQ(history.value().transactions[1].record.id(), 3);
+	ASSERT_EQ(history.value().transactions[1].balance, currency{100});
+	ASSERT_EQ(history.value().transactions[1].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[2].record.id(), 4);
-	ASSERT_EQ(history.val->transactions[2].balance, currency{133});
-	ASSERT_EQ(history.val->transactions[2].balance_is_speculative, true);
+	ASSERT_EQ(history.value().transactions[2].record.id(), 4);
+	ASSERT_EQ(history.value().transactions[2].balance, currency{133});
+	ASSERT_EQ(history.value().transactions[2].balance_is_speculative, true);
 	
-	ASSERT_EQ(history.val->transactions[3].record.id(), 5);
-	ASSERT_EQ(history.val->transactions[3].balance, currency{177});
-	ASSERT_EQ(history.val->transactions[3].balance_is_speculative, true);
+	ASSERT_EQ(history.value().transactions[3].record.id(), 5);
+	ASSERT_EQ(history.value().transactions[3].balance, currency{177});
+	ASSERT_EQ(history.value().transactions[3].balance_is_speculative, true);
 }
 
 TEST(DbQuery, AccountHistory_OneOldAndOneNewCheckpoint) {
@@ -1172,61 +1171,60 @@ TEST(DbQuery, AccountHistory_OneOldAndOneNewCheckpoint) {
 	ASSERT_EQ(rc, SQLITE_OK);
 
 	auto history = database->account_history(1, date(2026, std::chrono::January, 10), date(2026, std::chrono::March, 10));
-	ASSERT_EQ(history.err, db::error::none);
-	ASSERT_EQ(history.not_found(), false);
+	ASSERT_TRUE(static_cast<bool>(history));
 
-	ASSERT_EQ(history.val->checkpoints.size(), 2);
-	ASSERT_EQ(history.val->transactions.size(), 4);
+	ASSERT_EQ(history.value().checkpoints.size(), 2);
+	ASSERT_EQ(history.value().transactions.size(), 4);
 
-	ASSERT_EQ(history.val->checkpoints[0].id(), 1);
-	ASSERT_EQ(history.val->checkpoints[0].account_id, 1);
-	ASSERT_EQ(history.val->checkpoints[0].amount, currency{100});
-	ASSERT_EQ(history.val->checkpoints[0].date, feb11);
-	ASSERT_EQ(history.val->checkpoints[0].transactions.size(), 3);
-	ASSERT_EQ(history.val->checkpoints[0].transactions[0].id, 1);
-	ASSERT_EQ(history.val->checkpoints[0].transactions[1].id, 2);
-	ASSERT_EQ(history.val->checkpoints[0].transactions[2].id, 3);
+	ASSERT_EQ(history.value().checkpoints[0].id(), 1);
+	ASSERT_EQ(history.value().checkpoints[0].account_id, 1);
+	ASSERT_EQ(history.value().checkpoints[0].amount, currency{100});
+	ASSERT_EQ(history.value().checkpoints[0].date, feb11);
+	ASSERT_EQ(history.value().checkpoints[0].transactions.size(), 3);
+	ASSERT_EQ(history.value().checkpoints[0].transactions[0].id, 1);
+	ASSERT_EQ(history.value().checkpoints[0].transactions[1].id, 2);
+	ASSERT_EQ(history.value().checkpoints[0].transactions[2].id, 3);
 
-	ASSERT_EQ(history.val->checkpoints[1].id(), 2);
-	ASSERT_EQ(history.val->checkpoints[1].account_id, 1);
-	ASSERT_EQ(history.val->checkpoints[1].amount, currency{200});
-	ASSERT_EQ(history.val->checkpoints[1].date, mar25);
-	ASSERT_EQ(history.val->checkpoints[1].transactions.size(), 2);
-	ASSERT_EQ(history.val->checkpoints[1].transactions[0].id, 5);
-	ASSERT_EQ(history.val->checkpoints[1].transactions[1].id, 6);
+	ASSERT_EQ(history.value().checkpoints[1].id(), 2);
+	ASSERT_EQ(history.value().checkpoints[1].account_id, 1);
+	ASSERT_EQ(history.value().checkpoints[1].amount, currency{200});
+	ASSERT_EQ(history.value().checkpoints[1].date, mar25);
+	ASSERT_EQ(history.value().checkpoints[1].transactions.size(), 2);
+	ASSERT_EQ(history.value().checkpoints[1].transactions[0].id, 5);
+	ASSERT_EQ(history.value().checkpoints[1].transactions[1].id, 6);
 
-	ASSERT_EQ(history.val->transactions[0].record.id(), 2);
-	ASSERT_EQ(history.val->transactions[0].balance, currency{78});
-	ASSERT_EQ(history.val->transactions[0].balance_is_speculative, false);
+	ASSERT_EQ(history.value().transactions[0].record.id(), 2);
+	ASSERT_EQ(history.value().transactions[0].balance, currency{78});
+	ASSERT_EQ(history.value().transactions[0].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[1].record.id(), 3);
-	ASSERT_EQ(history.val->transactions[1].balance, currency{100});
-	ASSERT_EQ(history.val->transactions[1].balance_is_speculative, false);
+	ASSERT_EQ(history.value().transactions[1].record.id(), 3);
+	ASSERT_EQ(history.value().transactions[1].balance, currency{100});
+	ASSERT_EQ(history.value().transactions[1].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[2].record.id(), 4);
-	ASSERT_EQ(history.val->transactions[2].balance, std::nullopt);
-	ASSERT_EQ(history.val->transactions[2].balance_is_speculative, false);
+	ASSERT_EQ(history.value().transactions[2].record.id(), 4);
+	ASSERT_EQ(history.value().transactions[2].balance, std::nullopt);
+	ASSERT_EQ(history.value().transactions[2].balance_is_speculative, false);
 	
-	ASSERT_EQ(history.val->transactions[3].record.id(), 5);
-	ASSERT_EQ(history.val->transactions[3].balance, currency{145});
-	ASSERT_EQ(history.val->transactions[3].balance_is_speculative, false);
+	ASSERT_EQ(history.value().transactions[3].record.id(), 5);
+	ASSERT_EQ(history.value().transactions[3].balance, currency{145});
+	ASSERT_EQ(history.value().transactions[3].balance_is_speculative, false);
 }
 
 /// Previous iterations used a helper function instead of a macro but that loses the ability to assert in a test
 #define FUNDOS_SEED() \
 	fund groceries; \
 	groceries.name = "Groceries"; \
-	ASSERT_EQ(database->save_fund(groceries), db::error::none); \
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(groceries))); \
 	account checking; \
 	checking.name = "Checking"; \
 	checking.bank_account_id = std::string{"checking-123"}; \
-	ASSERT_EQ(database->save_account(checking), db::error::none); \
+	ASSERT_TRUE(static_cast<bool>(database->save_account(checking))); \
 	transaction txn; \
 	txn.account_id = checking.id(); \
 	txn.amount = currency{10000}; \
 	txn.date = datetime{0}; \
 	txn.memo = "Test"; \
-	ASSERT_EQ(database->save_transaction(txn), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn)));
 
 template<typename T>
 static T fetch_field(sqlite3* connection, const char* sql) {
@@ -1286,7 +1284,7 @@ TEST(DbQuery, SaveTransaction_Update) {
 	FUNDOS_SEED();
 	txn.date = datetime{86400000}; // 1 day later
 	txn.memo = "Updated";
-	ASSERT_EQ(database->save_transaction(txn), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn)));
 	EXPECT_EQ(86400000, fetch_field<int64_t>(connection, "SELECT date FROM transactions LIMIT 1"));
 	EXPECT_EQ("Updated", fetch_field<std::string>(connection, "SELECT memo FROM transactions LIMIT 1"));
 }
@@ -1295,14 +1293,14 @@ TEST(DbQuery, SaveTransaction_Update_ImmutableFieldChanged) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	txn.amount = currency{99999};
-	EXPECT_EQ(database->save_transaction(txn), db::error::rejected);
+	EXPECT_EQ(database->save_transaction(txn).code, db::error::rejected);
 }
 
 TEST(DbQuery, SaveTransaction_Update_NonexistentId) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	sqlite3_exec(connection, "DELETE FROM transactions", nullptr, nullptr, nullptr);
-	EXPECT_EQ(database->save_transaction(txn), db::error::bad_request);
+	EXPECT_EQ(database->save_transaction(txn).code, db::error::bad_request);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection) {
@@ -1315,7 +1313,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection) {
 	correction.memo         = "Correction";
 	correction.corrects_id  = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
-	ASSERT_EQ(database->save_transaction(correction), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(correction)));
 	ASSERT_NE(correction.id(), 0);
 	auto superseded_by = fetch_field<std::optional<int64_t>>(connection,
 		std::format("SELECT superseded_by FROM transactions WHERE id = {}", txn.id()).c_str()
@@ -1333,7 +1331,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectAction) {
 	correction.memo        = "Bad";
 	correction.corrects_id = txn.id();
 	// correct_action intentionally omitted
-	EXPECT_EQ(database->save_transaction(correction), db::error::bad_request);
+	EXPECT_EQ(database->save_transaction(correction).code, db::error::bad_request);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectsId) {
@@ -1346,7 +1344,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectsId) {
 	correction.memo           = "Bad";
 	correction.correct_action = transaction::correction_type::replaces;
 	// corrects_id intentionally omitted
-	EXPECT_EQ(database->save_transaction(correction), db::error::bad_request);
+	EXPECT_EQ(database->save_transaction(correction).code, db::error::bad_request);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_TargetHasFitid) {
@@ -1363,7 +1361,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetHasFitid) {
 	correction.memo           = "Correction";
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
-	EXPECT_EQ(database->save_transaction(correction), db::error::rejected);
+	EXPECT_EQ(database->save_transaction(correction).code, db::error::rejected);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
@@ -1374,7 +1372,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
 	superseder.amount     = currency{5000};
 	superseder.date       = datetime{0};
 	superseder.memo       = "Superseder";
-	ASSERT_EQ(database->save_transaction(superseder), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(superseder)));
 	std::string update = std::format(
 		"UPDATE transactions SET superseded_by = {} WHERE id = {}", superseder.id(), txn.id()
 	);
@@ -1386,7 +1384,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
 	correction.memo           = "Correction";
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
-	EXPECT_EQ(database->save_transaction(correction), db::error::rejected);
+	EXPECT_EQ(database->save_transaction(correction).code, db::error::rejected);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
@@ -1394,7 +1392,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	FUNDOS_SEED();
 	account savings;
 	savings.name = "Savings";
-	ASSERT_EQ(database->save_account(savings), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_account(savings)));
 	transaction correction;
 	correction.account_id     = savings.id();
 	correction.amount         = currency{5000};
@@ -1402,7 +1400,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	correction.memo           = "Correction";
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
-	EXPECT_EQ(database->save_transaction(correction), db::error::bad_request);
+	EXPECT_EQ(database->save_transaction(correction).code, db::error::bad_request);
 }
 
 #define FUNDOS_SEED_IMPORT() \
@@ -1451,7 +1449,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 TEST(DbQuery, PrepareImport_DefinitiveMatch) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	auto& matched = pending.accounts[0].transactions[0];
 	EXPECT_TRUE(matched.is_definitive_match());
 	EXPECT_EQ(matched.get_match()->id(), previous_import_id);
@@ -1462,7 +1460,7 @@ TEST(DbQuery, PrepareImport_DefinitiveMatch) {
 TEST(DbQuery, PrepareImport_NoMatch) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	auto& fresh = pending.accounts[0].transactions[1];
 	EXPECT_EQ(fresh.get_match(), nullptr);
 	EXPECT_EQ(fresh.saving.date, fresh.importing.date);
@@ -1481,7 +1479,7 @@ TEST(DbQuery, PrepareImport_FuzzyMatch) {
 		fresh_import.importing.cleared->milliseconds_since_epoch - timedelta::days(3).milliseconds
 	);
 	ASSERT_EQ(sqlite3_exec(connection, sql.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	auto& fresh = pending.accounts[0].transactions[1];
 	EXPECT_NE(fresh.get_match(), nullptr);
 	EXPECT_FALSE(fresh.is_definitive_match());
@@ -1491,27 +1489,27 @@ TEST(DbQuery, PrepareImport_MissingFitid) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
 	pending.accounts[0].transactions[0].importing.fitid = std::nullopt;
-	EXPECT_EQ(database->prepare_import(pending), db::error::bad_request);
+	EXPECT_EQ(database->prepare_import(pending).code, db::error::bad_request);
 }
 
 TEST(DbQuery, PrepareImport_MissingCleared) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
 	pending.accounts[0].transactions[0].importing.cleared = std::nullopt;
-	EXPECT_EQ(database->prepare_import(pending), db::error::bad_request);
+	EXPECT_EQ(database->prepare_import(pending).code, db::error::bad_request);
 }
 
 TEST(DbQuery, PrepareImport_UnknownAcctId) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
 	pending.accounts[0].acct_id = "does-not-exist";
-	EXPECT_EQ(database->prepare_import(pending), db::error::rejected);
+	EXPECT_EQ(database->prepare_import(pending).code, db::error::rejected);
 }
 
 TEST(DbQuery, PrepareImport_DefinitiveMatchInCandidates) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	auto& account = pending.accounts[0];
 	auto it = std::find_if(account.candidates.begin(), account.candidates.end(),
 		[&](const transaction& candidate) {
@@ -1523,7 +1521,7 @@ TEST(DbQuery, PrepareImport_DefinitiveMatchInCandidates) {
 TEST(DbQuery, PrepareImport_PrefersMatchInformation) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	auto& account = pending.accounts[0];
 	auto it = std::find_if(account.candidates.begin(), account.candidates.end(),
 		[&](const transaction& candidate) {
@@ -1537,17 +1535,17 @@ TEST(DbQuery, PrepareImport_PrefersMatchInformation) {
 TEST(DbQuery, PerformImport_InsertsNewTransaction) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
-	ASSERT_EQ(database->perform_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
+	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM transactions"), 3); // txn + previous_import + fresh_import, matched_import updates previous_import
 }
 
 TEST(DbQuery, PerformImport_UpdatesMatchedTransaction) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	pending.accounts[0].transactions[0].saving.memo = "Updated Memo";
-	ASSERT_EQ(database->perform_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
 	auto memo = fetch_field<std::string>(connection,
 		std::format("SELECT memo FROM transactions WHERE id = {}", previous_import_id).c_str()
 	);
@@ -1557,8 +1555,8 @@ TEST(DbQuery, PerformImport_UpdatesMatchedTransaction) {
 TEST(DbQuery, PerformImport_CreatesCheckpoint) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
-	ASSERT_EQ(database->perform_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
+	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM balance_checkpoints"), 1);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM balance_checkpoint_transactions"), 2);
 }
@@ -1567,19 +1565,19 @@ TEST(DbQuery, PerformImport_WithoutPrepare) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
 	// account_id is 0, acct_id won't match what prepare would have set
-	EXPECT_EQ(database->perform_import(pending), db::error::bad_request);
+	EXPECT_EQ(database->perform_import(pending).code, db::error::bad_request);
 }
 
 TEST(DbQuery, PerformImport_StaleMatch) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	// Mutate the db between prepare and perform
 	std::string sql = std::format(
 		"UPDATE transactions SET amount = 99999 WHERE id = {}", previous_import_id
 	);
 	ASSERT_EQ(sqlite3_exec(connection, sql.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
-	EXPECT_EQ(database->perform_import(pending), db::error::bad_request);
+	EXPECT_EQ(database->perform_import(pending).code, db::error::bad_request);
 }
 
 TEST(DbQuery, PerformImport_ResolvesCorrections) {
@@ -1587,8 +1585,8 @@ TEST(DbQuery, PerformImport_ResolvesCorrections) {
 	FUNDOS_SEED_IMPORT();
 	pending.accounts[0].transactions[1].importing.corrects_fitid = std::string{"fitid-existing"};
 	pending.accounts[0].transactions[1].importing.correct_action = transaction::correction_type::replaces;
-	ASSERT_EQ(database->prepare_import(pending), db::error::none);
-	ASSERT_EQ(database->perform_import(pending), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
+	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
 	auto corrects_id = fetch_field<std::optional<int64_t>>(connection,
 		std::format(
 			"SELECT corrects_id FROM transactions WHERE fitid = 'fitid-new'"
@@ -1607,7 +1605,7 @@ TEST(DbQuery, AllocateTransaction_SingleAllocation) {
 	alloc.amount = currency{10000};
 
 	std::vector<allocation> allocations = { alloc };
-	ASSERT_EQ(database->allocate_transaction(allocations), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->allocate_transaction(allocations)));
 	EXPECT_NE(allocations[0].id(), 0);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM allocations"), 1);
 }
@@ -1617,7 +1615,7 @@ TEST(DbQuery, AllocateTransaction_MultipleAllocations) {
 	FUNDOS_SEED();
 	fund rent;
 	rent.name = "Rent";
-	ASSERT_EQ(database->save_fund(rent), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(rent)));
 
 	allocation alloc1;
 	alloc1.transaction_id = txn.id();
@@ -1630,7 +1628,7 @@ TEST(DbQuery, AllocateTransaction_MultipleAllocations) {
 	alloc2.amount = currency{4000};
 
 	std::vector<allocation> allocations = { alloc1, alloc2 };
-	ASSERT_EQ(database->allocate_transaction(allocations), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->allocate_transaction(allocations)));
 	EXPECT_NE(allocations[0].id(), 0);
 	EXPECT_NE(allocations[1].id(), 0);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM allocations"), 2);
@@ -1641,20 +1639,20 @@ TEST(DbQuery, AllocateTransaction_UpdateExisting) {
 	FUNDOS_SEED();
 	fund rent;
 	rent.name = "Rent";
-	ASSERT_EQ(database->save_fund(rent), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(rent)));
 
 	allocation alloc;
 	alloc.transaction_id = txn.id();
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	ASSERT_EQ(database->allocate_transaction(allocations), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->allocate_transaction(allocations)));
 	ASSERT_NE(allocations[0].id(), 0);
 	int64_t original_id = allocations[0].id();
 
 	// Update amount on the existing allocation
 	allocations[0].fund_id = rent.id(); // same sum, different fund
-	ASSERT_EQ(database->allocate_transaction(allocations), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->allocate_transaction(allocations)));
 	EXPECT_EQ(allocations[0].id(), original_id);
 	std::string query = std::format("SELECT COUNT(*) FROM allocations WHERE fund_id = {}", rent.id());
 	EXPECT_EQ(count_rows(connection, query.c_str()), 1);
@@ -1665,7 +1663,7 @@ TEST(DbQuery, AllocateTransaction_Empty) {
 	FUNDOS_SEED();
 
 	std::vector<allocation> allocations;
-	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_ZeroTransactionId) {
@@ -1676,7 +1674,7 @@ TEST(DbQuery, AllocateTransaction_ZeroTransactionId) {
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_MismatchedTransactionIds) {
@@ -1684,7 +1682,7 @@ TEST(DbQuery, AllocateTransaction_MismatchedTransactionIds) {
 	FUNDOS_SEED();
 	fund rent;
 	rent.name = "Rent";
-	ASSERT_EQ(database->save_fund(rent), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(rent)));
 
 	allocation alloc1;
 	alloc1.transaction_id = txn.id();
@@ -1697,7 +1695,7 @@ TEST(DbQuery, AllocateTransaction_MismatchedTransactionIds) {
 	alloc2.amount = currency{4000};
 
 	std::vector<allocation> allocations = { alloc1, alloc2 };
-	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_DuplicateFund) {
@@ -1715,7 +1713,7 @@ TEST(DbQuery, AllocateTransaction_DuplicateFund) {
 	alloc2.amount = currency{4000};
 
 	std::vector<allocation> allocations = { alloc1, alloc2 };
-	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_ZeroFundId) {
@@ -1726,7 +1724,7 @@ TEST(DbQuery, AllocateTransaction_ZeroFundId) {
 	alloc.transaction_id = txn.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations), db::error::bad_request);
+	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_WrongSum) {
@@ -1738,7 +1736,7 @@ TEST(DbQuery, AllocateTransaction_WrongSum) {
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{9999};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations), db::error::rejected);
+	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::rejected);
 }
 
 TEST(DbQuery, AllocateTransaction_NonexistentTransaction) {
@@ -1750,19 +1748,19 @@ TEST(DbQuery, AllocateTransaction_NonexistentTransaction) {
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations), db::error::rejected);
+	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::rejected);
 }
 
 TEST(DbQuery, AllocateTransaction_ClosedFund) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	groceries.closed_at = CLOSED_AT;
-	ASSERT_EQ(database->save_fund(groceries), db::error::none);
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(groceries)));
 
 	allocation alloc;
 	alloc.transaction_id = txn.id();
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations), db::error::rejected);
+	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::rejected);
 }
