@@ -1591,7 +1591,12 @@ db::outcome db::prepare_import(import::pending_import& pending) {
 				return sqlite3_column_int64(stmt, 0);
 			}
 		);
-		if (!account_query) { return account_query.status(); }
+		if (!account_query) {
+			if (account_query.status().code == error::not_found) {
+				return outcome(db::error::rejected, "Cannot import from an unrecognized bank account");
+			}
+			return account_query.status();
+		}
 		account.account_id = account_query.value();
 
 		{ // Collect candidates
@@ -1847,6 +1852,7 @@ db::outcome db::save_transaction(transaction& saving) {
 			if (sqlite3_changes(connection) != 1) {
 				return outcome(error::not_found, "Cannot correct a transaction which does not exist or is already superseded");
 			}
+			return success();
 		});
 	} else {
 		auto existing = fetch_transaction(saving.id_);
