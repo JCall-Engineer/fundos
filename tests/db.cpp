@@ -1043,9 +1043,9 @@ TEST(DbQuery, AccountHistory_ClearedAndPending) {
 		INSERT INTO transactions (id, account_id, amount, date_recorded, memo, fitid, date_cleared)
 			VALUES
 				(1, 1, 100, {}, 'First Transaction', 'fitid1', {}),
-				(2, 1,  11, {}, 'Second Transaction', NULL, NULL),
+				(2, 1,  11, {}, 'Second Transaction', NULL,    NULL),
 				(3, 1,  22, {}, 'Third Transaction', 'fitid3', {}),
-				(4, 1,  33, {}, 'Fourth Transaction', NULL, NULL),
+				(4, 1,  33, {}, 'Fourth Transaction', NULL,    NULL),
 				(5, 1,  44, {}, 'Fifth Transaction', 'fitid5', {});
 	)sql",
 		  (date(2026, std::chrono::January,   1) + timedelta::hours(11) + timedelta::minutes(12) + timedelta::seconds(13)).milliseconds_since_epoch // transaction 1
