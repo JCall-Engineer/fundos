@@ -337,6 +337,7 @@ struct statements {
 		SET amount = ?, date_recorded = ?, date_cleared = ?, memo = ?, fitid = ?, corrects_fitid = ?, correct_action = ?
 		WHERE id = ?
 	)sql" };
+
 	statement_slot insert_transaction_user { .sql = R"sql(
 		INSERT INTO transactions (account_id, amount, date_recorded, memo, corrects_id, correct_action)
 		VALUES (?, ?, ?, ?, ?, ?)
@@ -374,7 +375,7 @@ struct statements {
 				superseded_by,
 				SUM(amount) OVER (ORDER BY date_cleared ROWS UNBOUNDED PRECEDING) AS account_balance
 			FROM transactions
-			WHERE account_id = ? AND date_cleared IS NOT NULL
+			WHERE account_id = ? AND date_cleared IS NOT NULL AND superseded_by IS NULL
 		)
 		SELECT * FROM all_cleared
 		WHERE date_cleared BETWEEN ? AND ?
@@ -401,7 +402,7 @@ struct statements {
 				superseded_by,
 				(SELECT total FROM cleared_total) + SUM(amount) OVER (ORDER BY date_recorded ROWS UNBOUNDED PRECEDING) AS account_balance
 			FROM transactions
-			WHERE account_id = ? AND date_cleared IS NULL
+			WHERE account_id = ? AND date_cleared IS NULL AND superseded_by IS NULL
 		)
 		SELECT * FROM all_pending
 		WHERE date_recorded BETWEEN ? AND ?
