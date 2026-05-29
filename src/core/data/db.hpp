@@ -11,12 +11,17 @@
 
 namespace fundos {
 
+/// Not exposed publicly
 union db_prepared_statements;
 
 class db {
 public:
+	/// Tag type: pass to db(sqlite3*, owns_connection) to transfer connection ownership to db.
 	struct owns_connection {};
 
+	/// Describes the schema relationship discovered when opening a database.
+	/// States that imply a closed connection are noted.
+	/// query methods will return error::not_ready for anything other than current, created, or migrated.
 	enum class schema_state : uint8_t {
 		none,            // empty or nonexistent db
 		current,         // existing db, schema current
@@ -41,6 +46,11 @@ public:
 		internal,        // an unexpected situation that would abort a debug build
 	};
 
+	/// Carries a human-readable error description without unnecessary allocation.
+	/// Constructed from either:
+	/// - a string literal (no heap allocation)
+	/// - a shared sqlite3 error string (shared ownership, one allocation)
+	/// @warning do not construct from a raw pointer unless it is a string literal
 	struct message {
 		std::variant<const char*, std::shared_ptr<std::string>> content;
 
@@ -49,16 +59,6 @@ public:
 
 		/// from existing shared sqlite error string
 		message(std::shared_ptr<std::string> dynamic) : content(std::move(dynamic)) {}
-
-		/// implicit construction from string literals — no allocation
-		static std::optional<message> make(const char* literal) {
-			return literal ? std::optional<message>(literal) : std::nullopt;
-		}
-
-		/// from existing shared sqlite error string
-		static std::optional<message> make(std::shared_ptr<std::string> dynamic) {
-			return dynamic ? std::optional<message>(std::move(dynamic)) : std::nullopt;
-		}
 
 		std::string_view view() const {
 			return std::visit([](auto& value) -> std::string_view {
@@ -72,6 +72,9 @@ public:
 		}
 	};
 
+	/// Carries an error code and an optional human-readable description.
+	/// Used as the error carrier in result<T> and the return type for operations that produce no value on success.
+	/// Defaults to error::none; boolean conversion returns true on success.
 	struct outcome {
 		error code = error::none;
 		std::optional<message> msg;
@@ -81,6 +84,14 @@ public:
 		outcome(error e, std::optional<message> m = std::nullopt) : code{e}, msg(std::move(m)) {}
 	};
 
+	/// Describes the result of opening and initializing a database connection.
+	/// Populated by open() and updated by prepare() and migrate().
+	///
+	/// result gives the coarse outcome: ok, needs_migration, or an error category.
+	/// schema_status gives the fine-grained schema relationship, including which error states imply a closed connection (see schema_state).
+	/// sqlite3_outcome carries the underlying sqlite3 error when result indicates a sqlite3_error, and is also set on corrupted schema states.
+	///
+	/// ok and needs_migration are the only workable states; all error codes imply the connection has been closed and queries will return not_ready.
 	struct status {
 		enum class code : uint8_t {
 			// Workable
@@ -114,9 +125,10 @@ private:
 	inline std::optional<message> sqlite_error_message() { return sqlite_error_message(connection); }
 	static inline std::optional<message> sqlite_error_message(sqlite3* connection) {
 		const char* msg = sqlite3_errmsg(connection);
-		return msg == nullptr || std::string_view(msg) == "not an error"
-			? std::nullopt
-			: message::make(std::make_shared<std::string>(msg));
+		if (msg == nullptr || std::string_view(msg) == "not an error") {
+			return std::nullopt;
+		}
+		return std::make_shared<std::string>(msg);
 	}
 
 	inline outcome not_ready() {
@@ -166,6 +178,22 @@ public:
 	const status&                get_status()   const { return open_result; }
 	bool                         is_connected() const { return connection != nullptr; }
 	bool                         is_ready()     const { return open_result.is_ok() && is_connected(); }
+
+private:
+	void open();
+	void close();
+	void prepare();
+
+public:
+	/// Applies any pending schema migrations and prepares query statements.
+	/// Must be called after open_file() or open_memory() if get_status().needs_migration() is true;
+	/// query methods return not_ready until migration succeeds.
+	/// Safe to call when the schema is already current; returns none immediately.
+	/// On success, sets schema_status to migrated and the db becomes ready for queries.
+	/// @return none if already current or migration succeeded.
+	/// @return corrupted if schema drift or a constraint violation is detected; connection is closed.
+	/// @return other db::error on storage failure.
+	outcome migrate();
 
 #pragma region Query methods
 
@@ -367,21 +395,6 @@ public:
 
 #pragma endregion
 
-private:
-	void open();
-	void close();
-	void prepare();
-
-public:
-	/// Applies any pending schema migrations and prepares query statements.
-	/// Must be called after open_file() or open_memory() if get_status().needs_migration() is true;
-	/// query methods return not_ready until migration succeeds.
-	/// Safe to call when the schema is already current; returns none immediately.
-	/// On success, sets schema_status to migrated and the db becomes ready for queries.
-	/// @return none if already current or migration succeeded.
-	/// @return corrupted if schema drift or a constraint violation is detected; connection is closed.
-	/// @return other db::error on storage failure.
-	outcome migrate();
-};
+}; // class db
 
 } // fundos
