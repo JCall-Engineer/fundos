@@ -1036,178 +1036,43 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets"), 3);
 }
 
-TEST(DbQuery, AccountHistory_NoCheckpoints) {
+TEST(DbQuery, AccountHistory_ClearedAndPending) {
 	FUNDOS_TEST_DB();
 	int rc = sqlite3_exec(connection, std::format(R"sql(
 		INSERT INTO accounts (id, name) VALUES (1, 'Checking');
-		INSERT INTO transactions (id, account_id, amount, date, memo)
+		INSERT INTO transactions (id, account_id, amount, date_recorded, memo, fitid, date_cleared)
 			VALUES
-				(1, 1, 100, {}, 'First Transaction'),
-				(2, 1,  11, {}, 'Second Transaction'),
-				(3, 1,  22, {}, 'Third Transaction'),
-				(4, 1,  33, {}, 'Fourth Transaction'),
-				(5, 1,  44, {}, 'Fifth Transaction');
-	)sql",
-		  (date(2026, std::chrono::January,   1) + timedelta::hours(11) + timedelta::minutes(12) + timedelta::seconds(13)).milliseconds_since_epoch
-		, (date(2026, std::chrono::January,  15) + timedelta::hours(12) + timedelta::minutes(34) + timedelta::seconds(24)).milliseconds_since_epoch
-		, (date(2026, std::chrono::February,  1) + timedelta::hours(13) + timedelta::minutes(56) + timedelta::seconds(35)).milliseconds_since_epoch
-		, (date(2026, std::chrono::February, 15) + timedelta::hours(14) + timedelta::minutes(18) + timedelta::seconds(46)).milliseconds_since_epoch
-		, (date(2026, std::chrono::March,     1) + timedelta::hours(15) + timedelta::minutes(29) + timedelta::seconds(57)).milliseconds_since_epoch
-	).c_str(), nullptr, nullptr, nullptr);
-	ASSERT_EQ(rc, SQLITE_OK);
-
-	auto history = database->account_history(1, date(2026, std::chrono::February, 1), date(2026, std::chrono::March, 1));
-	ASSERT_TRUE(static_cast<bool>(history));
-
-	ASSERT_EQ(history.value().checkpoints.size(), 0);
-	ASSERT_EQ(history.value().transactions.size(), 2);
-
-	ASSERT_EQ(history.value().transactions[0].record.id(), 3);
-	ASSERT_EQ(history.value().transactions[0].balance, currency{133});
-	
-	ASSERT_EQ(history.value().transactions[1].record.id(), 4);
-	ASSERT_EQ(history.value().transactions[1].balance, currency{166});
-}
-
-TEST(DbQuery, AccountHistory_OneOldCheckpoint) {
-	FUNDOS_TEST_DB();
-	int rc = sqlite3_exec(connection, std::format(R"sql(
-		INSERT INTO accounts (id, name) VALUES (1, 'Checking');
-		INSERT INTO transactions (id, account_id, amount, date, memo)
-			VALUES
-				(1, 1, 100, {}, 'First Transaction'),
-				(2, 1,  11, {}, 'Second Transaction'),
-				(3, 1,  22, {}, 'Third Transaction'),
-				(4, 1,  33, {}, 'Fourth Transaction'),
-				(5, 1,  44, {}, 'Fifth Transaction');
-		INSERT INTO balance_checkpoints (id, account_id, amount, date)
-			VALUES (1, 1, 100, {});
-		INSERT INTO balance_checkpoint_transactions (checkpoint_id, transaction_id)
-			VALUES
-				(1, 1),
-				(1, 2),
-				(1, 3);
+				(1, 1, 100, {}, 'First Transaction', 'fitid1', {}),
+				(2, 1,  11, {}, 'Second Transaction', NULL, NULL),
+				(3, 1,  22, {}, 'Third Transaction', 'fitid3', {}),
+				(4, 1,  33, {}, 'Fourth Transaction', NULL, NULL),
+				(5, 1,  44, {}, 'Fifth Transaction', 'fitid5', {});
 	)sql",
 		  (date(2026, std::chrono::January,   1) + timedelta::hours(11) + timedelta::minutes(12) + timedelta::seconds(13)).milliseconds_since_epoch // transaction 1
+		, (date(2026, std::chrono::January,   4) + timedelta::hours(12) + timedelta::minutes(00) + timedelta::seconds(00)).milliseconds_since_epoch // transaction 1 cleared
 		, (date(2026, std::chrono::January,  15) + timedelta::hours(12) + timedelta::minutes(34) + timedelta::seconds(24)).milliseconds_since_epoch // transaction 2
 		, (date(2026, std::chrono::February,  1) + timedelta::hours(13) + timedelta::minutes(56) + timedelta::seconds(35)).milliseconds_since_epoch // transaction 3
+		, (date(2026, std::chrono::February,  3) + timedelta::hours(12) + timedelta::minutes(00) + timedelta::seconds(00)).milliseconds_since_epoch // transaction 3 cleared
 		, (date(2026, std::chrono::February, 15) + timedelta::hours(14) + timedelta::minutes(18) + timedelta::seconds(46)).milliseconds_since_epoch // transaction 4
 		, (date(2026, std::chrono::March,     1) + timedelta::hours(15) + timedelta::minutes(29) + timedelta::seconds(57)).milliseconds_since_epoch // transaction 5
-		, (date(2026, std::chrono::February, 11) + timedelta::hours(16) + timedelta::minutes(30) + timedelta::seconds( 8)).milliseconds_since_epoch // checkpoint 1
+		, (date(2026, std::chrono::March,     3) + timedelta::hours(12) + timedelta::minutes(00) + timedelta::seconds(00)).milliseconds_since_epoch // transaction 5 cleared
 	).c_str(), nullptr, nullptr, nullptr);
 	ASSERT_EQ(rc, SQLITE_OK);
 
-	auto history = database->account_history(1, date(2026, std::chrono::January, 10), date(2026, std::chrono::March, 10));
+	auto pending = database->account_pending(1, date(2026, std::chrono::February, 1), date(2026, std::chrono::March, 1));
+	auto history = database->account_history(1, date(2026, std::chrono::February, 1), date(2026, std::chrono::March, 1));
 	ASSERT_TRUE(static_cast<bool>(history));
+	ASSERT_TRUE(static_cast<bool>(pending));
 
-	ASSERT_EQ(history.value().checkpoints.size(), 1);
-	ASSERT_EQ(history.value().transactions.size(), 4);
+	ASSERT_EQ(history.value().ledger_balances.size(), 0);
+	ASSERT_EQ(history.value().transactions.size(), 1);
+	ASSERT_EQ(pending.value().transactions.size(), 1);
 
-	ASSERT_EQ(history.value().checkpoints[0].id(), 1);
-	ASSERT_EQ(history.value().checkpoints[0].account_id, 1);
-	ASSERT_EQ(history.value().checkpoints[0].amount, currency{100});
-
-	ASSERT_EQ(history.value().transactions[0].record.id(), 2);
-	ASSERT_EQ(history.value().transactions[0].balance, currency{78});
-	ASSERT_EQ(history.value().transactions[0].balance_is_speculative, false);
+	ASSERT_EQ(history.value().transactions[0].record.id(), 3);
+	ASSERT_EQ(history.value().transactions[0].account_balance, currency{122});
 	
-	ASSERT_EQ(history.value().transactions[1].record.id(), 3);
-	ASSERT_EQ(history.value().transactions[1].balance, currency{100});
-	ASSERT_EQ(history.value().transactions[1].balance_is_speculative, false);
-	
-	ASSERT_EQ(history.value().transactions[2].record.id(), 4);
-	ASSERT_EQ(history.value().transactions[2].balance, currency{133});
-	ASSERT_EQ(history.value().transactions[2].balance_is_speculative, true);
-	
-	ASSERT_EQ(history.value().transactions[3].record.id(), 5);
-	ASSERT_EQ(history.value().transactions[3].balance, currency{177});
-	ASSERT_EQ(history.value().transactions[3].balance_is_speculative, true);
-}
-
-TEST(DbQuery, AccountHistory_OneOldAndOneNewCheckpoint) {
-	FUNDOS_TEST_DB();
-	static constexpr datetime
-		jan1  = date(2026, std::chrono::January,   1) + timedelta::hours(11) + timedelta::minutes(12) + timedelta::seconds(13), // transaction 1
-		jan15 = date(2026, std::chrono::January,  15) + timedelta::hours(12) + timedelta::minutes(34) + timedelta::seconds(24), // transaction 2
-		feb1  = date(2026, std::chrono::February,  1) + timedelta::hours(13) + timedelta::minutes(56) + timedelta::seconds(35), // transaction 3
-		feb15 = date(2026, std::chrono::February, 15) + timedelta::hours(14) + timedelta::minutes(18) + timedelta::seconds(46), // transaction 4
-		mar1  = date(2026, std::chrono::March,     1) + timedelta::hours(15) + timedelta::minutes(29) + timedelta::seconds(57), // transaction 5
-		mar15 = date(2026, std::chrono::March,    15) + timedelta::hours(14) + timedelta::minutes(29) + timedelta::seconds( 8), // transaction 6
-		feb11 = date(2026, std::chrono::February, 11) + timedelta::hours(16) + timedelta::minutes(30) + timedelta::seconds( 8), // checkpoint 1
-		mar25 = date(2026, std::chrono::March,    25) + timedelta::hours(15) + timedelta::minutes(15) + timedelta::seconds(15); // checkpoint 2
-	int rc = sqlite3_exec(connection, std::format(R"sql(
-		INSERT INTO accounts (id, name) VALUES (1, 'Checking');
-		INSERT INTO transactions (id, account_id, amount, date, memo)
-			VALUES
-				(1, 1, 100, {}, 'First Transaction'),
-				(2, 1,  11, {}, 'Second Transaction'),
-				(3, 1,  22, {}, 'Third Transaction'),
-				(4, 1,  33, {}, 'Fourth Transaction'),
-				(5, 1,  44, {}, 'Fifth Transaction'),
-				(6, 1,  55, {}, 'Sixth Transaction');
-		INSERT INTO balance_checkpoints (id, account_id, amount, date)
-			VALUES
-				(1, 1, 100, {}),
-				(2, 1, 200, {});
-		INSERT INTO balance_checkpoint_transactions (checkpoint_id, transaction_id)
-			VALUES
-				(1, 1),
-				(1, 2),
-				(1, 3);
-		INSERT INTO balance_checkpoint_transactions (checkpoint_id, transaction_id)
-			VALUES
-				(2, 5),
-				(2, 6);
-	)sql",
-		  jan1.milliseconds_since_epoch  // transaction 1
-		, jan15.milliseconds_since_epoch // transaction 2
-		, feb1.milliseconds_since_epoch  // transaction 3
-		, feb15.milliseconds_since_epoch // transaction 4
-		, mar1.milliseconds_since_epoch  // transaction 5
-		, mar15.milliseconds_since_epoch // transaction 6
-		, feb11.milliseconds_since_epoch // checkpoint 1
-		, mar25.milliseconds_since_epoch // checkpoint 2
-	).c_str(), nullptr, nullptr, nullptr);
-	ASSERT_EQ(rc, SQLITE_OK);
-
-	auto history = database->account_history(1, date(2026, std::chrono::January, 10), date(2026, std::chrono::March, 10));
-	ASSERT_TRUE(static_cast<bool>(history));
-
-	ASSERT_EQ(history.value().checkpoints.size(), 2);
-	ASSERT_EQ(history.value().transactions.size(), 4);
-
-	ASSERT_EQ(history.value().checkpoints[0].id(), 1);
-	ASSERT_EQ(history.value().checkpoints[0].account_id, 1);
-	ASSERT_EQ(history.value().checkpoints[0].amount, currency{100});
-	ASSERT_EQ(history.value().checkpoints[0].date, feb11);
-	ASSERT_EQ(history.value().checkpoints[0].transactions.size(), 3);
-	ASSERT_EQ(history.value().checkpoints[0].transactions[0].id, 1);
-	ASSERT_EQ(history.value().checkpoints[0].transactions[1].id, 2);
-	ASSERT_EQ(history.value().checkpoints[0].transactions[2].id, 3);
-
-	ASSERT_EQ(history.value().checkpoints[1].id(), 2);
-	ASSERT_EQ(history.value().checkpoints[1].account_id, 1);
-	ASSERT_EQ(history.value().checkpoints[1].amount, currency{200});
-	ASSERT_EQ(history.value().checkpoints[1].date, mar25);
-	ASSERT_EQ(history.value().checkpoints[1].transactions.size(), 2);
-	ASSERT_EQ(history.value().checkpoints[1].transactions[0].id, 5);
-	ASSERT_EQ(history.value().checkpoints[1].transactions[1].id, 6);
-
-	ASSERT_EQ(history.value().transactions[0].record.id(), 2);
-	ASSERT_EQ(history.value().transactions[0].balance, currency{78});
-	ASSERT_EQ(history.value().transactions[0].balance_is_speculative, false);
-	
-	ASSERT_EQ(history.value().transactions[1].record.id(), 3);
-	ASSERT_EQ(history.value().transactions[1].balance, currency{100});
-	ASSERT_EQ(history.value().transactions[1].balance_is_speculative, false);
-	
-	ASSERT_EQ(history.value().transactions[2].record.id(), 4);
-	ASSERT_EQ(history.value().transactions[2].balance, std::nullopt);
-	ASSERT_EQ(history.value().transactions[2].balance_is_speculative, false);
-	
-	ASSERT_EQ(history.value().transactions[3].record.id(), 5);
-	ASSERT_EQ(history.value().transactions[3].balance, currency{145});
-	ASSERT_EQ(history.value().transactions[3].balance_is_speculative, false);
+	ASSERT_EQ(pending.value().transactions[0].record.id(), 4);
+	ASSERT_EQ(pending.value().transactions[0].account_balance, currency{210});
 }
 
 /// Previous iterations used a helper function instead of a macro but that loses the ability to assert in a test
@@ -1220,10 +1085,10 @@ TEST(DbQuery, AccountHistory_OneOldAndOneNewCheckpoint) {
 	checking.bank_account_id = std::string{"checking-123"}; \
 	ASSERT_TRUE(static_cast<bool>(database->save_account(checking))); \
 	transaction txn; \
-	txn.account_id = checking.id(); \
-	txn.amount = currency{10000}; \
-	txn.date = datetime{0}; \
-	txn.memo = "Test"; \
+	txn.account_id    = checking.id(); \
+	txn.amount        = currency{10000}; \
+	txn.date_recorded = datetime{0}; \
+	txn.memo          = "Test"; \
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn)));
 
 template<typename T>
@@ -1282,10 +1147,10 @@ TEST(DbQuery, SaveTransaction_Insert) {
 TEST(DbQuery, SaveTransaction_Update) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
-	txn.date = datetime{86400000}; // 1 day later
+	txn.date_recorded = datetime{86400000}; // 1 day later
 	txn.memo = "Updated";
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn)));
-	EXPECT_EQ(86400000, fetch_field<int64_t>(connection, "SELECT date FROM transactions LIMIT 1"));
+	EXPECT_EQ(86400000, fetch_field<int64_t>(connection, "SELECT date_recorded FROM transactions LIMIT 1"));
 	EXPECT_EQ("Updated", fetch_field<std::string>(connection, "SELECT memo FROM transactions LIMIT 1"));
 }
 
@@ -1307,11 +1172,11 @@ TEST(DbQuery, SaveTransaction_InsertCorrection) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	transaction correction;
-	correction.account_id   = checking.id();
-	correction.amount       = currency{5000};
-	correction.date         = datetime{0};
-	correction.memo         = "Correction";
-	correction.corrects_id  = txn.id();
+	correction.account_id    = checking.id();
+	correction.amount        = currency{5000};
+	correction.date_recorded = datetime{0};
+	correction.memo          = "Correction";
+	correction.corrects_id   = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(correction)));
 	ASSERT_NE(correction.id(), 0);
@@ -1325,11 +1190,11 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectAction) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	transaction correction;
-	correction.account_id  = checking.id();
-	correction.amount      = currency{5000};
-	correction.date        = datetime{0};
-	correction.memo        = "Bad";
-	correction.corrects_id = txn.id();
+	correction.account_id    = checking.id();
+	correction.amount        = currency{5000};
+	correction.date_recorded = datetime{0};
+	correction.memo          = "Bad";
+	correction.corrects_id   = txn.id();
 	// correct_action intentionally omitted
 	EXPECT_EQ(database->save_transaction(correction).code, db::error::bad_request);
 }
@@ -1340,7 +1205,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectsId) {
 	transaction correction;
 	correction.account_id     = checking.id();
 	correction.amount         = currency{5000};
-	correction.date           = datetime{0};
+	correction.date_recorded  = datetime{0};
 	correction.memo           = "Bad";
 	correction.correct_action = transaction::correction_type::replaces;
 	// corrects_id intentionally omitted
@@ -1351,13 +1216,13 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetHasFitid) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	std::string update = std::format(
-		"UPDATE transactions SET fitid = 'imported-fitid' WHERE id = {}", txn.id()
+		"UPDATE transactions SET fitid = 'imported-fitid', date_cleared = 1 WHERE id = {}", txn.id()
 	);
 	ASSERT_EQ(sqlite3_exec(connection, update.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
 	transaction correction;
 	correction.account_id     = checking.id();
 	correction.amount         = currency{5000};
-	correction.date           = datetime{0};
+	correction.date_recorded  = datetime{0};
 	correction.memo           = "Correction";
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
@@ -1368,10 +1233,10 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	transaction superseder;
-	superseder.account_id = checking.id();
-	superseder.amount     = currency{5000};
-	superseder.date       = datetime{0};
-	superseder.memo       = "Superseder";
+	superseder.account_id    = checking.id();
+	superseder.amount        = currency{5000};
+	superseder.date_recorded = datetime{0};
+	superseder.memo          = "Superseder";
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(superseder)));
 	std::string update = std::format(
 		"UPDATE transactions SET superseded_by = {} WHERE id = {}", superseder.id(), txn.id()
@@ -1380,7 +1245,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
 	transaction correction;
 	correction.account_id     = checking.id();
 	correction.amount         = currency{5000};
-	correction.date           = datetime{0};
+	correction.date_recorded  = datetime{0};
 	correction.memo           = "Correction";
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
@@ -1396,7 +1261,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	transaction correction;
 	correction.account_id     = savings.id();
 	correction.amount         = currency{5000};
-	correction.date           = datetime{0};
+	correction.date_recorded  = datetime{0};
 	correction.memo           = "Correction";
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
@@ -1406,19 +1271,19 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 #define FUNDOS_SEED_IMPORT() \
 	FUNDOS_SEED(); \
 	transaction previous_import; \
-	previous_import.account_id = checking.id(); \
-	previous_import.amount     = currency{5000}; \
-	previous_import.date       = CLOSED_AT - timedelta::days(3); \
-	previous_import.cleared    = CLOSED_AT; \
-	previous_import.memo       = "Previous Import"; \
-	previous_import.fitid      = std::string{"fitid-existing"}; \
+	previous_import.account_id    = checking.id(); \
+	previous_import.amount        = currency{5000}; \
+	previous_import.date_recorded = CLOSED_AT - timedelta::days(3); \
+	previous_import.memo          = "Previous Import"; \
+	previous_import.fitid         = std::string{"fitid-existing"}; \
+	previous_import.date_cleared  = CLOSED_AT; \
 	std::string previous_import_sql = std::format( \
-		"INSERT INTO transactions (account_id, amount, date, cleared, memo, fitid) " \
+		"INSERT INTO transactions (account_id, amount, date_recorded, date_cleared, memo, fitid) " \
 		"VALUES ({}, {}, {}, {}, '{}', '{}')", \
 		previous_import.account_id, \
 		previous_import.amount.minor_units, \
-		previous_import.date.milliseconds_since_epoch, \
-		previous_import.cleared->milliseconds_since_epoch, \
+		previous_import.date_recorded.milliseconds_since_epoch, \
+		previous_import.date_cleared->milliseconds_since_epoch, \
 		previous_import.memo, \
 		*previous_import.fitid \
 	); \
@@ -1426,17 +1291,17 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	int64_t previous_import_id = sqlite3_last_insert_rowid(connection); \
 	(void)previous_import_id; \
 	import::imported_transaction matched_import; \
-	matched_import.importing.fitid   = previous_import.fitid; \
-	matched_import.importing.cleared = previous_import.cleared; \
-	matched_import.importing.amount  = previous_import.amount; \
-	matched_import.importing.date    = previous_import.date + timedelta::days(3); \
+	matched_import.importing.fitid         = previous_import.fitid; \
+	matched_import.importing.date_cleared  = previous_import.date_cleared; \
+	matched_import.importing.amount        = previous_import.amount; \
+	matched_import.importing.date_recorded = previous_import.date_recorded + timedelta::days(3); \
 	matched_import.importing.memo    = "New Memo"; \
 	import::imported_transaction fresh_import; \
-	fresh_import.importing.fitid    = std::string{"fitid-new"}; \
-	fresh_import.importing.cleared  = CLOSED_AT + timedelta::days(21); \
-	fresh_import.importing.amount   = currency{2000}; \
-	fresh_import.importing.date     = datetime{0}; \
-	fresh_import.importing.memo     = "Fresh"; \
+	fresh_import.importing.fitid         = std::string{"fitid-new"}; \
+	fresh_import.importing.date_cleared  = CLOSED_AT + timedelta::days(21); \
+	fresh_import.importing.amount        = currency{2000}; \
+	fresh_import.importing.date_recorded = datetime{0}; \
+	fresh_import.importing.memo          = "Fresh"; \
 	import::pending_import pending; \
 	import::bank_account bank; \
 	bank.acct_id = "checking-123"; \
@@ -1453,7 +1318,7 @@ TEST(DbQuery, PrepareImport_DefinitiveMatch) {
 	auto& matched = pending.accounts[0].transactions[0];
 	EXPECT_TRUE(matched.is_definitive_match());
 	EXPECT_EQ(matched.get_match()->id(), previous_import_id);
-	EXPECT_EQ(matched.saving.date, previous_import.date);
+	EXPECT_EQ(matched.saving.date_recorded, previous_import.date_recorded);
 	EXPECT_EQ(matched.saving.memo, previous_import.memo);
 }
 
@@ -1463,7 +1328,7 @@ TEST(DbQuery, PrepareImport_NoMatch) {
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	auto& fresh = pending.accounts[0].transactions[1];
 	EXPECT_EQ(fresh.get_match(), nullptr);
-	EXPECT_EQ(fresh.saving.date, fresh.importing.date);
+	EXPECT_EQ(fresh.saving.date_recorded, fresh.importing.date_recorded);
 	EXPECT_EQ(fresh.saving.memo, fresh.importing.memo);
 }
 
@@ -1472,11 +1337,11 @@ TEST(DbQuery, PrepareImport_FuzzyMatch) {
 	FUNDOS_SEED_IMPORT();
 	// Insert a candidate with no fitid, matching amount, date within 7 days
 	std::string sql = std::format(
-		"INSERT INTO transactions (account_id, amount, date, memo) "
+		"INSERT INTO transactions (account_id, amount, date_recorded, memo) "
 		"VALUES ({}, {}, {}, 'Fuzzy Candidate')",
 		checking.id(),
 		fresh_import.importing.amount.minor_units,
-		fresh_import.importing.cleared->milliseconds_since_epoch - timedelta::days(3).milliseconds
+		fresh_import.importing.date_cleared->milliseconds_since_epoch - timedelta::days(3).milliseconds
 	);
 	ASSERT_EQ(sqlite3_exec(connection, sql.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
@@ -1495,7 +1360,7 @@ TEST(DbQuery, PrepareImport_MissingFitid) {
 TEST(DbQuery, PrepareImport_MissingCleared) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	pending.accounts[0].transactions[0].importing.cleared = std::nullopt;
+	pending.accounts[0].transactions[0].importing.date_cleared = std::nullopt;
 	EXPECT_EQ(database->prepare_import(pending).code, db::error::bad_request);
 }
 
@@ -1529,7 +1394,7 @@ TEST(DbQuery, PrepareImport_PrefersMatchInformation) {
 		});
 	EXPECT_NE(it, account.candidates.end());
 	EXPECT_EQ(it->memo, previous_import.memo);
-	EXPECT_EQ(it->date, previous_import.date);
+	EXPECT_EQ(it->date_recorded, previous_import.date_recorded);
 }
 
 TEST(DbQuery, PerformImport_InsertsNewTransaction) {
@@ -1557,8 +1422,7 @@ TEST(DbQuery, PerformImport_CreatesCheckpoint) {
 	FUNDOS_SEED_IMPORT();
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
-	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM balance_checkpoints"), 1);
-	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM balance_checkpoint_transactions"), 2);
+	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM import_ledger_balances"), 1);
 }
 
 TEST(DbQuery, PerformImport_WithoutPrepare) {

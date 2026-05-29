@@ -247,8 +247,8 @@ void import_transaction(parse_context& context, std::vector<imported_transaction
 						context.output.add_warning(warning::skipped_transaction);
 						return;
 					}
-					transaction.date = *parsed;
-					transaction.cleared = *parsed;
+					transaction.date_recorded = *parsed;
+					transaction.date_cleared = *parsed;
 				} else if (in.text == CORRECT_FITID_TAG) {
 					transaction.corrects_fitid = value.text;
 				} else if (in.text == CORRECT_ACTION_TAG) {
@@ -280,7 +280,7 @@ void import_transaction(parse_context& context, std::vector<imported_transaction
 					context.output.add_warning(warning::skipped_transaction);
 					return;
 				}
-				if (transaction.date.milliseconds_since_epoch == 0) {
+				if (transaction.date_recorded.milliseconds_since_epoch == 0) {
 					context.output.add_warning(warning::missing_date);
 					context.output.add_warning(warning::skipped_transaction);
 					return;

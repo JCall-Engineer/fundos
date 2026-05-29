@@ -365,31 +365,38 @@ public:
 	/// @return constraint, unavailable, or other db::error on storage failure.
 	outcome                      allocate_transaction(std::vector<allocation>& allocations);
 
-	/// Result type for account-level transaction views.
-	/// Account balance and transactions for a date range.
-	/// Each transaction carries its complete allocation set.
-	/// Checkpoints allow the UI to identify imported transaction ranges and detect gaps where bank data was never imported.
-	/// A transaction absent from all checkpoint sets was not part of any OFX import.
+	/// Result type for account-level transaction views over a specified date range.
+	/// Each transaction carries its resulting account balance and all of its fund allocations.
+	/// Ledger balances allow the UI to verify that local records are in sync with the bank's reported statements.
 	struct transaction_history {
 		struct allocated_transaction {
 			transaction record;
-			bool orphaned_correction = false;
-			bool balance_is_speculative = false;
-			std::optional<currency> balance;
+			currency account_balance;
 			std::vector<allocation> allocations;
 		};
 
 		std::vector<allocated_transaction> transactions;
-		std::vector<balance_checkpoint> checkpoints;
+		std::vector<import_ledger_balance> ledger_balances;
 	};
 
-	/// Fund balance and allocations for a date range.
-	/// Each allocation is paired with its parent transaction for date, memo, or other context.
+	/// Return type for account_pending; groups uncleared transactions with projected balances and allocations.
+	struct pending_transactions {
+		std::vector<transaction_history::allocated_transaction> transactions;
+	};
+
+	/// Result type for fund-level transaction views over a specified date range.
+	/// Each transaction carries its resulting fund balance and the allocation amount specific to the fund.
 	struct allocation_history {
-		currency starting_balance;
-		std::vector<std::pair<transaction, allocation>> allocations;
+		struct allocated_transaction {
+			transaction record;
+			allocation allocated;
+			currency fund_balance;
+		};
+
+		std::vector<allocated_transaction> transactions;
 	};
 
+	result<pending_transactions> account_pending(int64_t account_id, datetime after, datetime before);
 	result<transaction_history>  account_history(int64_t account_id, datetime after, datetime before);
 	result<allocation_history>   fund_history(int64_t fund_id, datetime after, datetime before);
 

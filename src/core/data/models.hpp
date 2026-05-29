@@ -46,25 +46,20 @@ struct transaction : db_managed {
 
 	int64_t account_id = 0;
 	currency amount;
-	datetime date;
-	std::optional<datetime> cleared;
+	datetime date_recorded;
 	std::string memo;
 	std::optional<std::string> fitid;
+	std::optional<datetime> date_cleared;
 	std::optional<std::string> corrects_fitid;
 	std::optional<correction_type> correct_action;
 	std::optional<int64_t> corrects_id;
 	std::optional<int64_t> superseded_by;
 };
 
-struct balance_checkpoint : db_managed {
+struct import_ledger_balance : db_managed {
 	int64_t account_id = 0;
 	currency amount;
-	datetime date;
-	struct checkpoint_entry {
-		int64_t id = 0;
-		currency amount;
-	};
-	std::vector<checkpoint_entry> transactions;
+	datetime date_as_of;
 };
 
 namespace import {
