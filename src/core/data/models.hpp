@@ -368,6 +368,7 @@ struct budget : db_managed {
 			}
 		};
 
+		// phase ordering is user-defined; fixed and percentage phases may be interleaved
 		each_phase([&](int, budget_phase<fixed_target>* phase) -> void {
 			phase->each_target([&](int, fixed_target* target) -> void {
 				allocate(target, target->amount);
