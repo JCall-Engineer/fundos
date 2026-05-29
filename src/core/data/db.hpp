@@ -310,6 +310,7 @@ public:
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
 	outcome                      save_budget(budget& saving);
+	outcome                      delete_budget(int64_t budget_id);
 
 private:
 	/// Resolves correction links between transactions after an OFX import.

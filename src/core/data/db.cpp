@@ -1440,6 +1440,15 @@ db::outcome db::save_budget(budget& saving) {
 	});
 }
 
+db::outcome db::delete_budget(int64_t budget_id) {
+	return sql_execute(
+		prepared->named.delete_budget.statement,
+		[&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, budget_id);
+		}
+	);
+}
+
 static constexpr size_t num_correct_actions = 2;
 static const enum_string_map<transaction::correction_type, num_correct_actions> correction_map = {{
 	{ transaction::correction_type::deletes,   "delete" },
