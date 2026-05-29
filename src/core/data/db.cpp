@@ -347,16 +347,16 @@ struct statements {
 		WHERE id = ?
 	)sql" };
 
-	statement_slot insert_import_ledger_balance { .sql = R"sql(
-		INSERT INTO import_ledger_balances (account_id, amount, date_as_of)
-		VALUES (?, ?, ?)
-	)sql" };
-
 	/// Used to allow manual corrections
 	statement_slot update_transaction_correction { .sql = R"sql(
 		UPDATE transactions
 		SET superseded_by = ?
 		WHERE id = ? AND superseded_by IS NULL
+	)sql" };
+
+	statement_slot insert_import_ledger_balance { .sql = R"sql(
+		INSERT INTO import_ledger_balances (account_id, amount, date_as_of)
+		VALUES (?, ?, ?)
 	)sql" };
 
 	statement_slot filter_cleared_transactions { .sql = R"sql(
