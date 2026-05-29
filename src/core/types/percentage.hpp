@@ -68,7 +68,7 @@ struct percentage {
 	constexpr bool operator>=(const percentage& rhs) const { return basis_points >= rhs.basis_points; }
 };
 
-} // fundos
+} // namespace fundos
 
 /// Constructs a percentage from a whole number (e.g. 50_percent = 50%).
 constexpr fundos::percentage operator""_percent(unsigned long long percent) {

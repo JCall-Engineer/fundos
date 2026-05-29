@@ -11,4 +11,4 @@ const registry locales = { .named = {} };
 
 } // currency_locale
 
-} // fundos
+} // namespace fundos

@@ -43,4 +43,4 @@ struct currency {
 	constexpr bool operator>=(const currency& rhs) const { return minor_units >= rhs.minor_units; }
 };
 
-} // fundos
+} // namespace fundos

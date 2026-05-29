@@ -123,4 +123,4 @@ static inline std::optional<spec> get_locale(std::string_view identifier) {
 	return std::nullopt;
 }
 
-} // fundos::currency_locale
+} // namespace fundos::currency_locale

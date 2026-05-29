@@ -41,4 +41,4 @@ struct result {
 
 result import_ofx(const std::string& filepath, const currency_locale::spec& locale);
 
-} // fundos::import
+} // namespace fundos::import

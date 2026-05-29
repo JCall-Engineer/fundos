@@ -2353,4 +2353,4 @@ db::~db() { close(); }
 
 #pragma endregion
 
-} // fundos
+} // namespace fundos

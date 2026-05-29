@@ -60,4 +60,4 @@ static inline std::optional<spec> const get_locale(std::string_view identifier) 
 	return std::nullopt;
 }
 
-} // fundos::percentage_locale
+} // namespace fundos::percentage_locale

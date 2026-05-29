@@ -130,7 +130,7 @@ struct pending_import {
 	std::vector<bank_account> accounts;
 };
 
-} // fundos::import
+} // namespace fundos::import
 
 struct allocation : db_managed {
 	int64_t transaction_id = 0;
@@ -397,4 +397,4 @@ struct budget : db_managed {
 	}
 };
 
-} // fundos
+} // namespace fundos

@@ -92,4 +92,4 @@ std::string format_percentage(int32_t basis_points, const percentage_locale::spe
 	return std::string(buffer, buffer_n);
 }
 
-} // fundos
+} // namespace fundos

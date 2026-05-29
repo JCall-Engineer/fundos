@@ -509,4 +509,4 @@ result import_ofx(const std::string& filepath, const currency_locale::spec& loca
 	return result(error::bad_format);
 }
 
-} // fundos::import
+} // namespace fundos::import

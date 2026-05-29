@@ -137,4 +137,4 @@ std::string format_currency(int64_t minor_units, const currency_locale::spec& lo
 	}
 }
 
-} // fundos
+} // namespace fundos
