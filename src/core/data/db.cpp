@@ -418,6 +418,33 @@ struct statements {
 		ORDER BY date_recorded
 	)sql" };
 
+	statement_slot filter_allocations { .sql = R"sql(
+		WITH all_allocations AS (
+			SELECT
+				transactions.id,
+				transactions.account_id,
+				transactions.amount,
+				transactions.date_recorded,
+				transactions.memo,
+				transactions.date_reconciled,
+				transactions.fitid,
+				transactions.date_cleared,
+				transactions.corrects_fitid,
+				transactions.correct_action,
+				transactions.corrects_id,
+				transactions.superseded_by,
+				allocations.id AS allocation_id,
+				allocations.amount AS allocation_amount,
+				SUM(allocations.amount) OVER (ORDER BY transactions.date_recorded ROWS UNBOUNDED PRECEDING) AS fund_balance
+			FROM allocations
+			JOIN transactions ON transactions.id = allocations.transaction_id
+			WHERE allocations.fund_id = ? AND transactions.superseded_by IS NULL
+		)
+		SELECT * FROM all_allocations
+		WHERE date_recorded BETWEEN ? AND ?
+		ORDER BY date_recorded
+	)sql" };
+
 	statement_slot filter_ledger_balances { .sql = R"sql(
 		SELECT id, amount, date_as_of
 		FROM import_ledger_balances
@@ -2079,11 +2106,41 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 	};
 }
 
-/*
 db::result<db::allocation_history> db::fund_history(int64_t fund_id, datetime after, datetime before) {
-
+	using transaction = allocation_history::allocated_transaction;
+	auto history = sql_fetch_many<transaction>(
+		prepared->named.filter_allocations.statement,
+		[&](sqlite3_stmt* stmt) -> void {
+			sqlite3_bind_int64(stmt, 1, fund_id);
+			sqlite3_bind_int64(stmt, 2, after.milliseconds_since_epoch);
+			sqlite3_bind_int64(stmt, 3, before.milliseconds_since_epoch);
+		},
+		[&](sqlite3_stmt* stmt) -> transaction {
+			transaction out;
+			out.allocated.fund_id      = fund_id;
+			out.record.id_             =                                         sqlite3_column_int64  (stmt, 0);
+			out.record.account_id      =                                         sqlite3_column_int64  (stmt, 1);
+			out.record.amount          =                               currency {sqlite3_column_int64  (stmt, 2)};
+			out.record.date_recorded   =                               datetime {sqlite3_column_int64  (stmt, 3)};
+			out.record.memo            =                                         extract_text          (stmt, 4);
+			out.record.date_reconciled =                   as_optional<datetime>(extract_optional_int64(stmt, 5));
+			out.record.fitid           =                                         extract_optional_text (stmt, 6);
+			out.record.date_cleared    =                   as_optional<datetime>(extract_optional_int64(stmt, 7));
+			out.record.corrects_fitid  =                                         extract_optional_text (stmt, 8);
+			out.record.correct_action  = optional_string_to_enum(correction_map, extract_optional_text (stmt, 9));
+			out.record.corrects_id     =                                         extract_optional_int64(stmt, 10);
+			out.record.superseded_by   =                                         extract_optional_int64(stmt, 11);
+			out.allocated.id_          =                                         sqlite3_column_int64  (stmt, 12);
+			out.allocated.amount       =                               currency {sqlite3_column_int64  (stmt, 13)};
+			out.fund_balance           =                               currency {sqlite3_column_int64  (stmt, 14)};
+			return out;
+		}
+	);
+	if (!history) { return history.status(); }
+	return allocation_history{
+		.transactions = std::move(history.value())
+	};
 }
-*/
 
 #pragma endregion
 

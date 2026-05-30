@@ -1075,6 +1075,55 @@ TEST(DbQuery, AccountHistory_ClearedAndPending) {
 	ASSERT_EQ(pending.value().transactions[0].account_balance, currency{210});
 }
 
+TEST(DbQuery, FundHistory_Basic) {
+	FUNDOS_TEST_DB();
+	int rc = sqlite3_exec(connection, std::format(R"sql(
+		INSERT INTO accounts (id, name) VALUES (1, 'Checking');
+		INSERT INTO funds (id, name) VALUES (1, 'Groceries');
+		INSERT INTO transactions (id, account_id, amount, date_recorded, memo)
+			VALUES
+				(1, 1, 100, {}, 'First Transaction'),
+				(2, 1,  50, {}, 'Second Transaction'),
+				(3, 1,  25, {}, 'Third Transaction'),
+				(4, 1,  75, {}, 'Fourth Transaction - Superseded'),
+				(5, 1,  99, {}, 'Fifth Transaction - Supersedes Fourth');
+		UPDATE transactions SET superseded_by = 5 WHERE id = 4;
+		UPDATE transactions SET corrects_id = 4, correct_action = 'replace' WHERE id = 5;
+		INSERT INTO allocations (id, transaction_id, fund_id, amount)
+			VALUES
+				(1, 1, 1, 100),
+				(2, 2, 1,  50),
+				(3, 3, 1,  25),
+				(4, 4, 1,  75),
+				(5, 5, 1,  99);
+	)sql",
+		  (date(2026, std::chrono::January,  1) + timedelta::hours(12)).milliseconds_since_epoch // transaction 1
+		, (date(2026, std::chrono::February, 1) + timedelta::hours(12)).milliseconds_since_epoch // transaction 2
+		, (date(2026, std::chrono::March,    1) + timedelta::hours(12)).milliseconds_since_epoch // transaction 3
+		, (date(2026, std::chrono::March,   15) + timedelta::hours(12)).milliseconds_since_epoch // transaction 4
+		, (date(2026, std::chrono::March,   15) + timedelta::hours(13)).milliseconds_since_epoch // transaction 5
+	).c_str(), nullptr, nullptr, nullptr);
+	ASSERT_EQ(rc, SQLITE_OK);
+
+	auto history = database->fund_history(1, date(2026, std::chrono::February, 1), date(2026, std::chrono::March, 31));
+	ASSERT_TRUE(static_cast<bool>(history));
+	ASSERT_EQ(history.value().transactions.size(), 3);
+
+	// transaction 1 outside date range but contributes to fund_balance
+	ASSERT_EQ(history.value().transactions[0].record.id(), 2);
+	ASSERT_EQ(history.value().transactions[0].allocated.amount, currency{50});
+	ASSERT_EQ(history.value().transactions[0].fund_balance, currency{150});
+
+	ASSERT_EQ(history.value().transactions[1].record.id(), 3);
+	ASSERT_EQ(history.value().transactions[1].allocated.amount, currency{25});
+	ASSERT_EQ(history.value().transactions[1].fund_balance, currency{175});
+
+	// transaction 4 superseded, transaction 5 replaces it
+	ASSERT_EQ(history.value().transactions[2].record.id(), 5);
+	ASSERT_EQ(history.value().transactions[2].allocated.amount, currency{99});
+	ASSERT_EQ(history.value().transactions[2].fund_balance, currency{274});
+}
+
 /// Previous iterations used a helper function instead of a macro but that loses the ability to assert in a test
 #define FUNDOS_SEED() \
 	fund groceries; \
