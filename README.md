@@ -4,13 +4,36 @@ FundOS is a cross-platform, locally-run personal finance application built aroun
 It is currently in active development — the core library is complete and the UI clients are next.
 Licensed under the [AGPL](https://www.gnu.org/licenses/agpl-3.0.html).
 
+## What is FundOS?
+
+Envelope budgeting is a method of allocating every dollar of income to a named purpose before you spend it.
+Rather than tracking spending after the fact, you decide in advance how much goes to rent, groceries, savings, and so on — and spend from those envelopes.
+This shifts budgeting from reactive to intentional.
+
+FundOS implements envelope budgeting as a locally-run desktop and mobile application.
+Your financial data lives on your devices and nowhere else.
+Transactions are imported from OFX files exported by your bank, or entered manually — no bank credentials required.
+
+Many web-based budgeting services connect to your bank automatically by collecting your login credentials and logging in on your behalf to scrape your transaction history.
+This makes them a high-value target for attackers seeking access to people's bank accounts.
+FundOS sidesteps this entirely.
+
+## Why FundOS?
+
+Most budgeting tools, when they support automation at all, let you allocate fixed dollar amounts to categories.
+FundOS goes further — budgets are made up of phases that can be fixed dollar amounts or percentages of remaining income, freely interleaved in any order.
+This makes it straightforward to express rules like "save 10% off the top, then cover fixed expenses, then split what's left" without workarounds.
+
+FundOS is open source, licensed under the AGPL.
+A tool that exists to help people take control of their finances shouldn't be locked behind a subscription that itself undermines financial freedom.
+
 ## How It Works
 
 FundOS models personal finance using five core concepts — accounts, funds, transactions, allocations, and budgets — with budgets further broken down into phases and targets.
 
-**Accounts** represent real-world bank accounts.
+**Accounts** represent real-world bank accounts. They answer: where the money lives.
 
-**Funds** are virtual envelopes — named buckets that money is mentally assigned to.
+**Funds** are virtual envelopes — named buckets that money is mentally assigned to. They answer: what the money's for.
 
 **Transactions** are recorded against an account, either imported from an OFX file or entered manually.
 Each transaction has an amount, a date, an optional memo, and optional bank-assigned identifiers used to detect duplicates and corrections.
