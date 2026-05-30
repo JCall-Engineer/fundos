@@ -9,10 +9,11 @@ Licensed under the [AGPL](https://www.gnu.org/licenses/agpl-3.0.html).
 FundOS models personal finance using five core concepts — accounts, funds, transactions, allocations, and budgets — with budgets further broken down into phases and targets.
 
 **Accounts** represent real-world bank accounts.
-Transactions are recorded against an account, either imported from an OFX file or entered manually.
-Each transaction has an amount, a date, an optional memo, and optional bank-assigned identifiers used to detect duplicates and corrections.
 
 **Funds** are virtual envelopes — named buckets that money is mentally assigned to.
+
+**Transactions** are recorded against an account, either imported from an OFX file or entered manually.
+Each transaction has an amount, a date, an optional memo, and optional bank-assigned identifiers used to detect duplicates and corrections.
 
 **Allocations** connect transactions to funds.
 A transaction's amount is distributed across one or more funds via allocations, which can be set manually or automated by a budget.
