@@ -13,7 +13,6 @@ Transactions are recorded against an account, either imported from an OFX file o
 Each transaction has an amount, a date, an optional memo, and optional bank-assigned identifiers used to detect duplicates and corrections.
 
 **Funds** are virtual envelopes — named buckets that money is mentally assigned to.
-A fund can have an optional cap (a ceiling on how much it will accept) and can be open or closed.
 
 **Allocations** connect transactions to funds.
 A transaction's amount is distributed across one or more funds via allocations, which can be set manually or automated by a budget.
