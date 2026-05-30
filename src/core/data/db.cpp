@@ -383,7 +383,7 @@ struct statements {
 				superseded_by,
 				SUM(amount) OVER (ORDER BY COALESCE(date_reconciled, date_cleared) ROWS UNBOUNDED PRECEDING) AS account_balance
 			FROM transactions
-			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NOT NULL AND superseded_by IS NULL AND (corrects_fitid IS NULL OR corrects_id IS NOT NULL)
+			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NOT NULL AND superseded_by IS NULL
 		)
 		SELECT * FROM all_cleared
 		WHERE COALESCE(date_reconciled, date_cleared) BETWEEN ? AND ?
@@ -394,7 +394,7 @@ struct statements {
 		WITH cleared_total AS (
 			SELECT COALESCE(SUM(amount), 0) AS total
 			FROM transactions
-			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NOT NULL AND superseded_by IS NULL AND (corrects_fitid IS NULL OR corrects_id IS NOT NULL)
+			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NOT NULL AND superseded_by IS NULL
 		),
 		all_pending AS (
 			SELECT
@@ -411,7 +411,7 @@ struct statements {
 				superseded_by,
 				(SELECT total FROM cleared_total) + SUM(amount) OVER (ORDER BY date_recorded ROWS UNBOUNDED PRECEDING) AS account_balance
 			FROM transactions
-			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NULL AND superseded_by IS NULL AND (corrects_fitid IS NULL OR corrects_id IS NOT NULL)
+			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NULL AND superseded_by IS NULL
 		)
 		SELECT * FROM all_pending
 		WHERE date_recorded BETWEEN ? AND ?
