@@ -48,6 +48,7 @@ struct transaction : db_managed {
 	currency amount;
 	datetime date_recorded;
 	std::string memo;
+	std::optional<datetime> date_reconciled;
 	std::optional<std::string> fitid;
 	std::optional<datetime> date_cleared;
 	std::optional<std::string> corrects_fitid;

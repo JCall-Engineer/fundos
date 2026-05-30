@@ -88,6 +88,7 @@ CREATE TABLE transactions (
 	amount          INTEGER NOT NULL,
 	date_recorded   INTEGER NOT NULL,
 	memo            TEXT NOT NULL,
+	date_reconciled INTEGER,
 	fitid           TEXT,
 	date_cleared    INTEGER,
 	corrects_fitid  TEXT,
@@ -95,6 +96,7 @@ CREATE TABLE transactions (
 	corrects_id     INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
 	superseded_by   INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
 	CHECK((date_cleared IS NULL) = (fitid IS NULL)),                                    -- date_cleared signals a bank authoritative date
+	CHECK((date_cleared IS NULL) OR (date_reconciled IS NULL)),                         -- date_reconciled signals a user defined date that reconciles OFX imports
 	CHECK((correct_action IS NULL) = (corrects_fitid IS NULL AND corrects_id IS NULL)), -- correct_action requires a transaction being corrected, and corrections require an action
 	UNIQUE(corrects_id),
 	UNIQUE(superseded_by),
@@ -309,9 +311,14 @@ struct statements {
 
 	/// Used to find manual transactions that may need to be updated by an import.
 	statement_slot find_transaction_candidates { .sql = R"sql(
-		SELECT id, amount, date_recorded, date_cleared, memo
+		SELECT id, amount, date_recorded, memo
 		FROM transactions
-		WHERE account_id = ? AND fitid IS NULL AND correct_action IS NULL AND corrects_fitid IS NULL AND corrects_id IS NULL AND superseded_by IS NULL
+		WHERE
+			account_id = ?
+			AND date_reconciled IS NULL -- Reconciliation transactions are user assertions and should be corrected rather than matched to an OFX import
+			AND fitid IS NULL           -- Excludes previously imported transactions; also excludes bank corrections via schema constraint (corrects_fitid IS NULL implied, corrects_id for bank corrections handled)
+			AND correct_action IS NULL  -- Excludes all corrections; manual corrections with corrects_id set are caught here since fitid IS NULL only handles the bank correction case
+			AND superseded_by IS NULL   -- Excludes voided manual transactions
 	)sql" };
 
 	/// Used to find records of previously imported transactions.
@@ -339,12 +346,12 @@ struct statements {
 	)sql" };
 
 	statement_slot insert_transaction_user { .sql = R"sql(
-		INSERT INTO transactions (account_id, amount, date_recorded, memo, corrects_id, correct_action)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO transactions (account_id, amount, date_recorded, memo, date_reconciled, corrects_id, correct_action)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	)sql" };
 	statement_slot update_transaction_user { .sql = R"sql(
 		UPDATE transactions
-		SET date_recorded = ?, memo = ?
+		SET date_recorded = ?, memo = ?, date_reconciled = ?
 		WHERE id = ?
 	)sql" };
 
@@ -367,26 +374,27 @@ struct statements {
 				amount,
 				date_recorded,
 				memo,
+				date_reconciled,
 				fitid,
 				date_cleared,
 				corrects_fitid,
 				correct_action,
 				corrects_id,
 				superseded_by,
-				SUM(amount) OVER (ORDER BY date_cleared ROWS UNBOUNDED PRECEDING) AS account_balance
+				SUM(amount) OVER (ORDER BY COALESCE(date_reconciled, date_cleared) ROWS UNBOUNDED PRECEDING) AS account_balance
 			FROM transactions
-			WHERE account_id = ? AND date_cleared IS NOT NULL AND superseded_by IS NULL
+			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NOT NULL AND superseded_by IS NULL AND (corrects_fitid IS NULL OR corrects_id IS NOT NULL)
 		)
 		SELECT * FROM all_cleared
-		WHERE date_cleared BETWEEN ? AND ?
-		ORDER BY date_cleared
+		WHERE COALESCE(date_reconciled, date_cleared) BETWEEN ? AND ?
+		ORDER BY COALESCE(date_reconciled, date_cleared)
 	)sql" };
 
 	statement_slot filter_pending_transactions { .sql = R"sql(
 		WITH cleared_total AS (
 			SELECT COALESCE(SUM(amount), 0) AS total
 			FROM transactions
-			WHERE account_id = ? AND date_cleared IS NOT NULL
+			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NOT NULL AND superseded_by IS NULL AND (corrects_fitid IS NULL OR corrects_id IS NOT NULL)
 		),
 		all_pending AS (
 			SELECT
@@ -394,6 +402,7 @@ struct statements {
 				amount,
 				date_recorded,
 				memo,
+				date_reconciled,
 				fitid,
 				date_cleared,
 				corrects_fitid,
@@ -402,7 +411,7 @@ struct statements {
 				superseded_by,
 				(SELECT total FROM cleared_total) + SUM(amount) OVER (ORDER BY date_recorded ROWS UNBOUNDED PRECEDING) AS account_balance
 			FROM transactions
-			WHERE account_id = ? AND date_cleared IS NULL AND superseded_by IS NULL
+			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NULL AND superseded_by IS NULL AND (corrects_fitid IS NULL OR corrects_id IS NOT NULL)
 		)
 		SELECT * FROM all_pending
 		WHERE date_recorded BETWEEN ? AND ?
@@ -1547,17 +1556,11 @@ db::outcome db::prepare_import(import::pending_import& pending) {
 				},
 				[&](sqlite3_stmt* stmt) -> transaction {
 					transaction out;
-					out.id_            =                                         sqlite3_column_int64  (stmt, 0);
-					out.account_id     =                                         account.account_id;
-					out.amount         =                               currency {sqlite3_column_int64  (stmt, 1)};
-					out.date_recorded  =                               datetime {sqlite3_column_int64  (stmt, 2)};
-					out.date_cleared   =                   as_optional<datetime>(extract_optional_int64(stmt, 3));
-					out.memo           =                                         extract_text          (stmt, 4);
-					out.fitid          =                                         extract_optional_text (stmt, 5);
-					out.corrects_fitid =                                         extract_optional_text (stmt, 6);
-					out.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 7));
-					out.corrects_id    =                                         extract_optional_int64(stmt, 8);
-					out.superseded_by  =                                         extract_optional_int64(stmt, 9);
+					out.account_id    =          account.account_id;
+					out.id_           =          sqlite3_column_int64(stmt, 0);
+					out.amount        = currency{sqlite3_column_int64(stmt, 1)};
+					out.date_recorded = datetime{sqlite3_column_int64(stmt, 2)};
+					out.memo          =          extract_text        (stmt, 3);
 					return out;
 				}
 			);
@@ -1763,8 +1766,9 @@ db::outcome db::save_transaction(transaction& saving) {
 					sqlite3_bind_int64 (stmt, 2, saving.amount.minor_units);
 					sqlite3_bind_int64 (stmt, 3, saving.date_recorded.milliseconds_since_epoch);
 					bind_text          (stmt, 4, saving.memo);
-					bind_optional_int64(stmt, 5, saving.corrects_id);
-					bind_optional_text (stmt, 6, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, saving.correct_action));
+					bind_optional_int64(stmt, 5, as_optional_int64(saving.date_reconciled));
+					bind_optional_int64(stmt, 6, saving.corrects_id);
+					bind_optional_text (stmt, 7, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, saving.correct_action));
 				}
 			);
 			if (!insert_transaction) { return insert_transaction; }
@@ -1799,7 +1803,8 @@ db::outcome db::save_transaction(transaction& saving) {
 			[&](sqlite3_stmt* stmt) {
 				sqlite3_bind_int64 (stmt, 1, saving.date_recorded.milliseconds_since_epoch);
 				bind_text          (stmt, 2, saving.memo);
-				sqlite3_bind_int64 (stmt, 3, saving.id_);
+				bind_optional_int64(stmt, 3, as_optional_int64(saving.date_reconciled));
+				sqlite3_bind_int64 (stmt, 4, saving.id_);
 			}
 		);
 		if (!update) { return update; }
@@ -1962,18 +1967,19 @@ db::result<db::pending_transactions> db::account_pending(int64_t account_id, dat
 		},
 		[&](sqlite3_stmt* stmt) -> transaction {
 			transaction out;
-			out.record.account_id     =                                         account_id;
-			out.record.id_            =                                         sqlite3_column_int64  (stmt, 0);
-			out.record.amount         =                               currency {sqlite3_column_int64  (stmt, 1)};
-			out.record.date_recorded  =                               datetime {sqlite3_column_int64  (stmt, 2)};
-			out.record.memo           =                                         extract_text          (stmt, 3);
-			out.record.fitid          =                                         extract_optional_text (stmt, 4);
-			out.record.date_cleared   =                   as_optional<datetime>(extract_optional_int64(stmt, 5));
-			out.record.corrects_fitid =                                         extract_optional_text (stmt, 6);
-			out.record.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 7));
-			out.record.corrects_id    =                                         extract_optional_int64(stmt, 8);
-			out.record.superseded_by  =                                         extract_optional_int64(stmt, 9);
-			out.account_balance       =                               currency {sqlite3_column_int64  (stmt, 10)};
+			out.record.account_id      =                                         account_id;
+			out.record.id_             =                                         sqlite3_column_int64  (stmt, 0);
+			out.record.amount          =                               currency {sqlite3_column_int64  (stmt, 1)};
+			out.record.date_recorded   =                               datetime {sqlite3_column_int64  (stmt, 2)};
+			out.record.memo            =                                         extract_text          (stmt, 3);
+			out.record.date_reconciled =                   as_optional<datetime>(extract_optional_int64(stmt, 4));
+			out.record.fitid           =                                         extract_optional_text (stmt, 5);
+			out.record.date_cleared    =                   as_optional<datetime>(extract_optional_int64(stmt, 6));
+			out.record.corrects_fitid  =                                         extract_optional_text (stmt, 7);
+			out.record.correct_action  = optional_string_to_enum(correction_map, extract_optional_text (stmt, 8));
+			out.record.corrects_id     =                                         extract_optional_int64(stmt, 9);
+			out.record.superseded_by   =                                         extract_optional_int64(stmt, 10);
+			out.account_balance        =                               currency {sqlite3_column_int64  (stmt, 11)};
 			return out;
 		}
 	);
@@ -2014,17 +2020,18 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 		[&](sqlite3_stmt* stmt) -> transaction {
 			transaction out;
 			out.record.account_id = account_id;
-			out.record.id_            =                                         sqlite3_column_int64  (stmt, 0);
-			out.record.amount         =                               currency {sqlite3_column_int64  (stmt, 1)};
-			out.record.date_recorded  =                               datetime {sqlite3_column_int64  (stmt, 2)};
-			out.record.memo           =                                         extract_text          (stmt, 3);
-			out.record.fitid          =                                         extract_optional_text (stmt, 4);
-			out.record.date_cleared   =                   as_optional<datetime>(extract_optional_int64(stmt, 5));
-			out.record.corrects_fitid =                                         extract_optional_text (stmt, 6);
-			out.record.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 7));
-			out.record.corrects_id    =                                         extract_optional_int64(stmt, 8);
-			out.record.superseded_by  =                                         extract_optional_int64(stmt, 9);
-			out.account_balance       =                               currency {sqlite3_column_int64  (stmt, 10)};
+			out.record.id_             =                                         sqlite3_column_int64  (stmt, 0);
+			out.record.amount          =                               currency {sqlite3_column_int64  (stmt, 1)};
+			out.record.date_recorded   =                               datetime {sqlite3_column_int64  (stmt, 2)};
+			out.record.memo            =                                         extract_text          (stmt, 3);
+			out.record.date_reconciled =                   as_optional<datetime>(extract_optional_int64(stmt, 4));
+			out.record.fitid           =                                         extract_optional_text (stmt, 5);
+			out.record.date_cleared    =                   as_optional<datetime>(extract_optional_int64(stmt, 6));
+			out.record.corrects_fitid  =                                         extract_optional_text (stmt, 7);
+			out.record.correct_action  = optional_string_to_enum(correction_map, extract_optional_text (stmt, 8));
+			out.record.corrects_id     =                                         extract_optional_int64(stmt, 9);
+			out.record.superseded_by   =                                         extract_optional_int64(stmt, 10);
+			out.account_balance        =                               currency {sqlite3_column_int64  (stmt, 11)};
 			return out;
 		}
 	);
