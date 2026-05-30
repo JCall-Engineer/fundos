@@ -1,18 +1,18 @@
 # FundOS
 
 FundOS is a cross-platform, locally-run personal finance application built around envelope budgeting.
-It is currently in active development — the core library is complete and the UI clients are next.
+It is currently in active development: the core library is complete and the UI clients are next.
 Licensed under the [AGPL](https://www.gnu.org/licenses/agpl-3.0.html).
 
 ## What is FundOS?
 
 Envelope budgeting is a method of allocating every dollar of income to a named purpose before you spend it.
-Rather than tracking spending after the fact, you decide in advance how much goes to rent, groceries, savings, and so on — and spend from those envelopes.
+Rather than tracking spending after the fact, you decide in advance how much goes to rent, groceries, savings, and so on, then spend from those envelopes.
 This shifts budgeting from reactive to intentional.
 
 FundOS implements envelope budgeting as a locally-run desktop and mobile application.
 Your financial data lives on your devices and nowhere else.
-Transactions are imported from OFX files exported by your bank, or entered manually — no bank credentials required.
+Transactions are imported from OFX files exported by your bank, or entered manually. No bank credentials required.
 
 Many web-based budgeting services connect to your bank automatically by collecting your login credentials and logging in on your behalf to scrape your transaction history.
 This makes them a high-value target for attackers seeking access to people's bank accounts.
@@ -21,7 +21,7 @@ FundOS sidesteps this entirely.
 ## Why FundOS?
 
 Most budgeting tools, when they support automation at all, let you allocate fixed dollar amounts to categories.
-FundOS goes further — budgets are made up of phases that can be fixed dollar amounts or percentages of remaining income, freely interleaved in any order.
+FundOS goes further. Budgets are made up of phases that can be fixed dollar amounts or percentages of remaining income, freely interleaved in any order.
 This makes it straightforward to express rules like "save 10% off the top, then cover fixed expenses, then split what's left" without workarounds.
 
 FundOS is open source, licensed under the AGPL.
@@ -29,11 +29,11 @@ A tool that exists to help people take control of their finances shouldn't be lo
 
 ## How It Works
 
-FundOS models personal finance using five core concepts — accounts, funds, transactions, allocations, and budgets — with budgets further broken down into phases and targets.
+FundOS models personal finance around five core concepts: accounts, funds, transactions, allocations, and budgets. Budgets are further broken down into phases and targets.
 
 **Accounts** represent real-world bank accounts. They answer: where the money lives.
 
-**Funds** are virtual envelopes — named buckets that money is mentally assigned to. They answer: what the money's for.
+**Funds** are named virtual envelopes that money is mentally assigned to. They answer: what the money's for.
 
 **Transactions** are recorded against an account, either imported from an OFX file or entered manually.
 Each transaction has an amount, a date, an optional memo, and optional bank-assigned identifiers used to detect duplicates and corrections.
@@ -43,23 +43,26 @@ A transaction's amount is distributed across one or more funds via allocations, 
 
 **Budgets** define rules for automatically allocating income transactions.
 A budget is made up of **phases** that execute in user-defined order.
-Each phase is either fixed or percentage — phases of both types may be freely interleaved.
+Each phase is either fixed or percentage. Phases of both types may be freely interleaved.
 
 A **fixed phase** contains targets that each claim a set amount from the running remainder.
 
-A **percentage phase** contains targets that each claim a percentage of the remainder as it stood when the phase began — targets within a percentage phase do not deplete each other.
+A **percentage phase** contains targets that each claim a percentage of the remainder as it stood when the phase began. Targets within a percentage phase do not deplete each other.
 
-A **target** optionally specifies a cap, which limits how much will be added to the target fund — if the fund's balance is already near its cap, the target claims only enough to reach it, not the full amount.
+A **target** is a rule for how much to add to a specific fund.
+Fixed targets are well suited for predictable expenses like rent, groceries, or utilities.
+Percentage targets are well suited for goals like savings, investments, or discretionary spending.
+A target optionally specifies a cap on the target fund's balance, claiming only enough to bring the fund to its cap rather than the full amount.
 A target may also allow overdraw, pulling the remainder negative to fully meet the fund's need.
 
-Any remainder — positive or negative — after all phases complete flows to a designated overflow fund.
+After all phases complete, any remaining balance, positive or negative, flows to the budget's designated overflow fund.
 
 **Corrections** are first-class records.
-When a bank amends a transaction, the correction is stored as a new row linked to the original — nothing is mutated, and the full audit trail is preserved.
+When a bank amends a transaction, the correction is stored as a new row linked to the original. Nothing is mutated and the full audit trail is preserved.
 
 ## Project Status
 
-Active development — core library complete.
+Active development: core library complete.
 
 | Area                                        | Status                                      |
 |---------------------------------------------|---------------------------------------------|
@@ -93,21 +96,21 @@ Active development — core library complete.
 FundOS is structured as a thin-client architecture across all platforms:
 
 ```text
-core/        C++20 library — all business logic, SQLite persistence, OFX parsing
+core/        C++20 library: all business logic, SQLite persistence, OFX parsing
 desktop/     Qt application (Windows, Linux, macOS)
 android/     Kotlin application via JNI/NDK
 ios/         Swift application (planned)
 ```
 
 All business logic lives in `core`.
-UI layers are intentionally thin — they call into the core library and display results.
+UI layers are intentionally thin, calling into the core library and displaying results.
 SQLite is vendored as an amalgamation (`sqlite3.c` / `sqlite3.h`).
 
 ## Building
 
 FundOS uses CMake with presets for each platform and configuration. The configure step generates build system files; the build step compiles.
 
-**When you add or remove source files, re-run the configure step** — the build uses `GLOB_RECURSE` to discover sources, which only re-scans during configure, not during incremental builds.
+**When you add or remove source files, re-run the configure step.** The build uses `GLOB_RECURSE` to discover sources, which only re-scans during configure, not during incremental builds.
 
 ### Windows (Debug)
 
