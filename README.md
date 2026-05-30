@@ -4,7 +4,7 @@ FundOS is a cross-platform, locally-run personal finance application built aroun
 It is currently in active development: the core library is complete and the UI clients are next.
 Licensed under the [AGPL](https://www.gnu.org/licenses/agpl-3.0.html).
 
-## What is FundOS?
+## What is Envelope Budgeting?
 
 Envelope budgeting is a method of allocating every dollar of income to a named purpose before you spend it.
 Rather than tracking spending after the fact, you decide in advance how much goes to rent, groceries, savings, and so on, then spend from those envelopes.
@@ -14,11 +14,11 @@ FundOS implements envelope budgeting as a locally-run desktop and mobile applica
 Your financial data lives on your devices and nowhere else.
 Transactions are imported from OFX files exported by your bank, or entered manually. No bank credentials required.
 
+## Why FundOS?
+
 Many web-based budgeting services connect to your bank automatically by collecting your login credentials and logging in on your behalf to scrape your transaction history.
 This makes them a high-value target for attackers seeking access to people's bank accounts.
 FundOS sidesteps this entirely.
-
-## Why FundOS?
 
 Most budgeting tools, when they support automation at all, let you allocate fixed dollar amounts to categories.
 FundOS goes further. Budgets are made up of phases that can be fixed dollar amounts or percentages of remaining income, freely interleaved in any order.
