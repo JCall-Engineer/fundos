@@ -281,28 +281,11 @@ static constexpr datetime CLOSED_AT = date(2024, std::chrono::June, 1);
 TEST(DbQuery, ReadEntities) {
 	FUNDOS_TEST_DB();
 	sqlite3_exec(connection, std::format(R"sql(
-		INSERT INTO users (id, name) VALUES (1, 'Alice');
-		INSERT INTO users (id, name) VALUES (2, 'Bob');
 		INSERT INTO funds (id, name, closed_at) VALUES (10, 'Emergency', NULL);
 		INSERT INTO funds (id, name, closed_at) VALUES (11, 'Vacation', {});
 		INSERT INTO accounts (id, name, closed_at, bank_account_id) VALUES (20, 'Checking', NULL, 'ref1');
 		INSERT INTO accounts (id, name, closed_at, bank_account_id) VALUES (21, 'Savings', {}, NULL);
-		INSERT INTO fund_members (fund_id, user_id) VALUES (10, 1);
-		INSERT INTO fund_members (fund_id, user_id) VALUES (11, 1);
-		INSERT INTO account_members (account_id, user_id) VALUES (20, 1);
 	)sql", CLOSED_AT.milliseconds_since_epoch, CLOSED_AT.milliseconds_since_epoch).c_str(), nullptr, nullptr, nullptr);
-
-	{
-		auto result = database->get_users();
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 2);
-		auto alice = result.value()[0];
-		EXPECT_EQ(alice.id(), 1);
-		EXPECT_EQ(alice.name, "Alice");
-		auto bob = result.value()[1];
-		EXPECT_EQ(bob.id(), 2);
-		EXPECT_EQ(bob.name, "Bob");
-	}
 
 	{
 		auto result = database->get_funds();
@@ -333,72 +316,10 @@ TEST(DbQuery, ReadEntities) {
 		EXPECT_EQ(savings.closed_at, CLOSED_AT);
 		EXPECT_EQ(savings.bank_account_id, std::nullopt);
 	}
-
-	{
-		// Alice is member of Emergency (open), not Vacation (closed) — memberships excludes closed
-		auto memberships = database->get_fund_memberships(1);
-		ASSERT_TRUE(static_cast<bool>(memberships));
-		ASSERT_EQ(memberships.value().size(), 1);
-		EXPECT_EQ(memberships.value()[0].id(), 10);
-		EXPECT_EQ(memberships.value()[0].name, "Emergency");
-
-		// nonmemberships excludes closed funds too, so no rows return for Alice
-		auto nonmemberships = database->get_fund_nonmemberships(1);
-		ASSERT_TRUE(static_cast<bool>(nonmemberships));
-		ASSERT_EQ(nonmemberships.value().size(), 0);
-
-		// Bob is not a member of the only open fund open fund
-		auto bob_nonmemberships = database->get_fund_nonmemberships(2);
-		ASSERT_TRUE(static_cast<bool>(bob_nonmemberships));
-		ASSERT_EQ(bob_nonmemberships.value().size(), 1);
-		EXPECT_EQ(bob_nonmemberships.value()[0].id(), 10);
-
-		auto members = database->get_fund_members(10);
-		ASSERT_TRUE(static_cast<bool>(members));
-		ASSERT_EQ(members.value().size(), 1);
-		EXPECT_EQ(members.value()[0].id(), 1);
-		EXPECT_EQ(members.value()[0].name, "Alice");
-
-		auto nonmembers = database->get_fund_nonmembers(10);
-		ASSERT_TRUE(static_cast<bool>(nonmembers));
-		ASSERT_EQ(nonmembers.value().size(), 1);
-		EXPECT_EQ(nonmembers.value()[0].id(), 2);
-		EXPECT_EQ(nonmembers.value()[0].name, "Bob");
-	}
-
-	{
-		auto memberships = database->get_account_memberships(1);
-		ASSERT_TRUE(static_cast<bool>(memberships));
-		ASSERT_EQ(memberships.value().size(), 1);
-		EXPECT_EQ(memberships.value()[0].id(), 20);
-		EXPECT_EQ(memberships.value()[0].name, "Checking");
-		EXPECT_EQ(memberships.value()[0].bank_account_id, "ref1");
-
-		auto nonmemberships = database->get_account_nonmemberships(1);
-		ASSERT_TRUE(static_cast<bool>(nonmemberships));
-		ASSERT_EQ(nonmemberships.value().size(), 0);
-
-		auto members = database->get_account_members(20);
-		ASSERT_TRUE(static_cast<bool>(members));
-		ASSERT_EQ(members.value().size(), 1);
-		EXPECT_EQ(members.value()[0].id(), 1);
-		EXPECT_EQ(members.value()[0].name, "Alice");
-
-		auto nonmembers = database->get_account_nonmembers(20);
-		ASSERT_TRUE(static_cast<bool>(nonmembers));
-		ASSERT_EQ(nonmembers.value().size(), 1);
-		EXPECT_EQ(nonmembers.value()[0].id(), 2);
-		EXPECT_EQ(nonmembers.value()[0].name, "Bob");
-	}
 }
 
 TEST(DbQuery, SaveEntities) {
 	FUNDOS_TEST_DB();
-
-	user alice;
-	alice.name = "Alice";
-	ASSERT_TRUE(static_cast<bool>(database->save_user(alice)));
-	EXPECT_NE(alice.id(), 0);
 
 	fund emergency;
 	emergency.name = "Emergency";
@@ -410,14 +331,6 @@ TEST(DbQuery, SaveEntities) {
 	ASSERT_TRUE(static_cast<bool>(database->save_account(checking)));
 	EXPECT_NE(checking.id(), 0);
 
-	{
-		auto result = database->get_users();
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 1);
-		auto& row = result.value()[0];
-		EXPECT_EQ(row.id(), alice.id());
-		EXPECT_EQ(row.name, alice.name);
-	}
 	{
 		auto result = database->get_funds();
 		ASSERT_TRUE(static_cast<bool>(result));
@@ -436,80 +349,6 @@ TEST(DbQuery, SaveEntities) {
 		EXPECT_EQ(row.name, checking.name);
 		EXPECT_EQ(row.closed_at, checking.closed_at);
 		EXPECT_EQ(row.bank_account_id, checking.bank_account_id);
-	}
-
-	// Verify membership additions and removals
-	ASSERT_TRUE(static_cast<bool>(database->add_user_to_account(checking.id(), alice.id())));
-	{
-		auto result = database->get_account_members(checking.id());
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 1);
-		auto& row = result.value()[0];
-		EXPECT_EQ(row.id(), alice.id());
-		EXPECT_EQ(row.name, alice.name);
-	}
-	{
-		auto result = database->get_account_memberships(alice.id());
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 1);
-		auto& row = result.value()[0];
-		EXPECT_EQ(row.id(), checking.id());
-		EXPECT_EQ(row.name, checking.name);
-		EXPECT_EQ(row.closed_at, checking.closed_at);
-		EXPECT_EQ(row.bank_account_id, checking.bank_account_id);
-	}
-	ASSERT_TRUE(static_cast<bool>(database->remove_user_from_account(checking.id(), alice.id())));
-	{
-		auto result = database->get_account_members(checking.id());
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 0);
-	}
-	{
-		auto result = database->get_account_memberships(alice.id());
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 0);
-	}
-
-	ASSERT_TRUE(static_cast<bool>(database->add_user_to_fund(emergency.id(), alice.id())));
-	{
-		auto result = database->get_fund_members(emergency.id());
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 1);
-		auto& row = result.value()[0];
-		EXPECT_EQ(row.id(), alice.id());
-		EXPECT_EQ(row.name, alice.name);
-	}
-	{
-		auto result = database->get_fund_memberships(alice.id());
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 1);
-		auto& row = result.value()[0];
-		EXPECT_EQ(row.id(), emergency.id());
-		EXPECT_EQ(row.name, emergency.name);
-		EXPECT_EQ(row.closed_at, emergency.closed_at);
-	}
-	ASSERT_TRUE(static_cast<bool>(database->remove_user_from_fund(emergency.id(), alice.id())));
-	{
-		auto result = database->get_fund_members(emergency.id());
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 0);
-	}
-	{
-		auto result = database->get_fund_memberships(alice.id());
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 0);
-	}
-
-	// Verify update path
-	alice.name = "Alicia";
-	ASSERT_TRUE(static_cast<bool>(database->save_user(alice)));
-	{
-		auto result = database->get_users();
-		ASSERT_TRUE(static_cast<bool>(result));
-		ASSERT_EQ(result.value().size(), 1);
-		auto& row = result.value()[0];
-		EXPECT_EQ(row.id(), alice.id());
-		EXPECT_EQ(row.name, "Alicia");
 	}
 
 	emergency.name = "Rainy Day";

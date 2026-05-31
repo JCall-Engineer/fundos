@@ -23,10 +23,6 @@ public:
 	bool is_persisted() const { return id_ != 0; }
 };
 
-struct user : db_managed {
-	std::string name;
-};
-
 struct fund : db_managed {
 	std::string name;
 	std::optional<datetime> closed_at;

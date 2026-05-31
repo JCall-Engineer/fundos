@@ -268,14 +268,6 @@ public:
 	outcome                         set_percentage_locale_preset(const percentage_locale::slot&);
 	outcome                         set_percentage_locale(const percentage_locale::spec&);
 
-	result<std::vector<user>>    get_users();
-
-	/// Inserts or updates the given user.
-	/// If id is zero, inserts and sets id on the object.
-	/// If id is nonzero, updates the existing record.
-	outcome                      save_user(user& saving);
-	outcome                      delete_user(int64_t user_id);
-
 	result<std::vector<account>> get_accounts();
 
 	/// Inserts or updates the given account.
@@ -289,20 +281,6 @@ public:
 	/// If id is zero, inserts and sets id on the object.
 	/// If id is nonzero, updates the existing record.
 	outcome                      save_fund(fund& saving);
-
-	result<std::vector<account>> get_account_memberships(int64_t user_id);
-	result<std::vector<account>> get_account_nonmemberships(int64_t user_id);
-	result<std::vector<user>>    get_account_members(int64_t account_id);
-	result<std::vector<user>>    get_account_nonmembers(int64_t account_id);
-	outcome                      add_user_to_account(int64_t account_id, int64_t user_id);
-	outcome                      remove_user_from_account(int64_t account_id, int64_t user_id);
-
-	result<std::vector<fund>>    get_fund_memberships(int64_t user_id);
-	result<std::vector<fund>>    get_fund_nonmemberships(int64_t user_id);
-	result<std::vector<user>>    get_fund_members(int64_t fund_id);
-	result<std::vector<user>>    get_fund_nonmembers(int64_t fund_id);
-	outcome                      add_user_to_fund(int64_t fund_id, int64_t user_id);
-	outcome                      remove_user_from_fund(int64_t fund_id, int64_t user_id);
 
 	result<std::vector<budget>>  get_budgets();
 

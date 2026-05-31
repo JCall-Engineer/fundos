@@ -72,7 +72,6 @@ Active development: core library complete.
 | Database schema                             | ✅ Complete                                 |
 | Transaction recording and correction        | ✅ Complete                                 |
 | OFX import (1.x SGML and 2.x XML)           | ✅ Complete (untested, presumed working)    |
-| Multi-user handling                         | 🤔 Under consideration                      |
 | Account, fund, and budget CRUD              | ✅ Complete                                 |
 | Fund allocation                             | ✅ Complete                                 |
 | Budget automation logic                     | ✅ Complete                                 |
