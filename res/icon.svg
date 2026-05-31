@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="48"
+   height="48"
+   viewBox="0 0 12.7 12.7"
+   version="1.1"
+   id="svg1"
+   inkscape:export-filename="icon.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   sodipodi:docname="icon.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="23.524038"
+     inkscape:cx="27.631311"
+     inkscape:cy="23.911711"
+     inkscape:window-width="2560"
+     inkscape:window-height="1369"
+     inkscape:window-x="2552"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="fill:#e8d5a3;fill-opacity:1;stroke:#000000;stroke-width:0.0529167;stroke-dasharray:none;stroke-opacity:1"
+       id="rect1"
+       width="10.583333"
+       height="6.6145835"
+       x="1.0847917"
+       y="3.0691667" />
+    <path
+       style="fill:#e8d5a3;fill-opacity:1;stroke:#000000;stroke-width:0.02645833;stroke-dasharray:none;stroke-opacity:1"
+       d="M 1.0847917,3.0691666 6.3499999,6.3499999 11.668125,3.0691666 Z"
+       id="path2" />
+    <circle
+       style="fill:#8b1a1a;fill-opacity:1;stroke:#8b1a1a;stroke-width:0.0264583;stroke-dasharray:none;stroke-opacity:1"
+       id="path3"
+       cx="6.3499999"
+       cy="6.3499999"
+       r="1.3229166" />
+    <text
+       xml:space="preserve"
+       style="font-size:2.82222px;font-family:Monospace;-inkscape-font-specification:Monospace;text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#4a0c0c;fill-opacity:1;stroke:none;stroke-width:0.0264583;stroke-dasharray:none;stroke-opacity:1"
+       x="5.4814224"
+       y="7.182611"
+       id="text3"><tspan
+         sodipodi:role="line"
+         id="tspan3"
+         style="font-size:2.82222px;fill:#4a0c0c;fill-opacity:1;stroke:none;stroke-width:0.0264583;stroke-opacity:1"
+         x="5.4814224"
+         y="7.182611">₣</tspan></text>
+  </g>
+</svg>

@@ -3,6 +3,7 @@
 
 int main(int argc, char* argv[]) {
 	QApplication application(argc, argv);
+	application.setWindowIcon(QIcon(":/res/icon.svg"));
 
 	QMainWindow window;
 	window.setWindowTitle("FundOS");
