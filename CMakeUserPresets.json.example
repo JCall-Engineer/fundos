@@ -1,0 +1,55 @@
+{
+	"version": 6,
+	"configurePresets": [
+		{
+			"name": "windows-debug-local",
+			"inherits": "windows-debug",
+			"cacheVariables": {
+				"CMAKE_PREFIX_PATH": "C:/Qt/6.x.x/msvc2022_64"
+			}
+		},
+		{
+			"name": "windows-release-local",
+			"inherits": "windows-release",
+			"cacheVariables": {
+				"CMAKE_PREFIX_PATH": "C:/Qt/6.x.x/msvc2022_64"
+			}
+		},
+		{
+			"name": "linux-debug-local",
+			"inherits": "linux-debug",
+			"cacheVariables": {
+				"CMAKE_PREFIX_PATH": "/usr"
+			}
+		},
+		{
+			"name": "linux-release-local",
+			"inherits": "linux-release",
+			"cacheVariables": {
+				"CMAKE_PREFIX_PATH": "/usr"
+			}
+		}
+	],
+	"buildPresets": [
+		{
+			"name": "windows-debug-local",
+			"configurePreset": "windows-debug-local",
+			"configuration": "Debug"
+		},
+		{
+			"name": "windows-release-local",
+			"configurePreset": "windows-release-local",
+			"configuration": "Release"
+		},
+		{
+			"name": "linux-debug-local",
+			"configurePreset": "linux-debug-local",
+			"configuration": "Debug"
+		},
+		{
+			"name": "linux-release-local",
+			"configurePreset": "linux-release-local",
+			"configuration": "Release"
+		}
+	]
+}

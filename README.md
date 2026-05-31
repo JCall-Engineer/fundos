@@ -108,74 +108,63 @@ SQLite is vendored as an amalgamation (`sqlite3.c` / `sqlite3.h`).
 
 ## Building
 
-FundOS uses CMake with presets for each platform and configuration. The configure step generates build system files; the build step compiles.
+FundOS uses CMake with presets. Building is a two-step process: a **configure** step that generates build system files, and a **build** step that compiles. Each step has its own preset.
 
-**When you add or remove source files, re-run the configure step.** The build uses `GLOB_RECURSE` to discover sources, which only re-scans during configure, not during incremental builds.
+**Source discovery uses `GLOB_RECURSE`.** When you add or remove source files, re-run the configure step — the build system does not detect new or deleted files automatically during incremental builds.
 
-### Windows (Debug)
+### Presets
+
+| Configure preset        | Build preset            | Platform | Notes                                    |
+|-------------------------|-------------------------|----------|------------------------------------------|
+| `windows-debug-local`   | `windows-debug-local`   | Windows  | Requires `CMakeUserPresets.json`         |
+| `windows-release-local` | `windows-release-local` | Windows  | Requires `CMakeUserPresets.json`         |
+| `linux-debug`           | `linux-debug`           | Linux    |                                          |
+| `linux-release`         | `linux-release`         | Linux    |                                          |
 
 ```powershell
-cmake --preset windows-debug
-cmake --build --preset windows-debug
+cmake --preset <configure-preset>
+cmake --build --preset <build-preset>
 ```
 
-### Windows (Release)
+### Windows
+
+#### Dependencies
+
+- [Visual Studio 2022](https://visualstudio.microsoft.com/) or later with the **Desktop development with C++** workload
+- [Qt 6](https://www.qt.io/download-qt-installer) installed via the Qt Online Installer — select the **MSVC 2022 64-bit** kit under your Qt version. The MinGW kit is not compatible with this project. Qt is available under the LGPL v3 open source license.
+
+#### CMakeUserPresets.json
+
+CMake needs to know where Qt is installed on your machine. Copy the provided example and fill in your Qt path:
 
 ```powershell
-cmake --preset windows-release
-cmake --build --preset windows-release
+copy CMakeUserPresets.json.example CMakeUserPresets.json
 ```
 
-### Linux (Debug)
+Edit `CMakeUserPresets.json` and replace the placeholder path with your actual Qt installation directory, typically `C:/Qt/6.x.x/msvc2022_64`.
 
-```bash
-cmake --preset linux-debug
-cmake --build --preset linux-debug
-```
+### Linux
 
-### Linux (Release)
+> **Note:** Linux support is implemented but untested. Corrections and build reports are welcome.
 
-```bash
-cmake --preset linux-release
-cmake --build --preset linux-release
-```
+Install Qt 6 via your package manager:
+
+- Debian/Ubuntu: `sudo apt install qt6-base-dev`
+- Fedora: `sudo dnf install qt6-qtbase-devel`
+
+If you install Qt via the Qt Online Installer instead, CMake may not find it automatically.
+In that case, create a `CMakeUserPresets.json` modeled on `CMakeUserPresets.json.example` and set `CMAKE_PREFIX_PATH` to your Qt installation directory, typically `~/Qt/6.x.x/gcc_64`.
 
 ## Running Tests
 
 Tests are built automatically as part of the build step.
 
-### Windows
-
-```powershell
-.\out\windows-debug\bin\Debug\tests.exe
-.\out\windows-release\bin\Release\tests.exe
-```
-
-### Linux
-
-```bash
-./out/linux-debug/bin/tests
-./out/linux-release/bin/tests
-```
-
-## Output Structure
-
-```text
-out/
-  build/               <- CMake generator files
-  windows-debug/
-    bin/Debug/         <- tests.exe, fundos.exe
-    lib/Debug/         <- static libraries
-  windows-release/
-    bin/Release/
-    lib/Release/
-  linux-debug/
-    bin/
-    lib/
-  linux-release/
-    bin/
-    lib/
-```
+| Platform | Configuration | Path                                          |
+|----------|---------------|-----------------------------------------------|
+| Windows  | Debug         | `.\out\windows-debug\bin\Debug\tests.exe`     |
+| Windows  | Release       | `.\out\windows-release\bin\Release\tests.exe` |
+| Linux    | Debug         | `./out/linux-debug/bin/tests`                 |
+| Linux    | Release       | `./out/linux-release/bin/tests`               |
 
 ## Contributing
 
