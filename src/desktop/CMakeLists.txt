@@ -1,7 +1,9 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
+set(CMAKE_AUTOMOC ON)
+
 configure_file(app.rc.in app.rc)
-file(GLOB_RECURSE qt_sources CONFIGURE_DEPENDS *.cpp)
+file(GLOB_RECURSE qt_sources CONFIGURE_DEPENDS *.cpp *.hpp)
 qt_add_executable(fundos WIN32
 	${qt_sources}
 	${CMAKE_CURRENT_BINARY_DIR}/app.rc
