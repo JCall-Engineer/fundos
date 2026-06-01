@@ -219,10 +219,12 @@ public:
 
 		explicit operator bool() const { return std::holds_alternative<T>(data); }
 
-		      T& value()       & { return std::get<T>(data); }
-		const T& value() const & { return std::get<T>(data); }
+		// All accessors are lvalue-qualified; none make sense on a temporary result.
+		// Callers must verify via operator bool before calling value() or status().
 
-		const outcome& status() const { return std::get<outcome>(data); }
+		      T&       value()        & { return std::get<T>(data); }
+		const T&       value()  const & { return std::get<T>(data); }
+		const outcome& status() const & { return std::get<outcome>(data); }
 	};
 
 private:
