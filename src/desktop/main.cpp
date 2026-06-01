@@ -1,14 +1,12 @@
 #include <QApplication>
-#include <QMainWindow>
+#include "mainwindow.hpp"
 
 int main(int argc, char* argv[]) {
 	QApplication application(argc, argv);
+	application.setOrganizationName("fundos");
+	application.setApplicationName("fundos");
 	application.setWindowIcon(QIcon(":/res/icon.svg"));
 
-	QMainWindow window;
-	window.setWindowTitle("FundOS");
-	window.resize(1280, 720);
-	window.show();
-
+	MainWindow window;
 	return application.exec();
 }
