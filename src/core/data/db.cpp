@@ -132,10 +132,6 @@ struct statements {
 	statement_slot get_funds { .sql = R"sql(
 		SELECT id, name, closed_at FROM funds
 	)sql" };
-	statement_slot get_fund_balance { .sql = R"sql(
-		SELECT COALESCE(SUM(allocations.amount), 0) FROM allocations
-		WHERE allocations.fund_id = ?
-	)sql" };
 	statement_slot insert_fund { .sql = R"sql(
 		INSERT INTO funds (name) VALUES (?)
 	)sql" };
@@ -147,10 +143,6 @@ struct statements {
 
 	statement_slot get_accounts { .sql = R"sql(
 		SELECT id, name, closed_at, bank_account_id FROM accounts
-	)sql" };
-	statement_slot get_account_balance { .sql = R"sql(
-		SELECT COALESCE(SUM(amount), 0) FROM transactions
-		WHERE account_id = ?
 	)sql" };
 	statement_slot insert_account { .sql = R"sql(
 		INSERT INTO accounts (name, bank_account_id)
@@ -362,9 +354,6 @@ struct statements {
 
 	statement_slot get_transaction_allocations { .sql = R"sql(
 		SELECT id, fund_id, amount FROM allocations WHERE transaction_id = ?
-	)sql" };
-	statement_slot get_fund_allocation { .sql = R"sql(
-		SELECT id, amount FROM allocations WHERE transaction_id = ? AND fund_id = ?
 	)sql" };
 
 	/// Used to validate allocations
@@ -951,7 +940,7 @@ db::result<std::vector<budget>> db::get_budgets() {
 		}
 	);
 	if (!budget_result) { return budget_result.status(); }
-	
+
 	std::vector<budget> &out = budget_result.value(); // fetch_many guarantees a value if no error
 	for (auto &budget : out) {
 		auto phase_result = sql_fetch_many<any_budget_phase>(
@@ -973,7 +962,7 @@ db::result<std::vector<budget>> db::get_budgets() {
 			}
 		);
 		if (!phase_result) { return phase_result.status(); }
-		outcome phase_error = error::none;
+		outcome fetch_targets_result = error::none;
 		for (auto &phase : phase_result.value()) {
 			std::visit([&](auto &typed_phase) {
 				using TargetType = typename std::decay_t<decltype(typed_phase.targets)>::value_type;
@@ -997,7 +986,7 @@ db::result<std::vector<budget>> db::get_budgets() {
 					}
 				);
 				if (!target_result) {
-					phase_error = target_result.status();
+					fetch_targets_result = target_result.status();
 					return;
 				}
 				typed_phase.targets = std::list<TargetType>(
@@ -1006,7 +995,7 @@ db::result<std::vector<budget>> db::get_budgets() {
 				);
 				budget.phases.push_back(std::move(typed_phase));
 			}, phase);
-			if (!phase_error) { return phase_error; }
+			if (!fetch_targets_result) { return fetch_targets_result; }
 		}
 	}
 	return out;

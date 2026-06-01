@@ -108,7 +108,11 @@ Reword until a sentence is a reasonable length, then keep it on one line.
 
 ### Prefer structure over if/else chains
 
-Prefer dispatch tables, variant visitors, or other structured approaches over long chains of `if`/`else if`. This applies in both core and UI layers.
+Prefer dispatch tables, variant visitors, or `switch` statements over long chains of `if`/`else if` when branching on a known set of discrete values. This applies in both core and UI layers.
+
+The goal is to make the set of cases explicit. A visitor over a `std::variant` won't compile if a new variant goes unhandled; a `switch` makes the matched values visible at a glance in a way a chain of equality checks does not.
+
+This rule does not apply to range checks or other conditions that don't reduce to discrete value matching — a trichotomy on `<`, `==`, `>` is cleaner as `if/else if/else` than any alternative.
 
 ### Ternary expressions
 
