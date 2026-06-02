@@ -36,7 +36,8 @@ public:
 		none,            // happy path
 		not_ready,       // called a query function before migration or after a closed connection
 		corrupted,       // unrecoverable fs error, connection closed
-		unavailable,     // busy or locked
+		unavailable,     // busy or locked, try again
+		readonly,        // filesystem permission check necessary
 		out_of_memory,   // potentially transient error
 		disk_full,       // potentially transient error
 		constraint,      // either a FOREIGN KEY or UNIQUE violation
@@ -108,6 +109,7 @@ public:
 		code         result        = code::ok;
 		schema_state schema_status = schema_state::none;
 		outcome      sqlite3_outcome;
+		std::string  journal_mode; // cheap diagnostic for if wal mode can be set
 
 		bool is_ok()           const { return result == code::ok; }
 		bool has_error()       const { return result >= first_error; }
@@ -178,6 +180,8 @@ public:
 	const status&                get_status()   const { return open_result; }
 	bool                         is_connected() const { return connection != nullptr; }
 	bool                         is_ready()     const { return open_result.is_ok() && is_connected(); }
+
+	outcome backup(const std::string& path);
 
 private:
 	void open();

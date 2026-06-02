@@ -1846,8 +1846,9 @@ db::error db::classify_sqlite_open_error(int rc) {
 			return db::error::out_of_memory;
 		case SQLITE_BUSY:
 		case SQLITE_LOCKED:
-		case SQLITE_READONLY:
 			return db::error::unavailable;
+		case SQLITE_READONLY:
+			return db::error::readonly;
 		default:
 			FUNDOS_ASSERT(false, "unhandled sqlite3 result code"); // In production fall through to corrupted
 			[[fallthrough]];
@@ -1879,6 +1880,59 @@ std::shared_ptr<db> db::open_memory() {
 		return std::make_shared<db>(outcome(classify_sqlite_open_error(rc), msg));
 	}
 	return std::make_shared<db>(connection, owns_connection{});
+}
+
+db::outcome db::backup(const std::string& path) {
+	if (!is_ready()) { return db::error::not_ready; }
+
+	sqlite3* destination;
+	int rc = sqlite3_open(path.c_str(), &destination);
+	if (rc != SQLITE_OK) {
+		auto msg = sqlite_error_message(destination);
+		sqlite3_close(destination); // must still close even on open failure
+		return outcome(classify_sqlite_open_error(rc), msg);
+	}
+
+	sqlite3_backup* backup = sqlite3_backup_init(destination, "main", connection, "main");
+	if (backup == nullptr) {
+		rc = sqlite3_errcode(destination);
+		auto msg = sqlite_error_message(destination);
+		sqlite3_close(destination);
+		return outcome(classify_sqlite_open_error(rc), msg);
+	}
+
+	auto classify = [this](int rc) -> db::error {
+		switch (rc & 0xFF) {
+			case SQLITE_FULL:
+				return db::error::disk_full;
+			case SQLITE_NOMEM:
+				return db::error::out_of_memory;
+			case SQLITE_BUSY:
+			case SQLITE_LOCKED:
+				return db::error::unavailable;
+			case SQLITE_READONLY:
+				return db::error::readonly;
+			case SQLITE_CORRUPT: // Definitely an error on the source
+				close();
+				[[fallthrough]];
+			case SQLITE_IOERR: // could be an error on source or destination
+				return db::error::corrupted;
+			default:
+				FUNDOS_ASSERT(false, "unhandled sqlite3 backup result code");
+				return db::error::internal;
+		}
+	};
+
+	rc = sqlite3_backup_step(backup, -1); // -1 = copy all pages at once
+	rc = sqlite3_backup_finish(backup); // must be called even if step fails
+	if (SQLITE_OK != rc) {
+		auto msg = sqlite_error_message(destination);
+		sqlite3_close(destination);
+		return outcome(classify(rc), msg);
+	}
+
+	sqlite3_close(destination);
+	return outcome(error::none);
 }
 
 void db::prepare() {
@@ -1957,7 +2011,21 @@ void db::open() {
 		return;
 	}
 
-	int rc = sqlite3_exec(connection, "PRAGMA locking_mode = EXCLUSIVE;", nullptr, nullptr, nullptr); // Just adds an extra assurance that the db isn't going to change while we have it open
+	int rc = sqlite3_exec(connection, "PRAGMA locking_mode = EXCLUSIVE;", nullptr, nullptr, nullptr); // Adds an extra assurance that the db isn't going to change while we have it open
+	if (SQLITE_OK != rc) {
+		open_result.result = status::code::sqlite3_error;
+		open_result.sqlite3_outcome = sqlite_open_error(rc);
+		close();
+		return;
+	}
+
+	auto journal_mode_callback = [](void* result, int count, char** values, char**) -> int {
+		if (count > 0 && values[0]) {
+			*static_cast<std::string*>(result) = values[0];
+		}
+		return 0;
+	};
+	rc = sqlite3_exec(connection, "PRAGMA journal_mode = WAL;", journal_mode_callback, &open_result.journal_mode, nullptr); // Protects against write failures on system crashes
 	if (SQLITE_OK != rc) {
 		open_result.result = status::code::sqlite3_error;
 		open_result.sqlite3_outcome = sqlite_open_error(rc);
