@@ -275,6 +275,7 @@ public:
 	outcome                         set_percentage_locale(const percentage_locale::spec&);
 
 	result<std::vector<account>> get_accounts();
+	result<currency>             get_account_balance(int64_t fund_id);
 
 	/// Inserts or updates the given account.
 	/// If id is zero, inserts and sets id on the object.
@@ -282,6 +283,7 @@ public:
 	outcome                      save_account(account& saving);
 
 	result<std::vector<fund>>    get_funds();
+	result<currency>             get_fund_balance(int64_t fund_id);
 
 	/// Inserts or updates the given fund.
 	/// If id is zero, inserts and sets id on the object.

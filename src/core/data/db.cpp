@@ -140,6 +140,11 @@ struct statements {
 		SET name = ?, closed_at = ?
 		WHERE id = ?
 	)sql" };
+	statement_slot get_fund_balance { .sql = R"sql(
+		SELECT COALESCE(SUM(allocations.amount), 0)
+		FROM allocations JOIN transactions ON allocations.transaction_id = transactions.id
+		WHERE allocations.fund_id = ? AND transactions.superseded_by IS NULL
+	)sql" };
 
 	statement_slot get_accounts { .sql = R"sql(
 		SELECT id, name, closed_at, bank_account_id FROM accounts
@@ -152,6 +157,11 @@ struct statements {
 		UPDATE accounts
 		SET name = ?, closed_at = ?, bank_account_id = ?
 		WHERE id = ?
+	)sql" };
+	statement_slot get_account_balance { .sql = R"sql(
+		SELECT COALESCE(SUM(amount), 0)
+		FROM transactions
+		WHERE account_id = ? AND superseded_by IS NULL
 	)sql" };
 
 	statement_slot get_budgets { .sql = R"sql(
@@ -855,6 +865,17 @@ db::result<std::vector<fund>> db::get_funds() {
 		}
 	);
 }
+db::result<currency> db::get_fund_balance(int64_t fund_id) {
+	return sql_fetch_one<currency>(
+		prepared->named.get_fund_balance.statement,
+		[&](sqlite3_stmt* stmt) -> void {
+			sqlite3_bind_int64(stmt, 1, fund_id);
+		},
+		[](sqlite3_stmt* stmt) -> currency {
+			return currency{sqlite3_column_int64(stmt, 0)};
+		}
+	);
+}
 db::outcome db::save_fund(fund& saving) {
 	if (!saving.is_persisted()) {
 		outcome insert = sql_execute(
@@ -893,6 +914,17 @@ db::result<std::vector<account>> db::get_accounts() {
 			row.closed_at       = as_optional<datetime>(extract_optional_int64(stmt, 2));
 			row.bank_account_id =                       extract_optional_text (stmt, 3);
 			return row;
+		}
+	);
+}
+db::result<currency> db::get_account_balance(int64_t account_id) {
+	return sql_fetch_one<currency>(
+		prepared->named.get_account_balance.statement,
+		[&](sqlite3_stmt* stmt) -> void {
+			sqlite3_bind_int64(stmt, 1, account_id);
+		},
+		[](sqlite3_stmt* stmt) -> currency {
+			return currency{sqlite3_column_int64(stmt, 0)};
 		}
 	);
 }
