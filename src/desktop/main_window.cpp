@@ -3,8 +3,13 @@
 #include "main_window.hpp"
 
 void MainWindow::open_database() {
-	database = nullptr; // Close previous db so it doesn't lock an attempt to create a new db instance
+	if (database != nullptr) {
+		// Close previous db so it doesn't lock an attempt to create a new db instance
+		database->close();
+	}
 	database = fundos::db::open_file(db_path);
+	status_bar->set_database(database);
+
 	if (database->is_ready()) {
 		// open main page
 		return;
@@ -17,14 +22,7 @@ void MainWindow::open_database() {
 	}
 
 	if (status.has_error()) {
-		switch(status.result) {
-			case fundos::db::status::code::null_db: // impossible with how we use db, requires passing null sqlite3* to a constructor
-				FUNDOS_UNREACHABLE();
-				return;
-			case fundos::db::status::code::schema_error:
-			case fundos::db::status::code::sqlite3_error:
-				break;
-		}
+		
 		// show error page
 	}
 }
@@ -42,6 +40,10 @@ MainWindow::MainWindow() {
 
 	pages = new QStackedWidget(this);
 	setCentralWidget(pages);
+
+	status_bar = new StatusBar(this);
+	setStatusBar(status_bar);
+	//connect(status_bar, &StatusBar::db_menu_requested, this, &MainWindow::show_db_menu);
 
 	open_database();
 }

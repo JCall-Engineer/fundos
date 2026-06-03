@@ -1,5 +1,7 @@
 #pragma once
 #include "fundos.hpp"
+
+#include "status_bar.hpp"
 #include <QMainWindow>
 #include <QStackedWidget>
 
@@ -9,6 +11,7 @@ class MainWindow : public QMainWindow {
 	std::string db_path;
 	std::shared_ptr<fundos::db> database = nullptr;
 	QStackedWidget* pages = nullptr;
+	StatusBar* status_bar = nullptr;
 
 	void open_database();
 
