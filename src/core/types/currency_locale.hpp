@@ -26,13 +26,13 @@ struct spec {
 	negative_notation negative_format;
 };
 
-struct slot {
+struct currency_locale_entry {
 	const char* identifier;
 	spec info;
 };
 
 struct data {
-	slot USD {
+	currency_locale_entry USD {
 		"USD", {
 			.scale                = 100,
 			.symbol               = "$",
@@ -42,7 +42,7 @@ struct data {
 			.negative_format      = spec::negative_notation::parentheses,
 		}
 	};
-	slot CAD {
+	currency_locale_entry CAD {
 		"CAD", {
 			.scale                = 100,
 			.symbol               = "CA$",
@@ -52,7 +52,7 @@ struct data {
 			.negative_format      = spec::negative_notation::parentheses,
 		}
 	};
-	slot GBP {
+	currency_locale_entry GBP {
 		"GBP", {
 			.scale                = 100,
 			.symbol               = "\xc2\xa3", // £ in UTF-8
@@ -62,7 +62,7 @@ struct data {
 			.negative_format      = spec::negative_notation::leading_minus,
 		}
 	};
-	slot EUR {
+	currency_locale_entry EUR {
 		"EUR", {
 			.scale                = 100,
 			.symbol               = "\xe2\x82\xac", // € in UTF-8
@@ -72,7 +72,7 @@ struct data {
 			.negative_format      = spec::negative_notation::leading_minus,
 		}
 	};
-	slot AUD {
+	currency_locale_entry AUD {
 		"AUD", {
 			.scale                = 100,
 			.symbol               = "A$",
@@ -82,7 +82,7 @@ struct data {
 			.negative_format      = spec::negative_notation::parentheses,
 		}
 	};
-	slot JPY {
+	currency_locale_entry JPY {
 		"JPY", {
 			.scale                = 1, // No minor unit
 			.symbol               = "\xc2\xa5", // ¥ in UTF-8
@@ -92,7 +92,7 @@ struct data {
 			.negative_format      = spec::negative_notation::leading_minus,
 		}
 	};
-	slot CNY {
+	currency_locale_entry CNY {
 		"CNY", {
 			.scale                = 100,
 			.symbol               = "CN\xc2\xa5", // CN¥ in UTF-8
@@ -103,13 +103,13 @@ struct data {
 		}
 	};
 };
-static constexpr std::size_t num_locales = sizeof(data) / sizeof(slot);
-static_assert(sizeof(data) % sizeof(slot) == 0, "slots must contain only slot members with no padding");
+static constexpr std::size_t num_locales = sizeof(data) / sizeof(currency_locale_entry);
+static_assert(sizeof(data) % sizeof(currency_locale_entry) == 0, "currency locale data must contain only entry members with no padding");
 
-/// Union of named and indexed access to the locale slots.
+/// Union of named and indexed access to the locale entries.
 /// Explicit destructor required because info contains a non-trivial member (symbol), so the active union member must be explicitly destroyed.
 union registry {
-	slot slots[num_locales];
+	currency_locale_entry entries[num_locales];
 	data named;
 	~registry() { named.~data(); }
 };
@@ -117,8 +117,8 @@ extern const registry locales;
 
 static inline std::optional<spec> get_locale(std::string_view identifier) {
 	for (std::size_t i = 0; i < num_locales; i++) {
-		if (locales.slots[i].identifier == identifier)
-			return locales.slots[i].info;
+		if (locales.entries[i].identifier == identifier)
+			return locales.entries[i].info;
 	}
 	return std::nullopt;
 }

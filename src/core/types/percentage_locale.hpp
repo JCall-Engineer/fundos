@@ -15,27 +15,27 @@ struct spec {
 	symbol_placement symbol_position;
 };
 
-struct slot {
+struct percentage_locale_entry {
 	const char* identifier;
 	spec info;
 };
 
 struct data {
-	slot en {
+	percentage_locale_entry en {
 		"en", {
 			.decimal_separator = '.',
 			.has_space_around_number = false,
 			.symbol_position = spec::symbol_placement::after,
 		}
 	};
-	slot de {
+	percentage_locale_entry de {
 		"de", {
 			.decimal_separator = ',',
 			.has_space_around_number = false,
 			.symbol_position = spec::symbol_placement::after,
 		}
 	};
-	slot fr {
+	percentage_locale_entry fr {
 		"fr", {
 			.decimal_separator = ',',
 			.has_space_around_number = true,
@@ -43,19 +43,19 @@ struct data {
 		}
 	};
 };
-static constexpr std::size_t num_locales = sizeof(data) / sizeof(slot);
-static_assert(sizeof(data) % sizeof(slot) == 0, "slots must contain only slot members with no padding");
+static constexpr std::size_t num_locales = sizeof(data) / sizeof(percentage_locale_entry);
+static_assert(sizeof(data) % sizeof(percentage_locale_entry) == 0, "percentage locale data must contain only entry members with no padding");
 
 union registry {
-	slot slots[num_locales];
+	percentage_locale_entry entries[num_locales];
 	data named;
 };
 static constexpr registry locales = { .named = {} };
 
 static inline std::optional<spec> const get_locale(std::string_view identifier) {
 	for (std::size_t i = 0; i < num_locales; i++) {
-		if (locales.slots[i].identifier == identifier)
-			return locales.slots[i].info;
+		if (locales.entries[i].identifier == identifier)
+			return locales.entries[i].info;
 	}
 	return std::nullopt;
 }

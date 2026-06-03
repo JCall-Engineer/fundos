@@ -752,8 +752,8 @@ db::result<currency_locale::spec> db::get_currency_locale() {
 	}
 	return outcome(error::not_found, "Recorded currency locale preset is not a recognized string");
 }
-db::outcome db::set_currency_locale_preset(const currency_locale::slot& slot) {
-	return set_meta(locale_meta.currency_locale_key, slot.identifier);
+db::outcome db::set_currency_locale_preset(const currency_locale::currency_locale_entry& entry) {
+	return set_meta(locale_meta.currency_locale_key, entry.identifier);
 }
 db::outcome db::set_currency_locale(const currency_locale::spec& locale) {
 	return sql_transaction([&](std::vector<std::function<void()>>&) -> outcome {
@@ -829,8 +829,8 @@ db::result<percentage_locale::spec> db::get_percentage_locale() {
 	}
 	return outcome(error::not_found, "Recorded percentage locale preset is not a recognized string");
 }
-db::outcome db::set_percentage_locale_preset(const percentage_locale::slot& slot) {
-	return set_meta(locale_meta.percentage_locale_key, slot.identifier);
+db::outcome db::set_percentage_locale_preset(const percentage_locale::percentage_locale_entry& entry) {
+	return set_meta(locale_meta.percentage_locale_key, entry.identifier);
 }
 db::outcome db::set_percentage_locale(const percentage_locale::spec& locale) {
 	return sql_transaction([&](std::vector<std::function<void()>>&) -> outcome {

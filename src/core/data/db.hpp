@@ -267,12 +267,12 @@ private:
 
 public:
 	result<currency_locale::spec>   get_currency_locale();
-	outcome                         set_currency_locale_preset(const currency_locale::slot&);
-	outcome                         set_currency_locale(const currency_locale::spec&);
+	outcome                         set_currency_locale_preset(const currency_locale::currency_locale_entry& entry);
+	outcome                         set_currency_locale(const currency_locale::spec& locale);
 
 	result<percentage_locale::spec> get_percentage_locale();
-	outcome                         set_percentage_locale_preset(const percentage_locale::slot&);
-	outcome                         set_percentage_locale(const percentage_locale::spec&);
+	outcome                         set_percentage_locale_preset(const percentage_locale::percentage_locale_entry& entry);
+	outcome                         set_percentage_locale(const percentage_locale::spec& locale);
 
 	result<std::vector<account>> get_accounts();
 	result<currency>             get_account_balance(int64_t fund_id);
