@@ -37,6 +37,7 @@ public:
 		not_ready,       // called a query function before migration or after a closed connection
 		corrupted,       // unrecoverable fs error, connection closed
 		unavailable,     // busy or locked, try again
+		inaccessible,    // can't open the database
 		readonly,        // filesystem permission check necessary
 		out_of_memory,   // potentially transient error
 		disk_full,       // potentially transient error

@@ -1873,21 +1873,23 @@ db::result<db::allocation_history> db::fund_history(int64_t fund_id, datetime af
 db::error db::classify_sqlite_open_error(int rc) {
 	switch (rc) {
 		case SQLITE_FULL:
-			return db::error::disk_full;
+			return error::disk_full;
 		case SQLITE_NOMEM:
-			return db::error::out_of_memory;
+			return error::out_of_memory;
 		case SQLITE_BUSY:
 		case SQLITE_LOCKED:
-			return db::error::unavailable;
+			return error::unavailable;
 		case SQLITE_READONLY:
-			return db::error::readonly;
+			return error::readonly;
+		case SQLITE_CANTOPEN:
+			return error::inaccessible;
 		default:
 			FUNDOS_ASSERT(false, "unhandled sqlite3 result code"); // In production fall through to corrupted
 			[[fallthrough]];
 		case SQLITE_CORRUPT:
 		case SQLITE_NOTADB:
 		case SQLITE_IOERR:
-			return db::error::corrupted;
+			return error::corrupted;
 	}
 }
 
