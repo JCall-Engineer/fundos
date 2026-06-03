@@ -8,6 +8,7 @@
 #define FUNDOS_ASSERT(condition, message) \
 	do { if (!(condition)) { \
 		std::fprintf(stderr, "Assertion failed: %s\n  %s\n  %s:%d\n", #condition, message, __FILE__, __LINE__); \
+		std::fflush(stderr); \
 		std::abort(); \
 	}} while(0)
 #endif
