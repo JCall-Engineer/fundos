@@ -118,6 +118,27 @@ This rule does not apply to range checks or other conditions that don't reduce t
 
 Prefer ternary expressions over `if` statements for value selection. Use `if` statements when side effects are involved.
 
+## Qt interoperability
+
+The core library headers are included by Qt targets, and Qt defines several global macros that can silently corrupt identifiers in any included header.
+
+### Reserved macro names
+
+Qt defines the following macros in the global namespace: `signals`, `slots`, `emit`, `foreach`, `forever`.
+These expand to nothing or to Qt-specific syntax, and will silently corrupt any identifier that matches them.
+Identifiers in the core library must not use any of these names.
+
+### Include order
+
+In any translation unit that includes both core library headers and Qt headers, includes must appear in this order:
+
+1. Standard library headers
+2. Core library headers
+3. Qt headers
+
+This ensures Qt's macros are not in scope when core library headers are parsed.
+Note that moc-generated files are an exception — Qt controls their include order — which is why the naming restriction above is also necessary.
+
 ## Style — UI Layers
 
 UI contribution guidelines are forthcoming.

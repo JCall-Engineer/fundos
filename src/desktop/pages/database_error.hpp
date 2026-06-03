@@ -1,6 +1,6 @@
 #pragma once
-#include <QWidget>
 #include "fundos.hpp"
+#include <QWidget>
 
 class DatabaseErrorPage : public QWidget {
 	Q_OBJECT

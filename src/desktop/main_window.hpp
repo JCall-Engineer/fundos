@@ -1,7 +1,7 @@
 #pragma once
+#include "fundos.hpp"
 #include <QMainWindow>
 #include <QStackedWidget>
-#include "fundos.hpp"
 
 class MainWindow : public QMainWindow {
 	Q_OBJECT
