@@ -1,6 +1,7 @@
+#include "main_window.hpp"
+#include <QDir>
 #include <QSettings>
 #include <QStandardPaths>
-#include "main_window.hpp"
 
 void MainWindow::open_database() {
 	if (database != nullptr) {
@@ -36,6 +37,7 @@ MainWindow::MainWindow() {
 	restoreGeometry(settings.value("mainwindow/geometry", QByteArray()).toByteArray());
 	restoreState(settings.value("mainwindow/state", QByteArray()).toByteArray(), WINDOW_VERSION);
 
+	QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
 	db_path = (QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/fundos.sqlite").toStdString();
 
 	pages = new QStackedWidget(this);
