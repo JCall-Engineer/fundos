@@ -1,6 +1,6 @@
 #include <QSettings>
 #include <QStandardPaths>
-#include "mainwindow.hpp"
+#include "main_window.hpp"
 
 void MainWindow::open_database() {
 	database = nullptr; // Close previous db so it doesn't lock an attempt to create a new db instance
