@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Svg SvgWidgets LinguistTools)
 
 set(CMAKE_AUTOMOC ON)
 
@@ -9,15 +9,20 @@ qt_add_executable(fundos WIN32
 	${CMAKE_CURRENT_BINARY_DIR}/app.rc
 )
 
-set(icon_file ${CMAKE_SOURCE_DIR}/res/icon.svg)
-set_source_files_properties(${icon_file} PROPERTIES QT_RESOURCE_ALIAS "res/icon.svg")
-
 qt_add_resources(fundos "resources"
 	PREFIX "/"
-	FILES ${icon_file}
+	BASE ${CMAKE_SOURCE_DIR}/res
+	FILES ${CMAKE_SOURCE_DIR}/res/icon.svg
 )
 
-target_link_libraries(fundos PRIVATE Qt6::Widgets core)
+file(GLOB_RECURSE qt_icons CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/res/tabler/*.svg)
+qt_add_resources(fundos "icons"
+	PREFIX "/icons"
+	BASE ${CMAKE_SOURCE_DIR}/res/tabler
+	FILES ${qt_icons}
+)
+
+target_link_libraries(fundos PRIVATE Qt6::Widgets Qt6::Svg Qt6::SvgWidgets core)
 
 find_program(WINDEPLOYQT windeployqt HINTS "${Qt6_DIR}/../../../bin")
 
