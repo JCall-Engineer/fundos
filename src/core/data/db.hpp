@@ -121,7 +121,7 @@ private:
 	sqlite3* connection;
 	db_prepared_statements* prepared;
 
-	uint64_t schema = 0;
+	int64_t schema = 0;
 	status open_result = {};
 
 	inline std::optional<message> sqlite_error_message() { return sqlite_error_message(connection); }
@@ -177,15 +177,18 @@ public:
 	db(const db&) = delete;
 	db& operator=(const db&) = delete;
 
-	const status&                get_status()   const { return open_result; }
-	bool                         is_connected() const { return connection != nullptr; }
-	bool                         is_ready()     const { return open_result.is_ok() && is_connected(); }
+	const status&                get_status()     const { return open_result; }
+	bool                         is_connected()   const { return connection != nullptr; }
+	bool                         is_ready()       const { return open_result.is_ok() && is_connected(); }
+
+	/// @return 0 on an errored or uninitialized db
+	int64_t                      schema_version() const { return schema; }
 
 	outcome backup(const std::string& path);
 
+	void close();
 private:
 	void open();
-	void close();
 	void prepare();
 
 public:
@@ -273,6 +276,8 @@ public:
 	result<percentage_locale::spec> get_percentage_locale();
 	outcome                         set_percentage_locale_preset(const percentage_locale::percentage_locale_entry& entry);
 	outcome                         set_percentage_locale(const percentage_locale::spec& locale);
+
+	result<int64_t>              size_on_disk();
 
 	result<std::vector<account>> get_accounts();
 	result<currency>             get_account_balance(int64_t fund_id);

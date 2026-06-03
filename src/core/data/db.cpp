@@ -129,6 +129,13 @@ struct statements {
 		ON CONFLICT (key) DO UPDATE SET value = excluded.value
 	)sql" };
 
+	statement_slot get_page_count { .sql = R"sql(
+		PRAGMA page_count;
+	)sql" };
+	statement_slot get_page_size { .sql = R"sql(
+		PRAGMA page_size;
+	)sql" };
+
 	statement_slot get_funds { .sql = R"sql(
 		SELECT id, name, closed_at FROM funds
 	)sql" };
@@ -642,6 +649,18 @@ db::outcome db::set_meta(std::string key, std::string value) {
 			bind_text(stmt, 2, value);
 		}
 	);
+}
+
+db::result<int64_t> db::size_on_disk() {
+	auto extract_int = [](sqlite3_stmt* stmt) -> int64_t {
+		return sqlite3_column_int64(stmt, 0);
+	};
+	auto bind_null = [](sqlite3_stmt*) {};
+	auto page_count = sql_fetch_one<int64_t>(prepared->named.get_page_count.statement, bind_null, extract_int);
+	if (!page_count) { return page_count.status(); }
+	auto page_size  = sql_fetch_one<int64_t>(prepared->named.get_page_size.statement,  bind_null, extract_int);
+	if (!page_size)  { return page_size.status(); }
+	return page_count.value() * page_size.value();
 }
 
 //--------------------------------------------------------------------------------------+
@@ -2180,7 +2199,7 @@ void db::open() {
 		return;
 	}
 
-	schema = static_cast<uint64_t>(version);
+	schema = version;
 	if (schema < schema_latest_version) {
 		open_result.schema_status = schema_state::older_schema;
 		open_result.result = status::code::needs_migration;
