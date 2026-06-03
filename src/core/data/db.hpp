@@ -184,6 +184,9 @@ public:
 	/// @return 0 on an errored or uninitialized db
 	int64_t                      schema_version() const { return schema; }
 
+	/// @return 0 on an errored or closed db
+	int64_t                      size_on_disk();
+
 	outcome backup(const std::string& path);
 
 	void close();
@@ -276,8 +279,6 @@ public:
 	result<percentage_locale::spec> get_percentage_locale();
 	outcome                         set_percentage_locale_preset(const percentage_locale::percentage_locale_entry& entry);
 	outcome                         set_percentage_locale(const percentage_locale::spec& locale);
-
-	result<int64_t>              size_on_disk();
 
 	result<std::vector<account>> get_accounts();
 	result<currency>             get_account_balance(int64_t fund_id);

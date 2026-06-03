@@ -129,13 +129,6 @@ struct statements {
 		ON CONFLICT (key) DO UPDATE SET value = excluded.value
 	)sql" };
 
-	statement_slot get_page_count { .sql = R"sql(
-		PRAGMA page_count;
-	)sql" };
-	statement_slot get_page_size { .sql = R"sql(
-		PRAGMA page_size;
-	)sql" };
-
 	statement_slot get_funds { .sql = R"sql(
 		SELECT id, name, closed_at FROM funds
 	)sql" };
@@ -649,18 +642,6 @@ db::outcome db::set_meta(std::string key, std::string value) {
 			bind_text(stmt, 2, value);
 		}
 	);
-}
-
-db::result<int64_t> db::size_on_disk() {
-	auto extract_int = [](sqlite3_stmt* stmt) -> int64_t {
-		return sqlite3_column_int64(stmt, 0);
-	};
-	auto bind_null = [](sqlite3_stmt*) {};
-	auto page_count = sql_fetch_one<int64_t>(prepared->named.get_page_count.statement, bind_null, extract_int);
-	if (!page_count) { return page_count.status(); }
-	auto page_size  = sql_fetch_one<int64_t>(prepared->named.get_page_size.statement,  bind_null, extract_int);
-	if (!page_size)  { return page_size.status(); }
-	return page_count.value() * page_size.value();
 }
 
 //--------------------------------------------------------------------------------------+
@@ -2226,6 +2207,19 @@ void db::close() {
 	delete prepared;
 	prepared = nullptr;
 	connection = nullptr;
+}
+
+int64_t db::size_on_disk() {
+	if (!is_connected()) { return 0; }
+	auto extract_int = [](void* data, int, char** cols, char**) {
+		*static_cast<int64_t*>(data) = std::atoll(cols[0]);
+		return 0;
+	};
+	int64_t page_count = 0;
+	int64_t page_size  = 0;
+	sqlite3_exec(connection, "PRAGMA page_count", extract_int, &page_count, nullptr);
+	sqlite3_exec(connection, "PRAGMA page_size",  extract_int, &page_size,  nullptr);
+	return page_count * page_size;
 }
 
 db::db(outcome err) : connection(nullptr), managed(false), prepared(nullptr) {

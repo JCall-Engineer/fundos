@@ -196,15 +196,7 @@ void StatusBar::show_db_menu() {
 
 	// DATABASE section
 	menu.addSection(tr("DATABASE"));
-	auto size = database->size_on_disk();
-	QString size_str = tr("error");
-	if (size) {
-		size_str = format_size(size.value());
-	} else {
-		set_status(size.status());
-	}
-
-	add_info_row(tr("size on disk"), size_str);
+	add_info_row(tr("size on disk"), format_size(database->size_on_disk()));
 	add_info_row(tr("journal mode"), QString::fromStdString(database->get_status().journal_mode));
 	add_info_row(tr("schema version"), QString::number(database->schema_version()));
 
