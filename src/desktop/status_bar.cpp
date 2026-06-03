@@ -1,31 +1,35 @@
 #include "status_bar.hpp"
+#include "theme.hpp"
 #include <QHBoxLayout>
 #include <QMenu>
 #include <QWidgetAction>
 
 StatusBar::StatusBar(QWidget* parent) : QStatusBar(parent) {
 	setSizeGripEnabled(false);
+	setStyleSheet("QStatusBar::item { border: none; }");
 
 	auto* left = new QWidget(this);
 	auto* layout = new QHBoxLayout(left);
 	layout->setContentsMargins(4, 0, 0, 0);
+	layout->setAlignment(Qt::AlignVCenter);
 	layout->setSpacing(6);
 
-	dot = new QLabel(this);
+	dot = new QWidget(left);
 	dot->setFixedSize(10, 10);
-	layout->addWidget(dot);
+	layout->addWidget(dot, 0, Qt::AlignVCenter);
 
-	text = new QLabel(this);
-	layout->addWidget(text);
+	text = new QLabel(left);
+	layout->addWidget(text, 0, Qt::AlignVCenter);
 
 	addWidget(left);
 
 	db_button = new QToolButton(this);
-	db_button->setIcon(QIcon(":/icons/database.svg"));
+	db_button->setIcon(theme::colored_icon(":/icons/database.svg", theme::text));
 	db_button->setAutoRaise(true);
 	db_button->setFixedSize(24, 24);
 	connect(db_button, &QToolButton::clicked, this, &StatusBar::show_db_menu);
 	addPermanentWidget(db_button);
+	left->setFixedHeight(db_button->height());
 }
 
 void StatusBar::apply_ready() {
@@ -177,6 +181,23 @@ static QString format_size(int64_t bytes) {
 
 void StatusBar::show_db_menu() {
 	QMenu menu(this);
+	auto add_section_header = [&](const QString& title) {
+		auto* widget = new QWidget(&menu);
+		auto* layout = new QHBoxLayout(widget);
+		layout->setContentsMargins(8, 6, 16, 2);
+
+		auto* label = new QLabel(title, widget);
+		QFont font = label->font();
+		font.setPointSizeF(font.pointSizeF() * 0.8);
+		label->setFont(font);
+		label->setStyleSheet("color: " + theme::text_muted.name() + ";");
+
+		layout->addWidget(label);
+
+		auto* action = new QWidgetAction(&menu);
+		action->setDefaultWidget(widget);
+		menu.addAction(action);
+	};
 	auto add_info_row = [&](const QString& key, const QString& value) {
 		auto* widget = new QWidget(&menu);
 		auto* layout = new QHBoxLayout(widget);
@@ -195,24 +216,27 @@ void StatusBar::show_db_menu() {
 	};
 
 	// DATABASE section
-	menu.addSection(tr("DATABASE"));
+	add_section_header(tr("DATABASE"));
 	add_info_row(tr("size on disk"), format_size(database->size_on_disk()));
 	add_info_row(tr("journal mode"), QString::fromStdString(database->get_status().journal_mode));
 	add_info_row(tr("schema version"), QString::number(database->schema_version()));
 
 	// ACTIONS section
-	menu.addSection(tr("ACTIONS"));
+	add_section_header(tr("ACTIONS"));
 	connect(menu.addAction(tr("Manage Locale...")), &QAction::triggered, this, &StatusBar::manage_locale_requested);
 	connect(menu.addAction(tr("Back Up Database...")), &QAction::triggered, this, &StatusBar::backup_requested);
 
 	menu.addSeparator();
 	auto* restore_action = menu.addAction(tr("Restore from Backup..."));
-	restore_action->setIcon(QIcon(":/icons/alert-triangle.svg"));
+	restore_action->setIcon(theme::colored_icon(":/icons/alert-triangle.svg", theme::warning));
 	connect(restore_action, &QAction::triggered, this, &StatusBar::restore_requested);
 
 	auto* replace_action = menu.addAction(tr("Replace with New Database..."));
-	replace_action->setIcon(QIcon(":/icons/alert-triangle.svg"));
+	replace_action->setIcon(theme::colored_icon(":/icons/alert-triangle.svg", theme::warning));
 	connect(replace_action, &QAction::triggered, this, &StatusBar::replace_requested);
 
-	menu.exec(db_button->mapToGlobal(db_button->rect().bottomLeft()));
+	menu.adjustSize();
+	menu.exec(db_button->mapToGlobal(
+		db_button->rect().topRight() - QPoint(menu.width(), menu.height())
+	));
 }

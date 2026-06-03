@@ -7,7 +7,7 @@
 class StatusBar : public QStatusBar {
 	Q_OBJECT
 
-	QLabel*      dot  = nullptr;
+	QWidget*     dot  = nullptr;
 	QLabel*      text = nullptr;
 	QToolButton* db_button = nullptr;
 
