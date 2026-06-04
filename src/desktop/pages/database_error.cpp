@@ -90,12 +90,14 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 	using schema = fundos::db::schema_state;
 	using error = fundos::db::error;
 
+	// A rule about buttons: If recovery options are present they must be preceded by a backup button
 	switch (status.result) {
 		case code::ok: {
 			FUNDOS_UNREACHABLE();
 			break;
 		}
 		case code::needs_migration: {
+			// The database is fine, recovery options are not appropriate, but backup before migration is
 			setup_error(
 				tr("Database Migration Required"),
 				tr("This database was created by an older version of FundOS and needs to be migrated.") + " " +
@@ -111,6 +113,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 			break;
 		}
 		case code::schema_error: {
+			// FundOS cannot use this database in any way: offer recovery options
 			switch (status.schema_status) {
 				case schema::newer_schema: {
 					setup_error(
@@ -157,6 +160,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 		case code::sqlite3_error: {
 			switch (status.sqlite3_outcome.code) {
 				case error::corrupted: {
+					// The database is broken: offer recovery options
 					setup_error(
 						tr("Database is Corrupted"),
 						tr("The database file is damaged and cannot be opened.")
@@ -168,6 +172,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 					break;
 				}
 				case error::unavailable: {
+					// We cannot write to the database right now, which is required for recovery options: offer try again
 					setup_error(
 						tr("Database Unavailable"),
 						tr("The database is busy or locked by another process.")
@@ -177,6 +182,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 					break;
 				}
 				case error::inaccessible: {
+					// We do not have write access, which is required for recovery options: offer try again
 					setup_error(
 						tr("Can't Open Database"),
 						tr("The path to the database does not exist or FundOS does not have permission to access it.")
@@ -186,6 +192,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 					break;
 				}
 				case error::readonly: {
+					// We do not have write access, which is required for recovery options: offer try again
 					setup_error(
 						tr("Database is Read-Only"),
 						tr("FundOS does not have permission to write to the database. Check your filesystem permissions.")
@@ -195,6 +202,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 					break;
 				}
 				case error::out_of_memory: {
+					// The system is out of resources, nothing can be done from our end: offer try again
 					setup_error(
 						tr("Out of Memory"),
 						tr("FundOS ran out of memory while opening the database.")
@@ -204,6 +212,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 					break;
 				}
 				case error::disk_full: {
+					// The system is out of resources, nothing can be done from our end: offer try again
 					setup_error(
 						tr("Disk Full"),
 						tr("There is not enough disk space to open the database.")
@@ -220,6 +229,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 					FUNDOS_UNREACHABLE();
 					break;
 				case error::internal: {
+					// Something really bad happened and the system is in an unpredictable state: no reasonable action can be taken
 					setup_error(
 						tr("Internal Error"),
 						tr("An unexpected internal error occurred. Please report this issue.")
