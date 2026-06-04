@@ -1,9 +1,8 @@
 #pragma once
 #include "fundos.hpp"
-
-#include "status_bar.hpp"
 #include <QMainWindow>
 
+class StatusBar;
 class MainWindow : public QMainWindow {
 	Q_OBJECT
 
@@ -15,7 +14,6 @@ class MainWindow : public QMainWindow {
 
 public:
 	MainWindow();
-	void report_outcome(const fundos::db::outcome& reporting);
 
 protected:
 	void closeEvent(QCloseEvent* event) override;

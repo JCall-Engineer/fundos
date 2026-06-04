@@ -68,6 +68,7 @@ ErrorPage::ErrorPage(const fundos::db::status& status, QWidget* parent) : QWidge
 			case button::restore:    return { tr("Restore Database from Backup"), &ErrorPage::restore_requested    };
 			case button::quit:       return { tr("Quit"),                         &ErrorPage::quit_requested       };
 		}
+		FUNDOS_UNREACHABLE();
 	};
 
 	auto add_button = [&](button which) {

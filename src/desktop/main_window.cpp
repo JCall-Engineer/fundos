@@ -17,7 +17,8 @@ void MainWindow::open_database() {
 	status_bar->set_database(database);
 
 	if (database->is_ready()) {
-		// open main page
+		auto home = new HomePage(this);
+		setCentralWidget(home);
 		return;
 	}
 
@@ -48,9 +49,6 @@ MainWindow::MainWindow() {
 	setStatusBar(status_bar);
 
 	open_database();
-}
-
-void MainWindow::report_outcome(const fundos::db::outcome &reporting) {
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
