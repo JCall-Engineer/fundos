@@ -37,7 +37,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 	layout->setSpacing(8);
 
 	auto* icon_label = new QLabel(card);
-	icon_label->setPixmap(theme::colored_svg(":/icons/database-off.svg", theme::error, QSize(48, 48)));
+	icon_label->setPixmap(theme::colored_svg(":/icons/database-off.svg", theme::error_foreground, QSize(48, 48)));
 	layout->addWidget(icon_label, 0, Qt::AlignHCenter);
 
 	auto* title = new QLabel(card);

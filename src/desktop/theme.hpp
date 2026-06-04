@@ -9,14 +9,17 @@
 
 namespace theme {
 
-static constexpr QColor background  = QColor(0x1e, 0x20, 0x24);
-static constexpr QColor surface     = QColor(0x2a, 0x2d, 0x33);
-static constexpr QColor text        = QColor(0xff, 0xff, 0xff);
-static constexpr QColor text_muted  = QColor(0x9a, 0x9e, 0xa8);
-static constexpr QColor highlight   = QColor(0xd4, 0xa0, 0x17);
-static constexpr QColor success     = QColor(0x4c, 0xaf, 0x50);
-static constexpr QColor warning     = QColor(0xff, 0xc1, 0x07);
-static constexpr QColor error       = QColor(0xf4, 0x43, 0x36);
+static constexpr QColor background         = QColor(0x1e, 0x20, 0x24);
+static constexpr QColor surface            = QColor(0x2a, 0x2d, 0x33);
+static constexpr QColor text               = QColor(0xff, 0xff, 0xff);
+static constexpr QColor text_muted         = QColor(0x9a, 0x9e, 0xa8);
+static constexpr QColor highlight          = QColor(0xd4, 0xa0, 0x17);
+static constexpr QColor success_background = QColor(0x1a, 0x33, 0x1e);
+static constexpr QColor success_foreground = QColor(0x4c, 0xd9, 0x6e);
+static constexpr QColor warning_background = QColor(0x33, 0x28, 0x0d);
+static constexpr QColor warning_foreground = QColor(0xff, 0xc1, 0x07);
+static constexpr QColor error_background   = QColor(0x33, 0x11, 0x11);
+static constexpr QColor error_foreground   = QColor(0xf4, 0x43, 0x36);
 
 static inline QPixmap colored_svg(const QString& path, QColor color, QSize size) {
 	QPixmap pixmap(size);

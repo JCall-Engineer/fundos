@@ -33,20 +33,19 @@ StatusBar::StatusBar(QWidget* parent) : QStatusBar(parent) {
 }
 
 void StatusBar::apply_ready() {
-	if (database == nullptr || !database->is_ready()) {
-		return apply_red(tr("disconnected"));
-	}
-	dot->setStyleSheet("background: #4caf50; border-radius: 5px;");
+	FUNDOS_ASSERT(database != nullptr,  "apply_ready called with no database");
+	FUNDOS_ASSERT(database->is_ready(), "apply_ready called but database reports not ready");
+	dot->setStyleSheet(QString("background: %1; border-radius: 5px;").arg(theme::success_foreground.name()));
 	text->setText(tr("ready"));
 }
 
 void StatusBar::apply_yellow(const QString& message) {
-	dot->setStyleSheet("background: #ffc107; border-radius: 5px;");
+	dot->setStyleSheet(QString("background: %1; border-radius: 5px;").arg(theme::warning_foreground.name()));
 	text->setText(message);
 }
 
 void StatusBar::apply_red(const QString& message) {
-	dot->setStyleSheet("background: #f44336; border-radius: 5px;");
+	dot->setStyleSheet(QString("background: %1; border-radius: 5px;").arg(theme::error_foreground.name()));
 	text->setText(message);
 }
 
@@ -228,11 +227,11 @@ void StatusBar::show_db_menu() {
 
 	menu.addSeparator();
 	auto* restore_action = menu.addAction(tr("Restore from Backup..."));
-	restore_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning));
+	restore_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning_foreground));
 	connect(restore_action, &QAction::triggered, this, &StatusBar::restore_requested);
 
 	auto* replace_action = menu.addAction(tr("Replace with New Database..."));
-	replace_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning));
+	replace_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning_foreground));
 	connect(replace_action, &QAction::triggered, this, &StatusBar::create_new_requested);
 
 	menu.adjustSize();
