@@ -22,6 +22,7 @@ qt_add_resources(fundos "icons"
 	FILES ${qt_icons}
 )
 
+target_include_directories(fundos PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fundos PRIVATE Qt6::Widgets Qt6::Svg Qt6::SvgWidgets core)
 
 find_program(WINDEPLOYQT windeployqt HINTS "${Qt6_DIR}/../../../bin")

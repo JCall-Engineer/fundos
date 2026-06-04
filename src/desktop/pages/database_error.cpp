@@ -1,35 +1,80 @@
+#include "database_error.hpp"
+#include "theme.hpp"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QSvgWidget>
-#include "database_error.hpp"
+
+namespace {
+
+enum class button : int {
+	retry,
+	migrate,
+	backup,
+	create_new,
+	restore,
+	quit,
+};
+
+struct button_spec {
+	QString label;
+	void (DatabaseErrorPage::*signal)();
+};
+
+} // namespace
 
 DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* parent) : QWidget(parent) {
 	auto* outer = new QVBoxLayout(this);
 	outer->setAlignment(Qt::AlignCenter);
+	outer->setContentsMargins(0, 0, 0, 0);
 
-	auto* icon = new QSvgWidget(":/icons/database-off.svg", this);
-	icon->setFixedSize(48, 48);
-	outer->addWidget(icon, 0, Qt::AlignHCenter);
+	auto* card = new QWidget(this);
+	card->setMinimumWidth(280);
+	outer->addWidget(card, 0, Qt::AlignHCenter);
 
-	auto* title = new QLabel(this);
+	auto* layout = new QVBoxLayout(card);
+	layout->setSpacing(8);
+
+	auto* icon_label = new QLabel(card);
+	icon_label->setPixmap(theme::colored_svg(":/icons/database-off.svg", theme::error, QSize(48, 48)));
+	layout->addWidget(icon_label, 0, Qt::AlignHCenter);
+
+	auto* title = new QLabel(card);
 	title->setAlignment(Qt::AlignHCenter);
-	outer->addWidget(title);
+	QFont title_font = title->font();
+	title_font.setPointSizeF(title_font.pointSizeF() * 1.3);
+	title_font.setBold(true);
+	title->setFont(title_font);
+	layout->addWidget(title);
 
-	auto* description = new QLabel(this);
+	auto* description = new QLabel(card);
 	description->setAlignment(Qt::AlignHCenter);
 	description->setWordWrap(true);
-	outer->addWidget(description);
+	layout->addWidget(description);
+
+	layout->addSpacing(8);
 
 	auto* buttons = new QVBoxLayout();
-	buttons->setAlignment(Qt::AlignHCenter);
-	outer->addLayout(buttons);
+	buttons->setSpacing(6);
+	layout->addLayout(buttons);
 
-	auto add_button = [&](const QString& label, auto signal) {
-		auto* button = new QPushButton(label, this);
-		buttons->addWidget(button);
-		connect(button, &QPushButton::clicked, this, signal);
+	auto resolve_button = [&](button which) -> button_spec {
+		switch (which) {
+			case button::retry:      return { tr("Try Again"),                    &DatabaseErrorPage::retry_requested      };
+			case button::migrate:    return { tr("Migrate Database"),             &DatabaseErrorPage::migrate_requested    };
+			case button::backup:     return { tr("Backup Existing Database"),     &DatabaseErrorPage::backup_requested     };
+			case button::create_new: return { tr("Overwrite with New Database"),  &DatabaseErrorPage::create_new_requested };
+			case button::restore:    return { tr("Restore Database from Backup"), &DatabaseErrorPage::restore_requested    };
+			case button::quit:       return { tr("Quit"),                         &DatabaseErrorPage::quit_requested       };
+		}
+	};
+
+	auto add_button = [&](button which) {
+		const auto spec = resolve_button(which);
+		auto* b = new QPushButton(spec.label, this);
+		buttons->addWidget(b);
+		connect(b, &QPushButton::clicked, this, spec.signal);
 	};
 
 	auto setup_error = [&](const QString& title_text, QString description_text) {
@@ -53,11 +98,12 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 		case code::needs_migration: {
 			setup_error(
 				tr("Database Migration Required"),
-				tr("This database was created by an older version of FundOS and needs to be migrated.")
+				tr("This database was created by an older version of FundOS and needs to be migrated.") + " " +
+				tr("It is recommended you make a backup before proceeding.")
 			);
-			add_button(tr("Backup database..."), &DatabaseErrorPage::backup_requested);
-			add_button(tr("Migrate database"), &DatabaseErrorPage::migrate_requested);
-			add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+			add_button(button::backup);
+			add_button(button::migrate);
+			add_button(button::quit);
 			break;
 		}
 		case code::null_db: {
@@ -71,7 +117,10 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 						tr("Database Requires a Newer Version"),
 						tr("This database was created by a newer version of FundOS. Update FundOS to access it.")
 					);
-					add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+					add_button(button::backup);
+					add_button(button::create_new);
+					add_button(button::restore);
+					add_button(button::quit);
 					break;
 				}
 				case schema::app_mismatch: {
@@ -79,10 +128,10 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 						tr("Unrecognized Database File"),
 						tr("This file was not created by FundOS.")
 					);
-					add_button(tr("Extract Broken Database..."), &DatabaseErrorPage::backup_requested);
-					add_button(tr("Overwrite with New Database"), &DatabaseErrorPage::create_new_requested);
-					add_button(tr("Overwrite with External File..."), &DatabaseErrorPage::replace_requested);
-					add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+					add_button(button::backup);
+					add_button(button::create_new);
+					add_button(button::restore);
+					add_button(button::quit);
 					break;
 				}
 				case schema::schema_mismatch: {
@@ -90,10 +139,10 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 						tr("Database Schema is Corrupted"),
 						tr("The database structure is unrecognized and cannot be recovered.")
 					);
-					add_button(tr("Extract Broken Database..."), &DatabaseErrorPage::backup_requested);
-					add_button(tr("Overwrite with New Database"), &DatabaseErrorPage::create_new_requested);
-					add_button(tr("Overwrite with External File..."), &DatabaseErrorPage::replace_requested);
-					add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+					add_button(button::backup);
+					add_button(button::create_new);
+					add_button(button::restore);
+					add_button(button::quit);
 					break;
 				}
 				case schema::none:         // immediately should trigger creation
@@ -112,10 +161,10 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 						tr("Database is Corrupted"),
 						tr("The database file is damaged and cannot be opened.")
 					);
-					add_button(tr("Extract Broken Database..."), &DatabaseErrorPage::backup_requested);
-					add_button(tr("Overwrite with New Database"), &DatabaseErrorPage::create_new_requested);
-					add_button(tr("Overwrite with External File..."), &DatabaseErrorPage::replace_requested);
-					add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+					add_button(button::backup);
+					add_button(button::create_new);
+					add_button(button::restore);
+					add_button(button::quit);
 					break;
 				}
 				case error::unavailable: {
@@ -123,10 +172,17 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 						tr("Database Unavailable"),
 						tr("The database is busy or locked by another process.")
 					);
-					add_button(tr("Try Again"), &DatabaseErrorPage::retry_requested);
-					add_button(tr("Extract Broken Database..."), &DatabaseErrorPage::backup_requested);
-					add_button(tr("Overwrite with New Database"), &DatabaseErrorPage::create_new_requested);
-					add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+					add_button(button::retry);
+					add_button(button::quit);
+					break;
+				}
+				case error::inaccessible: {
+					setup_error(
+						tr("Can't Open Database"),
+						tr("The path to the database does not exist or FundOS does not have permission to access it.")
+					);
+					add_button(button::retry);
+					add_button(button::quit);
 					break;
 				}
 				case error::readonly: {
@@ -134,8 +190,8 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 						tr("Database is Read-Only"),
 						tr("FundOS does not have permission to write to the database. Check your filesystem permissions.")
 					);
-					add_button(tr("Try Again"), &DatabaseErrorPage::retry_requested);
-					add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+					add_button(button::retry);
+					add_button(button::quit);
 					break;
 				}
 				case error::out_of_memory: {
@@ -143,8 +199,8 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 						tr("Out of Memory"),
 						tr("FundOS ran out of memory while opening the database.")
 					);
-					add_button(tr("Try Again"), &DatabaseErrorPage::retry_requested);
-					add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+					add_button(button::retry);
+					add_button(button::quit);
 					break;
 				}
 				case error::disk_full: {
@@ -152,8 +208,8 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 						tr("Disk Full"),
 						tr("There is not enough disk space to open the database.")
 					);
-					add_button(tr("Try Again"), &DatabaseErrorPage::retry_requested);
-					add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+					add_button(button::retry);
+					add_button(button::quit);
 					break;
 				}
 				case error::none:        // We wouldn't be here if there was no error
@@ -168,7 +224,7 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 						tr("Internal Error"),
 						tr("An unexpected internal error occurred. Please report this issue.")
 					);
-					add_button(tr("Quit"), &DatabaseErrorPage::quit_requested);
+					add_button(button::quit);
 					break;
 				}
 			}

@@ -13,6 +13,6 @@ signals:
 	void migrate_requested();
 	void backup_requested();
 	void create_new_requested();
-	void replace_requested();
+	void restore_requested();
 	void quit_requested();
 };

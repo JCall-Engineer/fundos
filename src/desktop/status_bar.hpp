@@ -30,6 +30,6 @@ private slots:
 signals:
 	void backup_requested();
 	void restore_requested();
-	void replace_requested();
+	void create_new_requested();
 	void manage_locale_requested();
 };

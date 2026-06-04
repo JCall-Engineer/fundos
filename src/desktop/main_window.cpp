@@ -1,5 +1,8 @@
 #include "main_window.hpp"
+#include "pages/database_error.hpp"
+#include <QApplication>
 #include <QDir>
+#include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
 
@@ -17,15 +20,14 @@ void MainWindow::open_database() {
 	}
 
 	auto& status = database->get_status();
-	if (status.needs_migration()) {
-		// open migration page
-		return;
-	}
-
-	if (status.has_error()) {
-		
-		// show error page
-	}
+	DatabaseErrorPage* error_page = new DatabaseErrorPage(status, this);
+	connect(error_page, &DatabaseErrorPage::retry_requested,      this, &MainWindow::handle_retry);
+	connect(error_page, &DatabaseErrorPage::migrate_requested,    this, &MainWindow::handle_migrate);
+	connect(error_page, &DatabaseErrorPage::backup_requested,     this, &MainWindow::handle_backup);
+	connect(error_page, &DatabaseErrorPage::create_new_requested, this, &MainWindow::handle_create_new);
+	connect(error_page, &DatabaseErrorPage::restore_requested,    this, &MainWindow::handle_restore);
+	connect(error_page, &DatabaseErrorPage::quit_requested,       this, &MainWindow::handle_quit);
+	setCentralWidget(error_page);
 }
 
 static constexpr int WINDOW_VERSION = 1;
@@ -40,12 +42,8 @@ MainWindow::MainWindow() {
 	QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
 	db_path = (QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/fundos.sqlite").toStdString();
 
-	pages = new QStackedWidget(this);
-	setCentralWidget(pages);
-
 	status_bar = new StatusBar(this);
 	setStatusBar(status_bar);
-	//connect(status_bar, &StatusBar::db_menu_requested, this, &MainWindow::show_db_menu);
 
 	open_database();
 }
@@ -55,4 +53,28 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 	settings.setValue("mainwindow/geometry", saveGeometry());
 	settings.setValue("mainwindow/state", saveState(WINDOW_VERSION));
 	QMainWindow::closeEvent(event);
+}
+
+void MainWindow::handle_retry() {
+	QMessageBox::information(this, tr("Title"), tr("Retry Called"));
+	open_database();
+}
+void MainWindow::handle_quit() {
+	QApplication::quit();
+}
+void MainWindow::handle_migrate() {
+	QMessageBox::information(this, tr("Title"), tr("Migrate Called"));
+	//database->migrate();
+}
+void MainWindow::handle_backup() {
+	QMessageBox::information(this, tr("Title"), tr("Backup Called"));
+}
+void MainWindow::handle_create_new() {
+	QMessageBox::information(this, tr("Title"), tr("Create new called"));
+}
+void MainWindow::handle_restore() {
+	QMessageBox::information(this, tr("Title"), tr("Restore Called"));
+}
+void MainWindow::handle_manage_locale() {
+	QMessageBox::information(this, tr("Title"), tr("Manage locale Called"));
 }

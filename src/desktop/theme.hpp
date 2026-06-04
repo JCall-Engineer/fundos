@@ -4,6 +4,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPixmap>
+#include <QSize>
 #include <QSvgRenderer>
 
 namespace theme {
@@ -17,8 +18,8 @@ static constexpr QColor success     = QColor(0x4c, 0xaf, 0x50);
 static constexpr QColor warning     = QColor(0xff, 0xc1, 0x07);
 static constexpr QColor error       = QColor(0xf4, 0x43, 0x36);
 
-static inline QIcon colored_icon(const QString& path, QColor color) {
-	QPixmap pixmap(24, 24);
+static inline QPixmap colored_svg(const QString& path, QColor color, QSize size) {
+	QPixmap pixmap(size);
 	pixmap.fill(Qt::transparent);
 	QPainter painter(&pixmap);
 	painter.setRenderHint(QPainter::Antialiasing);
@@ -26,7 +27,11 @@ static inline QIcon colored_icon(const QString& path, QColor color) {
 	renderer.render(&painter);
 	painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
 	painter.fillRect(pixmap.rect(), color);
-	return QIcon(pixmap);
+	return pixmap;
+}
+
+static inline QIcon colored_svg_icon(const QString& path, QColor color) {
+	return QIcon(colored_svg(path, color, QSize(24, 24)));
 }
 
 static inline QPalette make_palette() {
