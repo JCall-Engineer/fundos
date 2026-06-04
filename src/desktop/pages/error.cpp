@@ -1,4 +1,4 @@
-#include "database_error.hpp"
+#include "error.hpp"
 #include "theme.hpp"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -19,12 +19,12 @@ enum class button : int {
 
 struct button_spec {
 	QString label;
-	void (DatabaseErrorPage::*signal)();
+	void (ErrorPage::*signal)();
 };
 
 } // namespace
 
-DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* parent) : QWidget(parent) {
+ErrorPage::ErrorPage(const fundos::db::status& status, QWidget* parent) : QWidget(parent) {
 	auto* outer = new QVBoxLayout(this);
 	outer->setAlignment(Qt::AlignCenter);
 	outer->setContentsMargins(0, 0, 0, 0);
@@ -61,12 +61,12 @@ DatabaseErrorPage::DatabaseErrorPage(const fundos::db::status& status, QWidget* 
 
 	auto resolve_button = [&](button which) -> button_spec {
 		switch (which) {
-			case button::retry:      return { tr("Try Again"),                    &DatabaseErrorPage::retry_requested      };
-			case button::migrate:    return { tr("Migrate Database"),             &DatabaseErrorPage::migrate_requested    };
-			case button::backup:     return { tr("Backup Existing Database"),     &DatabaseErrorPage::backup_requested     };
-			case button::create_new: return { tr("Overwrite with New Database"),  &DatabaseErrorPage::create_new_requested };
-			case button::restore:    return { tr("Restore Database from Backup"), &DatabaseErrorPage::restore_requested    };
-			case button::quit:       return { tr("Quit"),                         &DatabaseErrorPage::quit_requested       };
+			case button::retry:      return { tr("Try Again"),                    &ErrorPage::retry_requested      };
+			case button::migrate:    return { tr("Migrate Database"),             &ErrorPage::migrate_requested    };
+			case button::backup:     return { tr("Backup Existing Database"),     &ErrorPage::backup_requested     };
+			case button::create_new: return { tr("Overwrite with New Database"),  &ErrorPage::create_new_requested };
+			case button::restore:    return { tr("Restore Database from Backup"), &ErrorPage::restore_requested    };
+			case button::quit:       return { tr("Quit"),                         &ErrorPage::quit_requested       };
 		}
 	};
 

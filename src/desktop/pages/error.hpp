@@ -2,11 +2,11 @@
 #include "fundos.hpp"
 #include <QWidget>
 
-class DatabaseErrorPage : public QWidget {
+class ErrorPage : public QWidget {
 	Q_OBJECT
 
 public:
-	explicit DatabaseErrorPage(const fundos::db::status& status, QWidget* parent = nullptr);
+	explicit ErrorPage(const fundos::db::status& status, QWidget* parent = nullptr);
 
 signals:
 	void retry_requested();

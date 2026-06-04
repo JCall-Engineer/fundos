@@ -1,5 +1,7 @@
 #include "main_window.hpp"
-#include "pages/database_error.hpp"
+#include "status_bar.hpp"
+#include "pages/error.hpp"
+#include "pages/home.hpp"
 #include <QApplication>
 #include <QDir>
 #include <QMessageBox>
@@ -20,13 +22,13 @@ void MainWindow::open_database() {
 	}
 
 	auto& status = database->get_status();
-	DatabaseErrorPage* error_page = new DatabaseErrorPage(status, this);
-	connect(error_page, &DatabaseErrorPage::retry_requested,      this, &MainWindow::handle_retry);
-	connect(error_page, &DatabaseErrorPage::migrate_requested,    this, &MainWindow::handle_migrate);
-	connect(error_page, &DatabaseErrorPage::backup_requested,     this, &MainWindow::handle_backup);
-	connect(error_page, &DatabaseErrorPage::create_new_requested, this, &MainWindow::handle_create_new);
-	connect(error_page, &DatabaseErrorPage::restore_requested,    this, &MainWindow::handle_restore);
-	connect(error_page, &DatabaseErrorPage::quit_requested,       this, &MainWindow::handle_quit);
+	ErrorPage* error_page = new ErrorPage(status, this);
+	connect(error_page, &ErrorPage::retry_requested,      this, &MainWindow::handle_retry);
+	connect(error_page, &ErrorPage::migrate_requested,    this, &MainWindow::handle_migrate);
+	connect(error_page, &ErrorPage::backup_requested,     this, &MainWindow::handle_backup);
+	connect(error_page, &ErrorPage::create_new_requested, this, &MainWindow::handle_create_new);
+	connect(error_page, &ErrorPage::restore_requested,    this, &MainWindow::handle_restore);
+	connect(error_page, &ErrorPage::quit_requested,       this, &MainWindow::handle_quit);
 	setCentralWidget(error_page);
 }
 
@@ -46,6 +48,9 @@ MainWindow::MainWindow() {
 	setStatusBar(status_bar);
 
 	open_database();
+}
+
+void MainWindow::report_outcome(const fundos::db::outcome &reporting) {
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

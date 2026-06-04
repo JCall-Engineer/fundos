@@ -15,6 +15,7 @@ class MainWindow : public QMainWindow {
 
 public:
 	MainWindow();
+	void report_outcome(const fundos::db::outcome& reporting);
 
 protected:
 	void closeEvent(QCloseEvent* event) override;
