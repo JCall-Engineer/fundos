@@ -13,4 +13,7 @@ public:
 
 signals:
 	void db_outcome(const fundos::db::outcome& outcome);
+	void open_account(std::shared_ptr<fundos::account> opening);
+	void import_ofx();
+	void go_home();
 };
