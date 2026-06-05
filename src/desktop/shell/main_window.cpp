@@ -1,5 +1,6 @@
 #include "main_window.hpp"
 #include "content/home_page.hpp"
+#include "content/locale_page.hpp"
 #include <QApplication>
 #include <QDir>
 #include <QMessageBox>
@@ -21,6 +22,10 @@ MainWindow::MainWindow() {
 
 	status_bar = new StatusBar(this);
 	setStatusBar(status_bar);
+	connect(status_bar, &StatusBar::backup_requested,        this, &MainWindow::db_backup);
+	connect(status_bar, &StatusBar::restore_requested,       this, &MainWindow::db_restore);
+	connect(status_bar, &StatusBar::create_new_requested,    this, &MainWindow::db_create_new);
+	connect(status_bar, &StatusBar::manage_locale_requested, this, &MainWindow::db_manage_locale);
 
 	open_database();
 }
