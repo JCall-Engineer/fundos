@@ -155,35 +155,35 @@ void MainWindow::import_ofx() {
 void MainWindow::create_account() {
 
 }
-void MainWindow::open_account(fundos::account opening) {
+void MainWindow::open_account(std::shared_ptr<fundos::account> opening) {
 
 }
-void MainWindow::save_account(fundos::account saving) {
+void MainWindow::save_account(std::shared_ptr<fundos::account> saving) {
 
 }
 
 void MainWindow::create_fund() {
 
 }
-void MainWindow::open_fund(fundos::fund opening) {
+void MainWindow::open_fund(std::shared_ptr<fundos::fund> opening) {
 
 }
-void MainWindow::save_fund(fundos::fund saving) {
+void MainWindow::save_fund(std::shared_ptr<fundos::fund> saving) {
 
 }
 
 // create_budget is open_budget with a default constructed budget
-void MainWindow::open_budget(fundos::budget opening) {
+void MainWindow::open_budget(std::shared_ptr<fundos::budget> opening) {
 
 }
-void MainWindow::save_budget(fundos::budget saving) {
+void MainWindow::save_budget(std::shared_ptr<fundos::budget> saving) {
 
 }
 
 // Create transaction is open_transaction with minimal properties set
-void MainWindow::open_transaction(fundos::transaction opening) {
+void MainWindow::open_transaction(std::shared_ptr<fundos::transaction> opening) {
 
 }
-void MainWindow::save_transaction(fundos::transaction saving) {
+void MainWindow::save_transaction(std::shared_ptr<fundos::transaction> saving) {
 
 }

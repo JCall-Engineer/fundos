@@ -35,16 +35,16 @@ private slots:
 	void import_ofx();
 
 	void create_account();
-	void open_account(fundos::account opening);
-	void save_account(fundos::account saving);
+	void open_account(std::shared_ptr<fundos::account> opening);
+	void save_account(std::shared_ptr<fundos::account> saving);
 
 	void create_fund();
-	void open_fund(fundos::fund opening);
-	void save_fund(fundos::fund saving);
+	void open_fund(std::shared_ptr<fundos::fund> opening);
+	void save_fund(std::shared_ptr<fundos::fund> saving);
 
-	void open_budget(fundos::budget opening);
-	void save_budget(fundos::budget saving);
+	void open_budget(std::shared_ptr<fundos::budget> opening);
+	void save_budget(std::shared_ptr<fundos::budget> saving);
 
-	void open_transaction(fundos::transaction opening);
-	void save_transaction(fundos::transaction saving);
+	void open_transaction(std::shared_ptr<fundos::transaction> opening);
+	void save_transaction(std::shared_ptr<fundos::transaction> saving);
 };
