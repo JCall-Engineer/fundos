@@ -1,4 +1,4 @@
-#include "error.hpp"
+#include "error_page.hpp"
 #include "theme.hpp"
 #include <QVBoxLayout>
 #include <QHBoxLayout>

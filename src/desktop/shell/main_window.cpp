@@ -1,7 +1,5 @@
 #include "main_window.hpp"
-#include "status_bar.hpp"
-#include "pages/error.hpp"
-#include "pages/home.hpp"
+#include "content/home_page.hpp"
 #include <QApplication>
 #include <QDir>
 #include <QMessageBox>

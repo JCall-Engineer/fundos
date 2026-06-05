@@ -1,9 +1,9 @@
 #pragma once
 #include "fundos.hpp"
+#include "shell/status_bar.hpp"
+#include "content/error_page.hpp"
 #include <QMainWindow>
 
-class StatusBar;
-class ErrorPage;
 class MainWindow : public QMainWindow {
 	Q_OBJECT
 

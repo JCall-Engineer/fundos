@@ -1,4 +1,4 @@
-#include "home.hpp"
+#include "home_page.hpp"
 #include <QHBoxLayout>
 #include <QScrollArea>
 

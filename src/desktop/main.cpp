@@ -1,5 +1,5 @@
-#include "main_window.hpp"
 #include "theme.hpp"
+#include "shell/main_window.hpp"
 #include <QApplication>
 
 int main(int argc, char* argv[]) {
