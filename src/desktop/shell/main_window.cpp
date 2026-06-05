@@ -114,13 +114,14 @@ void MainWindow::on_result(const fundos::db::outcome& result) {
 	}
 }
 void MainWindow::go_home() {
-	auto home_page = new HomePage(database, this);
+	auto* home_page = new HomePage(database, this);
 	connect(home_page, &HomePage::db_outcome,   this, &MainWindow::on_result);
 	connect(home_page, &HomePage::open_account, this, &MainWindow::open_account);
 	connect(home_page, &HomePage::open_fund,    this, &MainWindow::open_fund);
 	connect(home_page, &HomePage::open_budget,  this, &MainWindow::open_budget);
 	connect(home_page, &HomePage::import_ofx,   this, &MainWindow::import_ofx);
 	connect(home_page, &HomePage::go_home,      this, &MainWindow::go_home);
+	home_page->initialize();
 	setCentralWidget(home_page);
 }
 void MainWindow::quit() {

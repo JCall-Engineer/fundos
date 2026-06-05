@@ -24,6 +24,9 @@ protected:
 public:
 	explicit HomePage(std::shared_ptr<fundos::db> db, QWidget* parent = nullptr);
 
+	///  Must be called after HonePage's signals are connected
+	void initialize();
+
 signals:
 	void db_outcome(const fundos::db::outcome& outcome);
 	void open_account(std::shared_ptr<fundos::account> opening);
