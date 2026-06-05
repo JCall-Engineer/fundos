@@ -1,5 +1,7 @@
 #pragma once
+#include "types/currency.hpp"
 #include <QColor>
+#include <QLabel>
 #include <QIcon>
 #include <QPainter>
 #include <QPalette>
@@ -54,6 +56,26 @@ static inline QPalette make_palette() {
 	palette.setColor(QPalette::ToolTipText,     text);
 	palette.setColor(QPalette::PlaceholderText, text_muted);
 	return palette;
+}
+
+static inline QLabel* currency_label(fundos::currency amount, const fundos::currency_locale::spec& locale, QWidget* parent = nullptr) {
+	auto* label = new QLabel(QString::fromStdString(amount.to_string(locale)), parent);
+	QPalette palette = label->palette();
+	palette.setColor(QPalette::WindowText, amount.minor_units < 0 ? theme::error_foreground : theme::success_foreground);
+	label->setPalette(palette);
+	return label;
+}
+
+static inline QLabel* header_label(const QString& content, QWidget* parent = nullptr) {
+	auto* label = new QLabel(content, parent);
+	QFont font = label->font();
+	font.setPointSize(font.pointSize() + 2);
+	font.setLetterSpacing(QFont::AbsoluteSpacing, 1.5);
+	label->setFont(font);
+	QPalette palette = label->palette();
+	palette.setColor(QPalette::WindowText, theme::text_muted);
+	label->setPalette(palette);
+	return label;
 }
 
 } // namespace theme
