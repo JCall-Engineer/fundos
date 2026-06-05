@@ -35,8 +35,8 @@ static inline QPixmap colored_svg(const QString& path, QColor color, QSize size)
 	return pixmap;
 }
 
-static inline QIcon colored_svg_icon(const QString& path, QColor color) {
-	return QIcon(colored_svg(path, color, QSize(24, 24)));
+static inline QIcon colored_svg_icon(const QString& path, QColor color, QSize size) {
+	return QIcon(colored_svg(path, color, size));
 }
 
 static inline QPalette make_palette() {

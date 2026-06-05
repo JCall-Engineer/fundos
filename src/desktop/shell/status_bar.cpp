@@ -4,6 +4,9 @@
 #include <QMenu>
 #include <QWidgetAction>
 
+// Qt 6 introduced constexpr compatibility
+static constexpr QSize icon_size = QSize(24, 24);
+
 StatusBar::StatusBar(QWidget* parent) : QStatusBar(parent) {
 	setSizeGripEnabled(false);
 	setStyleSheet("QStatusBar::item { border: none; }");
@@ -24,7 +27,7 @@ StatusBar::StatusBar(QWidget* parent) : QStatusBar(parent) {
 	addWidget(left);
 
 	db_button = new QToolButton(this);
-	db_button->setIcon(theme::colored_svg_icon(":/icons/database.svg", theme::text));
+	db_button->setIcon(theme::colored_svg_icon(":/icons/database.svg", theme::text, icon_size));
 	db_button->setAutoRaise(true);
 	db_button->setFixedSize(24, 24);
 	connect(db_button, &QToolButton::clicked, this, &StatusBar::show_db_menu);
@@ -224,11 +227,11 @@ void StatusBar::show_db_menu() {
 
 	menu.addSeparator();
 	auto* restore_action = menu.addAction(tr("Restore from Backup..."));
-	restore_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning_foreground));
+	restore_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning_foreground, icon_size));
 	connect(restore_action, &QAction::triggered, this, &StatusBar::restore_requested);
 
 	auto* replace_action = menu.addAction(tr("Replace with New Database..."));
-	replace_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning_foreground));
+	replace_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning_foreground, icon_size));
 	connect(replace_action, &QAction::triggered, this, &StatusBar::create_new_requested);
 
 	menu.adjustSize();
