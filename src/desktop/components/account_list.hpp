@@ -9,7 +9,7 @@ class AccountList : public QWidget {
 	std::vector<fundos::account> accounts;
 
 public:
-	explicit AccountList(std::shared_ptr<fundos::db> db, QWidget* parent = nullptr);
+	explicit AccountList(std::shared_ptr<fundos::db> db, const fundos::currency_locale::spec& locale, QWidget* parent = nullptr);
 
 signals:
 	void db_outcome(const fundos::db::outcome& outcome);

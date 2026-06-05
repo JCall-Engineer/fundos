@@ -1,14 +1,25 @@
 #pragma once
 #include "fundos.hpp"
+#include "components/account_list.hpp"
+#include "components/fund_list.hpp"
+#include "components/budget_list.hpp"
 #include <QWidget>
 #include <QScrollArea>
 
 class HomePage : public QWidget {
 	Q_OBJECT
 
-	QScrollArea* make_panel(QWidget* content);
-
 	std::shared_ptr<fundos::db> database;
+
+	QScrollArea* scroll_area;
+	AccountList* account_list;
+	FundList* fund_list;
+	BudgetList* budget_list;
+
+	void relayout();
+
+protected:
+	void resizeEvent(QResizeEvent* event) override;
 
 public:
 	explicit HomePage(std::shared_ptr<fundos::db> db, QWidget* parent = nullptr);

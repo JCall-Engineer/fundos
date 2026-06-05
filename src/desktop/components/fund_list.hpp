@@ -9,7 +9,7 @@ class FundList : public QWidget {
 	std::vector<fundos::fund> funds;
 
 public:
-	explicit FundList(std::shared_ptr<fundos::db> db, QWidget* parent = nullptr);
+	explicit FundList(std::shared_ptr<fundos::db> db, const fundos::currency_locale::spec& locale, QWidget* parent = nullptr);
 
 signals:
 	void db_outcome(const fundos::db::outcome& outcome);
