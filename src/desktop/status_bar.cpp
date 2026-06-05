@@ -149,15 +149,12 @@ void StatusBar::set_status(const fundos::db::outcome& outcome) {
 		case error::disk_full:
 			return apply_error(disconnected + tr("disk full"));
 		case error::constraint:
-			FUNDOS_ASSERT(false, "constraint violation occurred");
 			return apply_error(disconnected + tr("constraint violation"));
 		case error::not_found:
 			return apply_error(disconnected + tr("record not found"));
 		case error::bad_request:
-			FUNDOS_ASSERT(false, "bad request occurred");
 			return apply_error(disconnected + tr("incorrect API usage"));
 		case error::rejected:
-			FUNDOS_ASSERT(false, "did not properly validate user input");
 			return apply_error(disconnected + tr("attempted illegal operation"));
 		case error::internal:
 			return apply_error(disconnected + tr("unexpected internal error"));
