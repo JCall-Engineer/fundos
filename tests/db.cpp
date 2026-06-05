@@ -979,19 +979,17 @@ TEST(DbQuery, FundHistory_Basic) {
 	txn.memo          = "Test"; \
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn)));
 
-template<typename T>
-static T fetch_field(sqlite3* connection, const char* sql) {
-	T value{};
+static int64_t fetch_int64(sqlite3* connection, const char* sql) {
+	int64_t value{};
 	sqlite3_exec(connection, sql,
 		[](void* data, int, char** cols, char**) {
-			*static_cast<T*>(data) = cols[0] ? static_cast<T>(std::atoll(cols[0])) : T{};
+			*static_cast<int64_t*>(data) = cols[0] ? static_cast<int64_t>(std::atoll(cols[0])) : int64_t{};
 			return 0;
 		}, &value, nullptr);
 	return value;
 }
 
-template<>
-std::string fetch_field<std::string>(sqlite3* connection, const char* sql) {
+static std::string fetch_string(sqlite3* connection, const char* sql) {
 	std::string value;
 	sqlite3_exec(connection, sql,
 		[](void* data, int, char** cols, char**) {
@@ -1001,20 +999,7 @@ std::string fetch_field<std::string>(sqlite3* connection, const char* sql) {
 	return value;
 }
 
-template<>
-std::optional<std::string> fetch_field<std::optional<std::string>>(sqlite3* connection, const char* sql) {
-	std::optional<std::string> value;
-	sqlite3_exec(connection, sql,
-		[](void* data, int, char** cols, char**) {
-			auto* out = static_cast<std::optional<std::string>*>(data);
-			*out = cols[0] ? std::optional<std::string>{cols[0]} : std::nullopt;
-			return 0;
-		}, &value, nullptr);
-	return value;
-}
-
-template<>
-std::optional<int64_t> fetch_field<std::optional<int64_t>>(sqlite3* connection, const char* sql) {
+static std::optional<int64_t> fetch_optional_int64(sqlite3* connection, const char* sql) {
 	std::optional<int64_t> value;
 	sqlite3_exec(connection, sql,
 		[](void* data, int, char** cols, char**) {
@@ -1038,8 +1023,8 @@ TEST(DbQuery, SaveTransaction_Update) {
 	txn.date_recorded = datetime{86400000}; // 1 day later
 	txn.memo = "Updated";
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn)));
-	EXPECT_EQ(86400000, fetch_field<int64_t>(connection, "SELECT date_recorded FROM transactions LIMIT 1"));
-	EXPECT_EQ("Updated", fetch_field<std::string>(connection, "SELECT memo FROM transactions LIMIT 1"));
+	EXPECT_EQ(86400000, fetch_int64(connection, "SELECT date_recorded FROM transactions LIMIT 1"));
+	EXPECT_EQ("Updated", fetch_string(connection, "SELECT memo FROM transactions LIMIT 1"));
 }
 
 TEST(DbQuery, SaveTransaction_Update_ImmutableFieldChanged) {
@@ -1068,7 +1053,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection) {
 	correction.correct_action = transaction::correction_type::replaces;
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(correction)));
 	ASSERT_NE(correction.id(), 0);
-	auto superseded_by = fetch_field<std::optional<int64_t>>(connection,
+	auto superseded_by = fetch_optional_int64(connection,
 		std::format("SELECT superseded_by FROM transactions WHERE id = {}", txn.id()).c_str()
 	);
 	EXPECT_EQ(superseded_by, correction.id());
@@ -1299,7 +1284,7 @@ TEST(DbQuery, PerformImport_UpdatesMatchedTransaction) {
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	pending.accounts[0].transactions[0].saving.memo = "Updated Memo";
 	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
-	auto memo = fetch_field<std::string>(connection,
+	auto memo = fetch_string(connection,
 		std::format("SELECT memo FROM transactions WHERE id = {}", previous_import_id).c_str()
 	);
 	EXPECT_EQ(memo, "Updated Memo");
@@ -1339,7 +1324,7 @@ TEST(DbQuery, PerformImport_ResolvesCorrections) {
 	pending.accounts[0].transactions[1].importing.correct_action = transaction::correction_type::replaces;
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
-	auto corrects_id = fetch_field<std::optional<int64_t>>(connection,
+	auto corrects_id = fetch_optional_int64(connection,
 		std::format(
 			"SELECT corrects_id FROM transactions WHERE fitid = 'fitid-new'"
 		).c_str()
