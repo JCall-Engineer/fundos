@@ -10,6 +10,7 @@ static constexpr int WINDOW_VERSION = 1;
 MainWindow::MainWindow() {
 	setWindowTitle("FundOS");
 	resize(1280, 720);
+	setMinimumWidth(600);
 
 	QSettings settings;
 	restoreGeometry(settings.value("mainwindow/geometry", QByteArray()).toByteArray());
@@ -133,7 +134,11 @@ void MainWindow::db_migrate() {
 		FUNDOS_ASSERT(false, "Migrate was called on a non-existent or closed db");
 		return;
 	}
-	database->migrate();
+	auto migrated = database->migrate();
+	on_result(migrated);
+	if (migrated) {
+		go_home();
+	}
 }
 void MainWindow::db_backup() {
 	QMessageBox::information(this, tr("Title"), tr("Backup Called"));
