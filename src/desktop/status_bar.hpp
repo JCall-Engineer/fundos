@@ -7,8 +7,8 @@
 class StatusBar : public QStatusBar {
 	Q_OBJECT
 
-	QWidget*     dot  = nullptr;
-	QLabel*      text = nullptr;
+	QWidget*     dot       = nullptr;
+	QLabel*      text      = nullptr;
 	QToolButton* db_button = nullptr;
 
 	std::shared_ptr<fundos::db> database = nullptr;

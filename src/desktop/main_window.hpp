@@ -3,6 +3,7 @@
 #include <QMainWindow>
 
 class StatusBar;
+class ErrorPage;
 class MainWindow : public QMainWindow {
 	Q_OBJECT
 
@@ -11,6 +12,7 @@ class MainWindow : public QMainWindow {
 	StatusBar* status_bar = nullptr;
 
 	void open_database();
+	void load_error_page(ErrorPage* page);
 
 public:
 	MainWindow();
@@ -19,6 +21,7 @@ protected:
 	void closeEvent(QCloseEvent* event) override;
 
 private slots:
+	void on_result(const fundos::db::outcome& result);
 	void go_home();
 	void quit();
 

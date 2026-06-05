@@ -72,7 +72,7 @@ void StatusBar::set_database(std::shared_ptr<fundos::db> db) {
 
 	const auto& status = database->get_status();
 
-	switch(status.result) {
+	switch (status.result) {
 		case code::ok:
 			return apply_ready();
 		case code::needs_migration:
@@ -80,7 +80,7 @@ void StatusBar::set_database(std::shared_ptr<fundos::db> db) {
 		case code::null_db:
 			return apply_error(tr("db error: null"));
 		case code::schema_error: {
-			switch(status.schema_status) {
+			switch (status.schema_status) {
 				case schema::newer_schema:
 					return apply_error(tr("database requires a newer version of fundos"));
 				case schema::schema_mismatch:
@@ -96,7 +96,7 @@ void StatusBar::set_database(std::shared_ptr<fundos::db> db) {
 				const auto& view = status.sqlite3_outcome.msg->view();
 				text->setToolTip(QString::fromUtf8(view.data(), view.size()));
 			}
-			switch(status.sqlite3_outcome.code) {
+			switch (status.sqlite3_outcome.code) {
 				case error::corrupted:
 					return apply_error(tr("database is corrupted"));
 				case error::unavailable:
@@ -133,7 +133,7 @@ void StatusBar::set_status(const fundos::db::outcome& outcome) {
 		text->setToolTip(QString::fromUtf8(view.data(), view.size()));
 	}
 	using error = fundos::db::error;
-	switch(outcome.code) {
+	switch (outcome.code) {
 		case error::none:
 			return apply_ready();
 		case error::not_ready:
