@@ -689,7 +689,13 @@ db::result<currency_locale::spec> db::get_currency_locale() {
 	};
 
 	auto preset_result = get_meta(locale_meta.currency_locale_key);
-	if (!preset_result) { return preset_result.status(); }
+	if (!preset_result) {
+		auto& status = preset_result.status();
+		if (status.code == error::not_found) {
+			return outcome(error::not_found, "Currency Locale is not yet set");
+		}
+		return status;
+	}
 
 	std::string &preset_value = preset_result.value();
 	if (preset_value == locale_meta.custom_sentinel_val) {
@@ -790,7 +796,13 @@ db::outcome db::set_currency_locale(const currency_locale::spec& locale) {
 
 db::result<percentage_locale::spec> db::get_percentage_locale() {
 	auto preset_result = get_meta(locale_meta.percentage_locale_key);
-	if (!preset_result) { return preset_result.status(); }
+	if (!preset_result) {
+		auto& status = preset_result.status();
+		if (status.code == error::not_found) {
+			return outcome(error::not_found, "Percentage Locale is not yet set");
+		}
+		return status;
+	}
 
 	std::string &preset_value = preset_result.value();
 	if (preset_value == locale_meta.custom_sentinel_val) {
