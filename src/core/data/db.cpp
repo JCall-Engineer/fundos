@@ -481,7 +481,6 @@ db::error db::classify_sqlite_runtime_error(int rc) {
 		case SQLITE_CORRUPT:
 		// NOTADB cannot be returned at step time
 		case SQLITE_IOERR:
-			close();
 			return db::error::corrupted;
 		case SQLITE_CONSTRAINT:
 			return db::error::constraint;
@@ -496,7 +495,7 @@ db::outcome db::sql_count_check(const std::string& sql, size_t expected, executo
 	if (!is_ready()) { return db::error::not_ready; }
 	sqlite3_stmt* stmt = nullptr;
 	int rc = sqlite3_prepare_v2(connection, sql.c_str(), -1, &stmt, nullptr);
-	if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
+	if (rc != SQLITE_OK) { return sqlite_runtime_error(rc); }
 	auto result = sql_fetch_one<int64_t>(
 		stmt,
 		bind, [](sqlite3_stmt* stmt) -> int64_t {
@@ -525,7 +524,7 @@ db::outcome db::sql_delete_except(const db::delete_except_params& params) {
 
 	sqlite3_stmt* stmt = nullptr;
 	int rc = sqlite3_prepare_v2(connection, sql.c_str(), -1, &stmt, nullptr);
-	if (rc != SQLITE_OK) { return classify_sqlite_runtime_error(rc); }
+	if (rc != SQLITE_OK) { return sqlite_runtime_error(rc); }
 
 	outcome result = sql_execute(stmt, [&](sqlite3_stmt* stmt) {
 		sqlite3_bind_int64(stmt, 1, params.filter_value);
@@ -539,9 +538,9 @@ db::outcome db::sql_delete_except(const db::delete_except_params& params) {
 
 db::outcome db::sql_execute(sqlite3_stmt* stmt, executor bind) {
 	if (!is_ready()) { return db::error::not_ready; }
+	sqlite3_reset(stmt);
 	bind(stmt);
 	int rc = sqlite3_step(stmt);
-	sqlite3_reset(stmt);
 	if (SQLITE_DONE != rc) {
 		return sqlite_runtime_error(rc);
 	}
@@ -551,34 +550,30 @@ db::outcome db::sql_execute(sqlite3_stmt* stmt, executor bind) {
 template<typename T>
 db::result<T> db::sql_fetch_one(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
 	if (!is_ready()) { return not_ready(); }
+	sqlite3_reset(stmt);
 	bind(stmt);
 	int rc = sqlite3_step(stmt);
 	switch (rc) {
 		case SQLITE_ROW: {
-			T value = extract(stmt);
-			sqlite3_reset(stmt);
-			return value;
+			return extract(stmt);
 		}
 		case SQLITE_DONE:
-			sqlite3_reset(stmt);
 			return outcome(error::not_found);
 		default:
-			auto msg = sqlite_error_message();
-			sqlite3_reset(stmt);
-			return outcome(classify_sqlite_runtime_error(rc), msg);
+			return sqlite_runtime_error(rc);
 	}
 }
 
 template<typename T>
 db::result<std::vector<T>> db::sql_fetch_many(sqlite3_stmt* stmt, executor bind, extractor<T> extract) {
 	if (!is_ready()) { return not_ready(); }
+	sqlite3_reset(stmt);
 	bind(stmt);
 	int rc;
 	std::vector<T> rows;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		rows.push_back(extract(stmt));
 	}
-	sqlite3_reset(stmt);
 	if (SQLITE_DONE != rc) {
 		return sqlite_runtime_error(rc);
 	}

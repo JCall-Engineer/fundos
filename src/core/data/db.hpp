@@ -152,7 +152,14 @@ private:
 	inline outcome sqlite_open_error(int rc) { return outcome(classify_sqlite_open_error(rc), sqlite_error_message()); }
 
 	error classify_sqlite_runtime_error(int rc);
-	inline outcome sqlite_runtime_error(int rc) { return outcome(classify_sqlite_runtime_error(rc), sqlite_error_message()); }
+	inline outcome sqlite_runtime_error(int rc) {
+		auto error = classify_sqlite_runtime_error(rc);
+		auto message = sqlite_error_message(); // captured before any close
+		if (error == error::corrupted || error == error::internal) {
+			close();
+		}
+		return outcome(error, std::move(message));
+	}
 
 public:
 	/// Opens or creates a database file at the given path.
@@ -174,7 +181,8 @@ public:
 	/// Cleans up prepared statements. Calls sqlite3_close iff owns_connection
 	~db();
 
-	// no copy, no move — connection lifetime is explicit
+	// no default construct, no copy, no move — connection lifetime is explicit
+	db() = delete;
 	db(const db&) = delete;
 	db& operator=(const db&) = delete;
 
