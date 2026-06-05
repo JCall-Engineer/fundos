@@ -11,7 +11,7 @@ class StatusBar : public QStatusBar {
 	QLabel*      text      = nullptr;
 	QToolButton* db_button = nullptr;
 
-	std::shared_ptr<fundos::db> database = nullptr;
+	std::shared_ptr<fundos::db> database;
 
 	void apply_ready();
 	void apply_yellow(const QString& message);

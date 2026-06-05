@@ -8,7 +8,7 @@ class MainWindow : public QMainWindow {
 	Q_OBJECT
 
 	std::string db_path;
-	std::shared_ptr<fundos::db> database = nullptr;
+	std::shared_ptr<fundos::db> database;
 	StatusBar* status_bar = nullptr;
 
 	void open_database();
