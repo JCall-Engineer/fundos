@@ -4,6 +4,7 @@
 
 static constexpr int HORIZONTAL_BREAKPOINT = 600;
 void HomePage::relayout() {
+	if (budget_list = nullptr) { return; } // budget_list is the last pointer set in the ctor
 	bool use_horizontal = width() >= HORIZONTAL_BREAKPOINT;
 
 	auto* container = new QWidget();

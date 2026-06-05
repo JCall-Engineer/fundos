@@ -11,10 +11,10 @@ class HomePage : public QWidget {
 
 	std::shared_ptr<fundos::db> database;
 
-	QScrollArea* scroll_area;
-	AccountList* account_list;
-	FundList* fund_list;
-	BudgetList* budget_list;
+	QScrollArea* scroll_area  = nullptr;
+	AccountList* account_list = nullptr;
+	FundList*    fund_list    = nullptr;
+	BudgetList*  budget_list  = nullptr;
 
 	void relayout();
 
