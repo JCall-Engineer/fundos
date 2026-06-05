@@ -11,7 +11,7 @@ QScrollArea* HomePage::make_panel(QWidget* content) {
 	return area;
 }
 
-HomePage::HomePage(MainWindow* parent) : QWidget(parent) {
+HomePage::HomePage(std::shared_ptr<fundos::db> db, QWidget* parent) : QWidget(parent), database(db) {
 	auto* root_layout = new QHBoxLayout(this);
 	root_layout->setContentsMargins(0, 0, 0, 0);
 	root_layout->setSpacing(0);

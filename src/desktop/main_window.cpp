@@ -8,31 +8,6 @@
 #include <QSettings>
 #include <QStandardPaths>
 
-void MainWindow::open_database() {
-	if (database != nullptr) {
-		// Close previous db so it doesn't lock an attempt to create a new db instance
-		database->close();
-	}
-	database = fundos::db::open_file(db_path);
-	status_bar->set_database(database);
-
-	if (database->is_ready()) {
-		auto home = new HomePage(this);
-		setCentralWidget(home);
-		return;
-	}
-
-	auto& status = database->get_status();
-	ErrorPage* error_page = new ErrorPage(status, this);
-	connect(error_page, &ErrorPage::retry_requested,      this, &MainWindow::handle_retry);
-	connect(error_page, &ErrorPage::migrate_requested,    this, &MainWindow::handle_migrate);
-	connect(error_page, &ErrorPage::backup_requested,     this, &MainWindow::handle_backup);
-	connect(error_page, &ErrorPage::create_new_requested, this, &MainWindow::handle_create_new);
-	connect(error_page, &ErrorPage::restore_requested,    this, &MainWindow::handle_restore);
-	connect(error_page, &ErrorPage::quit_requested,       this, &MainWindow::handle_quit);
-	setCentralWidget(error_page);
-}
-
 static constexpr int WINDOW_VERSION = 1;
 MainWindow::MainWindow() {
 	setWindowTitle("FundOS");
@@ -58,26 +33,101 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 	QMainWindow::closeEvent(event);
 }
 
-void MainWindow::handle_retry() {
-	QMessageBox::information(this, tr("Title"), tr("Retry Called"));
-	open_database();
+void MainWindow::open_database() {
+	if (database != nullptr) {
+		// Close previous db so it doesn't lock an attempt to create a new db instance
+		database->close();
+	}
+	database = fundos::db::open_file(db_path);
+	status_bar->set_database(database);
+
+	if (database->is_ready()) {
+		return go_home();
+	}
+
+	auto& status = database->get_status();
+	ErrorPage* error_page = new ErrorPage(status, this);
+	connect(error_page, &ErrorPage::retry_requested,      this, &MainWindow::db_retry);
+	connect(error_page, &ErrorPage::migrate_requested,    this, &MainWindow::db_migrate);
+	connect(error_page, &ErrorPage::backup_requested,     this, &MainWindow::db_backup);
+	connect(error_page, &ErrorPage::create_new_requested, this, &MainWindow::db_create_new);
+	connect(error_page, &ErrorPage::restore_requested,    this, &MainWindow::db_restore);
+	connect(error_page, &ErrorPage::quit_requested,       this, &MainWindow::quit);
+	setCentralWidget(error_page);
 }
-void MainWindow::handle_quit() {
+
+void MainWindow::go_home() {
+	auto home_page = new HomePage(database, this);
+	connect(home_page, &HomePage::db_outcome, status_bar, &StatusBar::set_status);
+	connect(home_page, &HomePage::create_account, this, &MainWindow::create_account);
+	connect(home_page, &HomePage::create_fund,    this, &MainWindow::create_fund);
+	connect(home_page, &HomePage::open_budget,    this, &MainWindow::open_budget);
+	connect(home_page, &HomePage::import_ofx,     this, &MainWindow::import_ofx);
+	setCentralWidget(home_page);
+}
+void MainWindow::quit() {
 	QApplication::quit();
 }
-void MainWindow::handle_migrate() {
-	QMessageBox::information(this, tr("Title"), tr("Migrate Called"));
-	//database->migrate();
+
+void MainWindow::db_retry() {
+	open_database();
 }
-void MainWindow::handle_backup() {
+void MainWindow::db_migrate() {
+	if (database == nullptr || !database->is_connected()) {
+		FUNDOS_ASSERT(false, "Migrate was called on a non-existent or closed db");
+		return;
+	}
+	database->migrate();
+}
+void MainWindow::db_backup() {
 	QMessageBox::information(this, tr("Title"), tr("Backup Called"));
 }
-void MainWindow::handle_create_new() {
+void MainWindow::db_create_new() {
 	QMessageBox::information(this, tr("Title"), tr("Create new called"));
 }
-void MainWindow::handle_restore() {
+void MainWindow::db_restore() {
 	QMessageBox::information(this, tr("Title"), tr("Restore Called"));
 }
-void MainWindow::handle_manage_locale() {
+void MainWindow::db_manage_locale() {
 	QMessageBox::information(this, tr("Title"), tr("Manage locale Called"));
+}
+
+void MainWindow::import_ofx() {
+
+}
+
+void MainWindow::create_account() {
+
+}
+void MainWindow::open_account(fundos::account opening) {
+
+}
+void MainWindow::save_account(fundos::account saving) {
+
+}
+
+void MainWindow::create_fund() {
+
+}
+void MainWindow::open_fund(fundos::fund opening) {
+
+}
+void MainWindow::save_fund(fundos::fund saving) {
+
+}
+
+// create_budget is open_budget with a default constructed budget
+void MainWindow::open_budget(fundos::budget opening) {
+
+}
+void MainWindow::save_budget(fundos::budget saving) {
+
+}
+
+// Create transaction is open_transaction with minimal properties set
+void MainWindow::open_transaction(fundos::transaction opening) {
+
+}
+void MainWindow::save_transaction(fundos::transaction saving) {
+
 }
