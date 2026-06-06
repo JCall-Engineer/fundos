@@ -1,15 +1,15 @@
 #pragma once
-#include "fundos.hpp"
+#include "context.hpp"
 #include <QWidget>
 
 class AccountPage : public QWidget {
 	Q_OBJECT
 
-	std::shared_ptr<fundos::db> database;
+	std::shared_ptr<AppContext> context;
 	fundos::account record;
 
 public:
-	explicit AccountPage(std::shared_ptr<fundos::db> db, fundos::account opening, QWidget* parent = nullptr);
+	explicit AccountPage(std::shared_ptr<AppContext> ctx, fundos::account opening, QWidget* parent = nullptr);
 
 signals:
 };

@@ -1,5 +1,5 @@
 #include "account_page.hpp"
 
-AccountPage::AccountPage(std::shared_ptr<fundos::db> db, fundos::account opening, QWidget *parent) : QWidget(parent), database(std::move(db)), record(std::move(opening)) {
+AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account opening, QWidget *parent) : QWidget(parent), context(std::move(ctx)), record(std::move(opening)) {
 
 }

@@ -1,15 +1,15 @@
 #pragma once
-#include "fundos.hpp"
+#include "context.hpp"
 #include <QDialog>
 #include <QWidget>
 
 class ImportDialog : public QDialog {
 	Q_OBJECT
 
-	std::shared_ptr<fundos::db> database;
+	std::shared_ptr<AppContext> context;
 
 public:
-	explicit ImportDialog(std::shared_ptr<fundos::db> db, QWidget* parent = nullptr);
+	explicit ImportDialog(std::shared_ptr<AppContext> ctx, QWidget* parent = nullptr);
 
 signals:
 };

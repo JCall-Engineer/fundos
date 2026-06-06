@@ -1,15 +1,15 @@
 #pragma once
-#include "fundos.hpp"
+#include "context.hpp"
 #include <QWidget>
 
 class BudgetPage : public QWidget {
 	Q_OBJECT
 
-	std::shared_ptr<fundos::db> database;
+	std::shared_ptr<AppContext> context;
 	fundos::budget record;
 
 public:
-	explicit BudgetPage(std::shared_ptr<fundos::db> db, fundos::budget opening, QWidget* parent = nullptr);
+	explicit BudgetPage(std::shared_ptr<AppContext> ctx, fundos::budget opening, QWidget* parent = nullptr);
 
 signals:
 };

@@ -1,7 +1,7 @@
 #include "fund_list.hpp"
 
-FundList::FundList(std::shared_ptr<fundos::db> db, const fundos::currency_locale::spec& locale, QWidget *parent) : QWidget(parent), database(std::move(db)) {
-	auto result = database->get_funds();
+FundList::FundList(std::shared_ptr<AppContext> ctx, QWidget *parent) : QWidget(parent), context(std::move(ctx)) {
+	auto result = context->database->get_funds();
 	if (!result) {
 		emit db_outcome(result.status());
 		return;

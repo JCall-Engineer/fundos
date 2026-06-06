@@ -7,7 +7,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
-AccountList::AccountList(std::shared_ptr<fundos::db> db, const fundos::currency_locale::spec& locale, QWidget *parent) : QWidget(parent), database(std::move(db)) {
+AccountList::AccountList(std::shared_ptr<AppContext> ctx, QWidget *parent) : QWidget(parent), context(std::move(ctx)) {
 	auto* root_layout = new QVBoxLayout(this);
 	auto* header = new QHBoxLayout();
 
@@ -46,7 +46,7 @@ AccountList::AccountList(std::shared_ptr<fundos::db> db, const fundos::currency_
 		if (name.isEmpty()) { return; }
 
 		fundos::account creating = { .name = name.toStdString() };
-		auto saved = database->save_account(creating);
+		auto saved = context->database->save_account(creating);
 		if (saved) {
 			emit go_home();
 		} else {
@@ -54,7 +54,7 @@ AccountList::AccountList(std::shared_ptr<fundos::db> db, const fundos::currency_
 		}
 	});
 
-	auto fetched = database->get_accounts();
+	auto fetched = context->database->get_accounts();
 	if (!fetched) {
 		emit db_outcome(fetched.status());
 		return;
@@ -63,10 +63,10 @@ AccountList::AccountList(std::shared_ptr<fundos::db> db, const fundos::currency_
 	accounts = std::move(fetched.value());
 
 	for (int i = 0; i < static_cast<int>(accounts.size()); i++) {
-		auto balance = database->get_account_balance(accounts[i].id());
+		auto balance = context->database->get_account_balance(accounts[i].id());
 		QLabel* amount = nullptr;
 		if (balance) {
-			amount = theme::currency_label(balance.value(), locale);
+			amount = theme::currency_label(balance.value(), context->currency_locale.info());
 		} else {
 			emit db_outcome(balance.status());
 		}

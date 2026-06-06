@@ -1,5 +1,5 @@
 #pragma once
-#include "fundos.hpp"
+#include "context.hpp"
 #include "components/account_list.hpp"
 #include "components/fund_list.hpp"
 #include "components/budget_list.hpp"
@@ -9,7 +9,7 @@
 class HomePage : public QWidget {
 	Q_OBJECT
 
-	std::shared_ptr<fundos::db> database;
+	std::shared_ptr<AppContext> context;
 
 	QScrollArea* scroll_area  = nullptr;
 	AccountList* account_list = nullptr;
@@ -22,7 +22,7 @@ protected:
 	void resizeEvent(QResizeEvent* event) override;
 
 public:
-	explicit HomePage(std::shared_ptr<fundos::db> db, QWidget* parent = nullptr);
+	explicit HomePage(std::shared_ptr<AppContext> ctx, QWidget* parent = nullptr);
 
 	///  Must be called after HonePage's signals are connected
 	void initialize();

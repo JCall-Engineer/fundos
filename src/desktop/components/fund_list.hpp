@@ -1,15 +1,15 @@
 #pragma once
-#include "fundos.hpp"
+#include "context.hpp"
 #include <QWidget>
 
 class FundList : public QWidget {
 	Q_OBJECT
 
-	std::shared_ptr<fundos::db> database;
+	std::shared_ptr<AppContext> context;
 	std::vector<fundos::fund> funds;
 
 public:
-	explicit FundList(std::shared_ptr<fundos::db> db, const fundos::currency_locale::spec& locale, QWidget* parent = nullptr);
+	explicit FundList(std::shared_ptr<AppContext> ctx, QWidget* parent = nullptr);
 
 signals:
 	void db_outcome(const fundos::db::outcome& outcome);

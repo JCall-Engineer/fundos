@@ -2,7 +2,7 @@
 #include <QHBoxLayout>
 #include <QScrollArea>
 
-HomePage::HomePage(std::shared_ptr<fundos::db> db, QWidget* parent) : QWidget(parent), database(std::move(db)) {
+HomePage::HomePage(std::shared_ptr<AppContext> ctx, QWidget* parent) : QWidget(parent), context(std::move(ctx)) {
 	auto* root_layout = new QVBoxLayout(this);
 	root_layout->setContentsMargins(0, 0, 0, 0);
 
@@ -14,15 +14,9 @@ HomePage::HomePage(std::shared_ptr<fundos::db> db, QWidget* parent) : QWidget(pa
 }
 
 void HomePage::initialize() {
-	auto locale = database->get_currency_locale();
-	if (!locale) {
-		emit db_outcome(locale.status());
-		return;
-	}
-
-	account_list = new AccountList(database, locale.value().info(), this);
-	fund_list    = new FundList(database, locale.value().info(), this);
-	budget_list  = new BudgetList(database, this);
+	account_list = new AccountList(context, this);
+	fund_list    = new FundList(context, this);
+	budget_list  = new BudgetList(context, this);
 
 	connect(account_list, &AccountList::db_outcome,   this, &HomePage::db_outcome);
 	connect(fund_list,    &FundList::db_outcome,      this, &HomePage::db_outcome);
