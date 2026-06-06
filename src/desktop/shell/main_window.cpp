@@ -46,11 +46,94 @@ void MainWindow::open_database() {
 	status_bar->set_database(database);
 
 	if (database->is_ready()) {
-		return go_home();
+		return create_context();
 	}
 
 	auto& status = database->get_status();
 	load_error_page(new ErrorPage(status, this));
+}
+
+bool MainWindow::try_get_locales(std::optional<fundos::currency_locale::selection>& currency_locale, std::optional<fundos::percentage_locale::selection>& percentage_locale) {
+	FUNDOS_ASSERT(database->is_ready(), "get_locales called when database is not ready");
+
+	currency_locale = std::nullopt;
+	percentage_locale = std::nullopt;
+
+	auto currency_locale_fetch = database->get_currency_locale();
+	while (!currency_locale_fetch) {
+		if (currency_locale_fetch.status().code == fundos::db::error::not_found) {
+			break;
+		}
+		if (!database->is_ready()) {
+			load_error_page(new ErrorPage(currency_locale_fetch.status(), this));
+			return false;
+		}
+		QString detail = tr("Error Code:") + " " + QString::number(static_cast<int>(currency_locale_fetch.status().code));
+		if (currency_locale_fetch.status().msg.has_value()) {
+			const auto& view = currency_locale_fetch.status().msg->view();
+			detail += "\n\n" + tr("Error Message:") + " " + QString::fromUtf8(view.data(), view.size());
+		}
+		int choice = QMessageBox::critical(
+			this,
+			tr("Settings Error"),
+			tr("FundOS could not read its settings from the database and cannot continue.") + "\n\n" + detail,
+			QMessageBox::StandardButton::Retry,
+			QMessageBox::StandardButton::Abort
+		);
+		if (choice == QMessageBox::Abort) {
+			QApplication::quit();
+			return false;
+		}
+		currency_locale_fetch = database->get_currency_locale();
+	}
+	if (currency_locale_fetch) { currency_locale = currency_locale_fetch.value(); }
+
+	auto percentage_locale_fetch = database->get_percentage_locale();
+	while (!percentage_locale_fetch) {
+		if (percentage_locale_fetch.status().code == fundos::db::error::not_found) {
+			break;
+		}
+		if (!database->is_ready()) {
+			load_error_page(new ErrorPage(percentage_locale_fetch.status(), this));
+			return false;
+		}
+		QString detail = tr("Error Code:") + " " + QString::number(static_cast<int>(percentage_locale_fetch.status().code));
+		if (percentage_locale_fetch.status().msg.has_value()) {
+			const auto& view = percentage_locale_fetch.status().msg->view();
+			detail += "\n\n" + tr("Error Message:") + " " + QString::fromUtf8(view.data(), view.size());
+		}
+		int choice = QMessageBox::critical(
+			this,
+			tr("Settings Error"),
+			tr("FundOS could not read its settings from the database and cannot continue.") + "\n\n" + detail,
+			QMessageBox::StandardButton::Retry,
+			QMessageBox::StandardButton::Abort
+		);
+		if (choice == QMessageBox::Abort) {
+			QApplication::quit();
+			return false;
+		}
+		percentage_locale_fetch = database->get_percentage_locale();
+	}
+	if (percentage_locale_fetch) { percentage_locale = percentage_locale_fetch.value(); }
+	return true;
+}
+
+void MainWindow::create_context() {
+	FUNDOS_ASSERT(database->is_ready(), "create_context called when database is not ready");
+	context = nullptr;
+
+	std::optional<fundos::currency_locale::selection> currency_locale;
+	std::optional<fundos::percentage_locale::selection> percentage_locale;
+	if (!try_get_locales(currency_locale, percentage_locale)) {
+		return;
+	}
+
+	if (!currency_locale || !percentage_locale) {
+		return open_locale_page(currency_locale, percentage_locale);
+	}
+	context = std::make_shared<AppContext>(database, *currency_locale, *percentage_locale);
+	go_home();
 }
 
 void MainWindow::load_error_page(ErrorPage* page) {
@@ -61,6 +144,26 @@ void MainWindow::load_error_page(ErrorPage* page) {
 	connect(page, &ErrorPage::restore_requested,    this, &MainWindow::db_restore);
 	connect(page, &ErrorPage::quit_requested,       this, &MainWindow::quit);
 	setCentralWidget(page);
+}
+
+void MainWindow::open_locale_page() {
+	FUNDOS_ASSERT(database->is_ready(), "open_locale_page called when database is not ready");
+
+	std::optional<fundos::currency_locale::selection> currency_locale;
+	std::optional<fundos::percentage_locale::selection> percentage_locale;
+	if (!try_get_locales(currency_locale, percentage_locale)) {
+		return;
+	}
+
+	open_locale_page(currency_locale, percentage_locale);
+}
+void MainWindow::open_locale_page(std::optional<fundos::currency_locale::selection> currency_locale, std::optional<fundos::percentage_locale::selection> percentage_locale) {
+	FUNDOS_ASSERT(database->is_ready(), "open_locale_page called when database is not ready");
+
+	auto* locale_page = new LocalePage(database, currency_locale, percentage_locale, this);
+	connect(locale_page, &LocalePage::db_outcome, this, &MainWindow::on_result);
+	connect(locale_page, &LocalePage::done,       this, [this]() { create_context(); });
+	setCentralWidget(locale_page);
 }
 
 void MainWindow::on_result(const fundos::db::outcome& result) {
@@ -144,7 +247,7 @@ void MainWindow::db_migrate() {
 	auto migrated = database->migrate();
 	on_result(migrated);
 	if (migrated) {
-		go_home();
+		create_context();
 	}
 }
 void MainWindow::db_backup() {
@@ -157,7 +260,7 @@ void MainWindow::db_restore() {
 	QMessageBox::information(this, tr("Title"), tr("Restore Called"));
 }
 void MainWindow::db_manage_locale() {
-	QMessageBox::information(this, tr("Title"), tr("Manage locale Called"));
+	open_locale_page();
 }
 
 void MainWindow::import_ofx() {

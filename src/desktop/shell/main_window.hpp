@@ -1,5 +1,5 @@
 #pragma once
-#include "fundos.hpp"
+#include "context.hpp"
 #include "shell/status_bar.hpp"
 #include "content/error_page.hpp"
 #include <QMainWindow>
@@ -9,10 +9,15 @@ class MainWindow : public QMainWindow {
 
 	std::string db_path;
 	std::shared_ptr<fundos::db> database;
+	std::shared_ptr<AppContext> context;
 	StatusBar* status_bar = nullptr;
 
 	void open_database();
+	void create_context();
 	void load_error_page(ErrorPage* page);
+	void open_locale_page();
+	void open_locale_page(std::optional<fundos::currency_locale::selection> currency_locale, std::optional<fundos::percentage_locale::selection> percentage_locale);
+	bool try_get_locales(std::optional<fundos::currency_locale::selection>& currency_locale, std::optional<fundos::percentage_locale::selection>& percentage_locale);
 
 public:
 	MainWindow();
