@@ -222,7 +222,10 @@ void MainWindow::on_result(const fundos::db::outcome& result) {
 	}
 }
 void MainWindow::go_home() {
-	auto* home_page = new HomePage(database, this);
+	FUNDOS_ASSERT(database->is_ready(), "go_home called when database is not ready");
+	FUNDOS_ASSERT(context != nullptr, "go_home called before context is created");
+
+	auto* home_page = new HomePage(context, this);
 	connect(home_page, &HomePage::db_outcome,   this, &MainWindow::on_result);
 	connect(home_page, &HomePage::open_account, this, &MainWindow::open_account);
 	connect(home_page, &HomePage::open_fund,    this, &MainWindow::open_fund);
