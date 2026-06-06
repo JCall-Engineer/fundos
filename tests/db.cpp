@@ -392,8 +392,8 @@ TEST(DbQuery, MetaLocales) {
 		EXPECT_EQ(saved_percentage.status().code, db::error::not_found);
 	}
 	{
-		auto currency_result   = database->set_currency_locale_preset(currency_locale::locales.named.USD);
-		auto percentage_result = database->set_percentage_locale_preset(percentage_locale::locales.named.en);
+		auto currency_result   = database->set_currency_locale(&currency_locale::locales.named.USD);
+		auto percentage_result = database->set_percentage_locale(&percentage_locale::locales.named.en);
 
 		ASSERT_TRUE(static_cast<bool>(currency_result));
 		ASSERT_TRUE(static_cast<bool>(percentage_result));
@@ -404,8 +404,8 @@ TEST(DbQuery, MetaLocales) {
 		ASSERT_TRUE(static_cast<bool>(saved_currency));
 		ASSERT_TRUE(static_cast<bool>(saved_percentage));
 
-		auto c_locale = saved_currency.value();
-		auto p_locale = saved_percentage.value();
+		auto c_locale = saved_currency.value().info();
+		auto p_locale = saved_percentage.value().info();
 
 		EXPECT_EQ(c_locale.scale,               currency_locale::locales.named.USD.info.scale);
 		EXPECT_EQ(c_locale.symbol,              currency_locale::locales.named.USD.info.symbol);
@@ -444,8 +444,8 @@ TEST(DbQuery, MetaLocales) {
 		ASSERT_TRUE(static_cast<bool>(saved_currency));
 		ASSERT_TRUE(static_cast<bool>(saved_percentage));
 
-		auto c_locale = saved_currency.value();
-		auto p_locale = saved_percentage.value();
+		auto c_locale = saved_currency.value().info();
+		auto p_locale = saved_percentage.value().info();
 
 		EXPECT_EQ(c_locale.scale,               custom_currency.scale);
 		EXPECT_EQ(c_locale.symbol,              custom_currency.symbol);
