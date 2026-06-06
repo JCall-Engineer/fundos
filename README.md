@@ -122,7 +122,7 @@ FundOS uses CMake with presets. Building is a two-step process: a **configure** 
 
 ```powershell
 cmake --preset <configure-preset>
-cmake --build --preset <build-preset>
+cmake --build --preset <build-preset> --parallel
 ```
 
 ### Windows
@@ -144,12 +144,22 @@ Edit `CMakeUserPresets.json` and replace the placeholder path with your actual Q
 
 ### Linux
 
-> **Note:** Linux support is implemented but untested. Corrections and build reports are welcome.
+> **Note:** Linux support has been confirmed on Arch Linux. Build reports for other distributions are welcome.
 
 Install Qt 6 via your package manager:
 
-- Debian/Ubuntu: `sudo apt install qt6-base-dev`
-- Fedora: `sudo dnf install qt6-qtbase-devel`
+- Debian/Ubuntu (apt)
+  - `qt6-base-dev`
+  - `qt6-tools-dev`
+  - `libvulkan-dev`
+- Fedora (dnf)
+  - `qt6-qtbase-devel`
+  - `qt6-linguist`
+  - `vulkan-headers`
+- Arch (pacman)
+  - `qt6-base`
+  - `qt6-tools`
+  - `vulkan-headers`
 
 If you install Qt via the Qt Online Installer instead, CMake may not find it automatically.
 In that case, create a `CMakeUserPresets.json` modeled on `CMakeUserPresets.json.example` and set `CMAKE_PREFIX_PATH` to your Qt installation directory, typically `~/Qt/6.x.x/gcc_64`.
