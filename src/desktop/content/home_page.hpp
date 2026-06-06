@@ -1,21 +1,26 @@
 #pragma once
+#include <functional>
 #include "context.hpp"
-#include "components/account_list.hpp"
-#include "components/fund_list.hpp"
-#include "components/budget_list.hpp"
 #include <QWidget>
 #include <QScrollArea>
+#include <QString>
 
 class HomePage : public QWidget {
 	Q_OBJECT
 
 	std::shared_ptr<AppContext> context;
 
-	QScrollArea* scroll_area  = nullptr;
-	AccountList* account_list = nullptr;
-	FundList*    fund_list    = nullptr;
-	BudgetList*  budget_list  = nullptr;
+	QScrollArea* scroll_area   = nullptr;
+	QWidget*     account_panel = nullptr;
+	QWidget*     fund_panel    = nullptr;
+	QWidget*     budget_panel  = nullptr;
 
+	struct button_spec {
+		QString icon_path;
+		std::function<void()> action;
+	};
+
+	QWidget* make_panel(QWidget* list, const QString& title, std::vector<button_spec> buttons);
 	void relayout();
 
 protected:
@@ -24,7 +29,7 @@ protected:
 public:
 	explicit HomePage(std::shared_ptr<AppContext> ctx, QWidget* parent = nullptr);
 
-	///  Must be called after HonePage's signals are connected
+	///  Must be called after HomePage's signals are connected
 	void initialize();
 
 signals:

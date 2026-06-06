@@ -11,9 +11,10 @@ class AccountList : public QWidget {
 public:
 	explicit AccountList(std::shared_ptr<AppContext> ctx, QWidget* parent = nullptr);
 
+	///  Must be called after AccountList's signals are connected
+	void initialize();
+
 signals:
 	void db_outcome(const fundos::db::outcome& outcome);
 	void open_account(std::shared_ptr<fundos::account> opening);
-	void import_ofx();
-	void go_home();
 };

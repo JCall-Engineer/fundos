@@ -11,6 +11,9 @@ class FundList : public QWidget {
 public:
 	explicit FundList(std::shared_ptr<AppContext> ctx, QWidget* parent = nullptr);
 
+	///  Must be called after FundList's signals are connected
+	void initialize();
+
 signals:
 	void db_outcome(const fundos::db::outcome& outcome);
 	void open_fund(std::shared_ptr<fundos::fund> opening);
