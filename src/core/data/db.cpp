@@ -21,7 +21,8 @@ INSERT INTO meta (key, value) VALUES ('schema_version', '1');
 CREATE TABLE funds (
 	id        INTEGER PRIMARY KEY,
 	name      TEXT NOT NULL,
-	closed_at INTEGER
+	closed_at INTEGER,
+	UNIQUE(name COLLATE NOCASE)
 );
 
 CREATE TABLE accounts (
@@ -29,13 +30,15 @@ CREATE TABLE accounts (
 	name            TEXT NOT NULL,
 	closed_at       INTEGER,
 	bank_account_id TEXT,
-	UNIQUE(bank_account_id)
+	UNIQUE(bank_account_id),
+	UNIQUE(name COLLATE NOCASE)
 );
 
 CREATE TABLE budgets (
 	id              INTEGER PRIMARY KEY,
 	name            TEXT NOT NULL,
-	overflow_fund   INTEGER NOT NULL REFERENCES funds(id) ON DELETE RESTRICT
+	overflow_fund   INTEGER NOT NULL REFERENCES funds(id) ON DELETE RESTRICT,
+	UNIQUE(name COLLATE NOCASE)
 );
 CREATE INDEX idx_budgets_overflow_fund ON budgets(overflow_fund);
 
