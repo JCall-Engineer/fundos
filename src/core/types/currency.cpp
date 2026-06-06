@@ -60,7 +60,8 @@ std::optional<int64_t> parse_currency(const std::string& text, const currency_lo
 
 inline // helper for format_currency writes the arbitrary size symbol in reverse byte order
 void copy_symbol_reversed(char* buffer, size_t& buffer_n, const currency_locale::spec& locale) {
-	for (auto it = locale.symbol.rbegin(); it != locale.symbol.rend(); ++it) {
+	size_t copied = 0;
+	for (auto it = locale.symbol.rbegin(); it != locale.symbol.rend() && copied < 4; ++it, ++copied) {
 		buffer[buffer_n++] = *it;
 	}
 }
