@@ -1,5 +1,5 @@
 #pragma once
-#include "fundos.hpp"
+#include <QLabel>
 #include <QWidget>
 
 class NavigableRow : public QWidget {
