@@ -5,6 +5,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 #include "sqlite3.h"
 #include "models.hpp"
