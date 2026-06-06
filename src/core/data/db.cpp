@@ -650,7 +650,6 @@ db::outcome db::set_meta(std::string key, std::string value) {
 struct locale_register {
 	const std::string percentage_locale_key = "percentage_locale";
 	const std::string currency_locale_key   = "currency_locale";
-	const std::string custom_sentinel_val   = "custom";
 
 	const std::string percentage_locale_decimal_separator_key = "percentage_locale_decimal_separator";
 	const std::string percentage_locale_has_space_key         = "percentage_locale_has_space";
@@ -683,7 +682,7 @@ static const enum_string_map<currency_locale::spec::negative_notation, num_negat
 	{ currency_locale::spec::negative_notation::trailing_minus, "trailing_minus" },
 }};
 
-db::result<currency_locale::spec> db::get_currency_locale() {
+db::result<currency_locale::selection> db::get_currency_locale() {
 	static const std::unordered_map<std::string, int16_t> valid_scales = {
 		{ "1", int16_t{1} }, { "10", int16_t{10} }, { "100", int16_t{100} }, { "1000", int16_t{1000} },
 	};
@@ -698,7 +697,7 @@ db::result<currency_locale::spec> db::get_currency_locale() {
 	}
 
 	std::string &preset_value = preset_result.value();
-	if (preset_value == locale_meta.custom_sentinel_val) {
+	if (preset_value == currency_locale::selection::custom_id) {
 		// Extract scale from meta
 		auto scale_result = get_meta(locale_meta.currency_locale_scale_key);
 		if (!scale_result) { return scale_result.status(); }
@@ -738,54 +737,57 @@ db::result<currency_locale::spec> db::get_currency_locale() {
 		if (!negative_enum.has_value()) { return outcome(error::not_found, "Recorded negative format is not a recognized string"); }
 		currency_locale::spec::negative_notation negative_format = negative_enum.value();
 
-		return currency_locale::spec{
+		return currency_locale::selection(currency_locale::spec{
 			.scale = scale,
 			.symbol = symbol,
 			.thousands_separator = thousands_separator,
 			.decimal_separator = decimal_separator,
 			.symbol_position = symbol_position,
 			.negative_format = negative_format,
-		};
+		});
 	}
 	auto locale = currency_locale::get_locale(preset_value);
-	if (locale.has_value()) {
-		return locale.value();
+	if (locale) {
+		return currency_locale::selection(locale);
 	}
 	return outcome(error::not_found, "Recorded currency locale preset is not a recognized string");
 }
-db::outcome db::set_currency_locale_preset(const currency_locale::currency_locale_entry& entry) {
-	return set_meta(locale_meta.currency_locale_key, entry.identifier);
-}
-db::outcome db::set_currency_locale(const currency_locale::spec& locale) {
+db::outcome db::set_currency_locale(const currency_locale::selection& locale) {
+	auto set_identifier = [&]() -> outcome {
+		return set_meta(locale_meta.currency_locale_key, locale.identifier());
+	};
+	if (locale.is_preset()) {
+		return set_identifier();
+	}
 	return sql_transaction([&](std::vector<std::function<void()>>&) -> outcome {
-		outcome result = set_meta(locale_meta.currency_locale_key, locale_meta.custom_sentinel_val);
+		outcome result = set_identifier();
 		if (!result) { return result; }
 
-		switch (locale.scale) {
+		switch (locale.info().scale) {
 			case 1: case 10: case 100: case 1000:
-				result = set_meta(locale_meta.currency_locale_scale_key, std::to_string(locale.scale));
+				result = set_meta(locale_meta.currency_locale_scale_key, std::to_string(locale.info().scale));
 				if (!result) { return result; }
 				break;
 			default:
 				return error::internal;
 		}
 
-		if (locale.symbol.length() > 4) { return error::internal; }
-		result = set_meta(locale_meta.currency_locale_symbol_key, locale.symbol);
+		if (locale.info().symbol.length() > 4) { return error::internal; }
+		result = set_meta(locale_meta.currency_locale_symbol_key, locale.info().symbol);
 		if (!result) { return result; }
 
-		result = set_meta(locale_meta.currency_locale_thousands_separator_key, std::string(1, locale.thousands_separator));
+		result = set_meta(locale_meta.currency_locale_thousands_separator_key, std::string(1, locale.info().thousands_separator));
 		if (!result) { return result; }
 
-		result = set_meta(locale_meta.currency_locale_decimal_separator_key, std::string(1, locale.decimal_separator));
+		result = set_meta(locale_meta.currency_locale_decimal_separator_key, std::string(1, locale.info().decimal_separator));
 		if (!result) { return result; }
 
-		auto symbol_pos = enum_to_string(currency_symbol_placement_map, locale.symbol_position);
+		auto symbol_pos = enum_to_string(currency_symbol_placement_map, locale.info().symbol_position);
 		if (!symbol_pos.has_value()) { return error::internal; }
 		result = set_meta(locale_meta.currency_locale_symbol_position_key, symbol_pos.value());
 		if (!result) { return result; }
 
-		auto negative_format = enum_to_string(currency_negative_notation_map, locale.negative_format);
+		auto negative_format = enum_to_string(currency_negative_notation_map, locale.info().negative_format);
 		if (!negative_format.has_value()) { return error::internal; }
 		result = set_meta(locale_meta.currency_locale_negative_format_key, negative_format.value());
 		if (!result) { return result; }
@@ -794,7 +796,7 @@ db::outcome db::set_currency_locale(const currency_locale::spec& locale) {
 	});
 }
 
-db::result<percentage_locale::spec> db::get_percentage_locale() {
+db::result<percentage_locale::selection> db::get_percentage_locale() {
 	auto preset_result = get_meta(locale_meta.percentage_locale_key);
 	if (!preset_result) {
 		auto& status = preset_result.status();
@@ -805,7 +807,7 @@ db::result<percentage_locale::spec> db::get_percentage_locale() {
 	}
 
 	std::string &preset_value = preset_result.value();
-	if (preset_value == locale_meta.custom_sentinel_val) {
+	if (preset_value == percentage_locale::selection::custom_id) {
 		// Extract decimal_separator from meta
 		auto decimal_result = get_meta(locale_meta.percentage_locale_decimal_separator_key);
 		if (!decimal_result) { return decimal_result.status(); }
@@ -824,33 +826,36 @@ db::result<percentage_locale::spec> db::get_percentage_locale() {
 		if (!position_enum.has_value()) { return outcome(error::not_found, "Recorded symbol position is not a recognized string"); }
 		percentage_locale::spec::symbol_placement symbol_position = position_enum.value();
 
-		return percentage_locale::spec{
+		return percentage_locale::selection(percentage_locale::spec{
 			.decimal_separator = decimal_separator,
 			.has_space_around_number = has_space_around_number,
 			.symbol_position = symbol_position,
-		};
+		});
 	}
 	auto locale = percentage_locale::get_locale(preset_value);
-	if (locale.has_value()) {
-		return locale.value();
+	if (locale) {
+		return percentage_locale::selection(locale);
 	}
 	return outcome(error::not_found, "Recorded percentage locale preset is not a recognized string");
 }
-db::outcome db::set_percentage_locale_preset(const percentage_locale::percentage_locale_entry& entry) {
-	return set_meta(locale_meta.percentage_locale_key, entry.identifier);
-}
-db::outcome db::set_percentage_locale(const percentage_locale::spec& locale) {
+db::outcome db::set_percentage_locale(const percentage_locale::selection& locale) {
+	auto set_identifier = [&]() -> outcome {
+		return set_meta(locale_meta.percentage_locale_key, locale.identifier());
+	};
+	if (locale.is_preset()) {
+		return set_identifier();
+	}
 	return sql_transaction([&](std::vector<std::function<void()>>&) -> outcome {
-		outcome result = set_meta(locale_meta.percentage_locale_key, locale_meta.custom_sentinel_val);
+		outcome result = set_identifier();
 		if (!result) { return result; }
 
-		result = set_meta(locale_meta.percentage_locale_decimal_separator_key, std::string(1, locale.decimal_separator));
+		result = set_meta(locale_meta.percentage_locale_decimal_separator_key, std::string(1, locale.info().decimal_separator));
 		if (!result) { return result; }
 
-		result = set_meta(locale_meta.percentage_locale_has_space_key, locale.has_space_around_number ? "1" : "0");
+		result = set_meta(locale_meta.percentage_locale_has_space_key, locale.info().has_space_around_number ? "1" : "0");
 		if (!result) { return result; }
 
-		auto symbol_pos = enum_to_string(percentage_symbol_placement_map, locale.symbol_position);
+		auto symbol_pos = enum_to_string(percentage_symbol_placement_map, locale.info().symbol_position);
 		if (!symbol_pos.has_value()) { return error::internal; }
 		result = set_meta(locale_meta.percentage_locale_symbol_position_key, symbol_pos.value());
 		if (!result) { return result; }

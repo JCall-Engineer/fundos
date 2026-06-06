@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <variant>
 
 namespace fundos::percentage_locale {
 
@@ -18,6 +19,30 @@ struct spec {
 struct percentage_locale_entry {
 	const char* identifier;
 	spec info;
+};
+
+struct selection {
+	std::variant<const percentage_locale_entry*, spec> raw;
+
+	selection(const percentage_locale_entry* entry) : raw(entry)  {}
+	selection(const spec& custom)                   : raw(custom) {}
+
+	static constexpr const char* custom_id = "Custom";
+	const char* identifier() const {
+		if (std::holds_alternative<const percentage_locale_entry*>(raw)) {
+			return std::get<const percentage_locale_entry*>(raw)->identifier;
+		}
+		return custom_id;
+	 }
+	 const spec& info() const {
+		if (std::holds_alternative<const percentage_locale_entry*>(raw)) {
+			return std::get<const percentage_locale_entry*>(raw)->info;
+		}
+		return std::get<spec>(raw);
+	 }
+
+	 bool is_preset() const { return std::holds_alternative<const percentage_locale_entry*>(raw); }
+	 bool is_custom() const { return !is_preset(); }
 };
 
 struct data {
@@ -52,12 +77,12 @@ union registry {
 };
 static constexpr registry locales = { .named = {} };
 
-static inline std::optional<spec> const get_locale(std::string_view identifier) {
+static inline const percentage_locale_entry* get_locale(std::string_view identifier) {
 	for (std::size_t i = 0; i < num_locales; i++) {
 		if (locales.entries[i].identifier == identifier)
-			return locales.entries[i].info;
+			return &locales.entries[i];
 	}
-	return std::nullopt;
+	return nullptr;
 }
 
 } // namespace fundos::percentage_locale

@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <variant>
 
 namespace fundos::currency_locale {
 
@@ -29,6 +30,30 @@ struct spec {
 struct currency_locale_entry {
 	const char* identifier;
 	spec info;
+};
+
+struct selection {
+	std::variant<const currency_locale_entry*, spec> raw;
+
+	selection(const currency_locale_entry* entry) : raw(entry)  {}
+	selection(const spec& custom)                 : raw(custom) {}
+
+	static constexpr const char* custom_id = "Custom";
+	const char* identifier() const {
+		if (std::holds_alternative<const currency_locale_entry*>(raw)) {
+			return std::get<const currency_locale_entry*>(raw)->identifier;
+		}
+		return custom_id;
+	 }
+	 const spec& info() const {
+		if (std::holds_alternative<const currency_locale_entry*>(raw)) {
+			return std::get<const currency_locale_entry*>(raw)->info;
+		}
+		return std::get<spec>(raw);
+	 }
+
+	 bool is_preset() const { return std::holds_alternative<const currency_locale_entry*>(raw); }
+	 bool is_custom() const { return !is_preset(); }
 };
 
 struct data {
@@ -115,12 +140,12 @@ union registry {
 };
 extern const registry locales;
 
-static inline std::optional<spec> get_locale(std::string_view identifier) {
+static inline const currency_locale_entry* get_locale(std::string_view identifier) {
 	for (std::size_t i = 0; i < num_locales; i++) {
 		if (locales.entries[i].identifier == identifier)
-			return locales.entries[i].info;
+			return &locales.entries[i];
 	}
-	return std::nullopt;
+	return nullptr;
 }
 
 } // namespace fundos::currency_locale
