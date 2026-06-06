@@ -20,8 +20,8 @@ void HomePage::initialize() {
 		return;
 	}
 
-	account_list = new AccountList(database, locale.value(), this);
-	fund_list    = new FundList(database, locale.value(), this);
+	account_list = new AccountList(database, locale.value().info(), this);
+	fund_list    = new FundList(database, locale.value().info(), this);
 	budget_list  = new BudgetList(database, this);
 
 	connect(account_list, &AccountList::db_outcome,   this, &HomePage::db_outcome);
