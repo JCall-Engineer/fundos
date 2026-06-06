@@ -107,30 +107,14 @@ SQLite is vendored as an amalgamation (`sqlite3.c` / `sqlite3.h`).
 
 ## Building
 
-FundOS uses CMake with presets. Building is a two-step process: a **configure** step that generates build system files, and a **build** step that compiles. Each step has its own preset.
-
-**Source discovery uses `GLOB_RECURSE`.** When you add or remove source files, re-run the configure step — the build system does not detect new or deleted files automatically during incremental builds.
-
-### Presets
-
-| Configure preset        | Build preset            | Platform | Notes                                    |
-|-------------------------|-------------------------|----------|------------------------------------------|
-| `windows-debug-local`   | `windows-debug-local`   | Windows  | Requires `CMakeUserPresets.json`         |
-| `windows-release-local` | `windows-release-local` | Windows  | Requires `CMakeUserPresets.json`         |
-| `linux-debug`           | `linux-debug`           | Linux    |                                          |
-| `linux-release`         | `linux-release`         | Linux    |                                          |
-
-```powershell
-cmake --preset <configure-preset>
-cmake --build --preset <build-preset> --parallel
-```
+Building FundOS requires Qt6 and CMake. The process is is the same across platforms after you take care of the dependencies.
 
 ### Windows
 
 #### Dependencies
 
 - [Visual Studio 2022](https://visualstudio.microsoft.com/) or later with the **Desktop development with C++** workload
-- [Qt 6](https://www.qt.io/download-qt-installer) installed via the Qt Online Installer — select the **MSVC 2022 64-bit** kit under your Qt version. The MinGW kit is not compatible with this project. Qt is available under the LGPL v3 open source license.
+- [Qt 6](https://www.qt.io/download-qt-installer) installed via the Qt Online Installer — select the **MSVC 2022 64-bit** kit under your Qt version. The MinGW kit is not supported with this project. Qt is available under the LGPL v3 open source license.
 
 #### CMakeUserPresets.json
 
@@ -141,6 +125,8 @@ copy CMakeUserPresets.json.example CMakeUserPresets.json
 ```
 
 Edit `CMakeUserPresets.json` and replace the placeholder path with your actual Qt installation directory, typically `C:/Qt/6.x.x/msvc2022_64`.
+
+After you have taken care of the dependencies you can complete the [common building procedure](#common-building-procedure).
 
 ### Linux
 
@@ -163,6 +149,28 @@ Install Qt 6 via your package manager:
 
 If you install Qt via the Qt Online Installer instead, CMake may not find it automatically.
 In that case, create a `CMakeUserPresets.json` modeled on `CMakeUserPresets.json.example` and set `CMAKE_PREFIX_PATH` to your Qt installation directory, typically `~/Qt/6.x.x/gcc_64`.
+
+After you have taken care of the dependencies you can complete the [common building procedure](#common-building-procedure).
+
+### Common Building Procedure
+
+FundOS uses CMake with presets. Building is a two-step process: a **configure** step that generates build system files, and a **build** step that compiles. Each step has its own preset.
+
+**Source discovery uses `GLOB_RECURSE`.** When you add or remove source files, re-run the configure step — the build system does not detect new or deleted files automatically during incremental builds.
+
+### Presets
+
+| Configure preset        | Build preset            | Platform | Notes                                    |
+|-------------------------|-------------------------|----------|------------------------------------------|
+| `windows-debug-local`   | `windows-debug-local`   | Windows  | Requires `CMakeUserPresets.json`         |
+| `windows-release-local` | `windows-release-local` | Windows  | Requires `CMakeUserPresets.json`         |
+| `linux-debug`           | `linux-debug`           | Linux    |                                          |
+| `linux-release`         | `linux-release`         | Linux    |                                          |
+
+```powershell
+cmake --preset <configure-preset>
+cmake --build --preset <build-preset> --parallel
+```
 
 ## Running Tests
 
