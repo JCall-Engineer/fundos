@@ -30,28 +30,30 @@ void LocalePage::setup_layout(bool can_cancel) {
 	connect(confirm_button, &QPushButton::clicked, this, &LocalePage::on_confirm);
 	actions_layout->addWidget(confirm_button);
 
-	// Form
-	auto* form        = new QWidget(this);
-	auto* form_layout = new QHBoxLayout(form);
-	form_layout->setContentsMargins(16, 16, 16, 16);
-	form_layout->setSpacing(24);
-	form_layout->setAlignment(Qt::AlignTop);
+	// Form columns (currency + percentage side by side)
+	auto* columns        = new QWidget(this);
+	auto* columns_layout = new QHBoxLayout(columns);
+	columns_layout->setContentsMargins(16, 16, 16, 16);
+	columns_layout->setSpacing(24);
+	columns_layout->setAlignment(Qt::AlignTop);
 
-	// Currency section
-	auto* currency_form   = new QWidget(form);
-	auto* currency_layout = new QVBoxLayout(currency_form);
-	currency_layout->setContentsMargins(0, 0, 0, 0);
-	currency_layout->setAlignment(Qt::AlignTop);
+	// Currency column
+	auto* currency_column        = new QWidget(columns);
+	auto* currency_column_layout = new QVBoxLayout(currency_column);
+	currency_column_layout->setContentsMargins(0, 0, 0, 0);
+	currency_column_layout->setAlignment(Qt::AlignTop);
 
-	currency_layout->addWidget(theme::header_label(tr("CURRENCY"), currency_form));
+	currency_column_layout->addWidget(theme::header_label(tr("CURRENCY"), currency_column));
 
-	currency_combo = new QComboBox(currency_form);
-	currency_layout->addWidget(currency_combo);
+	currency_combo = new QComboBox(currency_column);
+	currency_column_layout->addWidget(currency_combo);
 
-	currency_custom_fields = new QWidget(currency_form);
+	// Scrollable currency custom fields
+	currency_custom_fields       = new QWidget();
 	auto* currency_custom_layout = new QVBoxLayout(currency_custom_fields);
-	currency_custom_layout->setContentsMargins(0, 0, 0, 0);
+	currency_custom_layout->setContentsMargins(0, 8, 0, 8);
 	currency_custom_layout->setSpacing(8);
+	currency_custom_layout->setAlignment(Qt::AlignTop);
 
 	currency_custom_layout->addWidget(theme::header_label(tr("SCALE"), currency_custom_fields));
 	currency_scale = new QComboBox(currency_custom_fields);
@@ -87,10 +89,10 @@ void LocalePage::setup_layout(bool can_cancel) {
 
 	currency_custom_layout->addWidget(theme::header_label(tr("NEGATIVE FORMAT"), currency_custom_fields));
 	currency_negative_notation_group = new QButtonGroup(currency_custom_fields);
-	auto* negative_leading_minus  = new QRadioButton(tr("Leading minus (-1.00)"),    currency_custom_fields);
-	auto* negative_trailing_minus = new QRadioButton(tr("Trailing minus (1.00-)"),   currency_custom_fields);
-	auto* negative_parentheses    = new QRadioButton(tr("Parentheses ((1.00))"),     currency_custom_fields);
-	auto* negative_angle_brackets = new QRadioButton(tr("Angle brackets (<1.00>)"),  currency_custom_fields);
+	auto* negative_leading_minus  = new QRadioButton(tr("Leading minus"),  currency_custom_fields);
+	auto* negative_trailing_minus = new QRadioButton(tr("Trailing minus"), currency_custom_fields);
+	auto* negative_parentheses    = new QRadioButton(tr("Parentheses"),    currency_custom_fields);
+	auto* negative_angle_brackets = new QRadioButton(tr("Angle brackets"), currency_custom_fields);
 	currency_negative_notation_group->addButton(negative_leading_minus,  static_cast<int>(currency_spec::negative_notation::leading_minus));
 	currency_negative_notation_group->addButton(negative_trailing_minus, static_cast<int>(currency_spec::negative_notation::trailing_minus));
 	currency_negative_notation_group->addButton(negative_parentheses,    static_cast<int>(currency_spec::negative_notation::parentheses));
@@ -100,31 +102,35 @@ void LocalePage::setup_layout(bool can_cancel) {
 	currency_custom_layout->addWidget(negative_parentheses);
 	currency_custom_layout->addWidget(negative_angle_brackets);
 
-	currency_layout->addWidget(currency_custom_fields);
+	auto* currency_scroll = new QScrollArea(currency_column);
+	currency_scroll->setWidget(currency_custom_fields);
+	currency_scroll->setWidgetResizable(true);
+	currency_scroll->setFrameShape(QFrame::NoFrame);
+	currency_column_layout->addWidget(currency_scroll, 1);
 
-	currency_custom_layout->addStretch();
-	auto* currency_preview_label = theme::header_label(tr("PREVIEW"), currency_form);
-	currency_layout->addWidget(currency_preview_label);
-	currency_preview = new QLabel(currency_form);
-	currency_layout->addWidget(currency_preview);
+	currency_column_layout->addWidget(theme::header_label(tr("PREVIEW"), currency_column));
+	currency_preview = new QLabel(currency_column);
+	currency_column_layout->addWidget(currency_preview);
 
-	form_layout->addWidget(currency_form);
+	columns_layout->addWidget(currency_column);
 
-	// Percentage section
-	auto* percentage_form   = new QWidget(form);
-	auto* percentage_layout = new QVBoxLayout(percentage_form);
-	percentage_layout->setContentsMargins(0, 0, 0, 0);
-	percentage_layout->setAlignment(Qt::AlignTop);
+	// Percentage column
+	auto* percentage_column        = new QWidget(columns);
+	auto* percentage_column_layout = new QVBoxLayout(percentage_column);
+	percentage_column_layout->setContentsMargins(0, 0, 0, 0);
+	percentage_column_layout->setAlignment(Qt::AlignTop);
 
-	percentage_layout->addWidget(theme::header_label(tr("PERCENTAGE"), percentage_form));
+	percentage_column_layout->addWidget(theme::header_label(tr("PERCENTAGE"), percentage_column));
 
-	percentage_combo = new QComboBox(percentage_form);
-	percentage_layout->addWidget(percentage_combo);
+	percentage_combo = new QComboBox(percentage_column);
+	percentage_column_layout->addWidget(percentage_combo);
 
-	percentage_custom_fields = new QWidget(percentage_form);
+	// Scrollable percentage custom fields
+	percentage_custom_fields       = new QWidget();
 	auto* percentage_custom_layout = new QVBoxLayout(percentage_custom_fields);
-	percentage_custom_layout->setContentsMargins(0, 0, 0, 0);
+	percentage_custom_layout->setContentsMargins(0, 8, 0, 8);
 	percentage_custom_layout->setSpacing(8);
+	percentage_custom_layout->setAlignment(Qt::AlignTop);
 
 	percentage_custom_layout->addWidget(theme::header_label(tr("DECIMAL SEPARATOR"), percentage_custom_fields));
 	percentage_decimal_separator = new QLineEdit(percentage_custom_fields);
@@ -143,24 +149,22 @@ void LocalePage::setup_layout(bool can_cancel) {
 	percentage_custom_layout->addWidget(percentage_placement_before);
 	percentage_custom_layout->addWidget(percentage_placement_after);
 
-	percentage_layout->addWidget(percentage_custom_fields);
+	auto* percentage_scroll = new QScrollArea(percentage_column);
+	percentage_scroll->setWidget(percentage_custom_fields);
+	percentage_scroll->setWidgetResizable(true);
+	percentage_scroll->setFrameShape(QFrame::NoFrame);
+	percentage_column_layout->addWidget(percentage_scroll, 1);
 
-	percentage_custom_layout->addStretch();
-	auto* percentage_preview_label = theme::header_label(tr("PREVIEW"), percentage_form);
-	percentage_layout->addWidget(percentage_preview_label);
-	percentage_preview = new QLabel(percentage_form);
-	percentage_layout->addWidget(percentage_preview);
+	percentage_column_layout->addWidget(theme::header_label(tr("PREVIEW"), percentage_column));
+	percentage_preview = new QLabel(percentage_column);
+	percentage_column_layout->addWidget(percentage_preview);
 
-	form_layout->addWidget(percentage_form);
+	columns_layout->addWidget(percentage_column);
 
-	// Scroll + outer
-	auto* scroll = new QScrollArea(this);
-	scroll->setWidget(form);
-	scroll->setWidgetResizable(true);
-
+	// Outer layout
 	auto* outer_layout = new QVBoxLayout(this);
 	outer_layout->setContentsMargins(0, 0, 0, 0);
-	outer_layout->addWidget(scroll);
+	outer_layout->addWidget(columns, 1);
 	outer_layout->addWidget(actions);
 }
 
@@ -237,6 +241,7 @@ LocalePage::LocalePage(
 		auto* notation_button = currency_negative_notation_group->button(static_cast<int>(spec.negative_format));
 		if (notation_button) { notation_button->setChecked(true); }
 	}
+	on_currency_preset();
 
 	// Apply initial percentage selection
 	if (current_percentage->is_preset()) {
@@ -258,6 +263,7 @@ LocalePage::LocalePage(
 		auto* placement_button = percentage_symbol_placement_group->button(static_cast<int>(spec.symbol_position));
 		if (placement_button) { placement_button->setChecked(true); }
 	}
+	on_percentage_preset();
 }
 
 void LocalePage::on_confirm() {
