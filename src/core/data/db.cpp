@@ -495,7 +495,7 @@ db::error db::classify_sqlite_runtime_error(int rc) {
 }
 
 db::outcome db::sql_count_check(const std::string& sql, size_t expected, executor bind, message on_failure) {
-	if (!is_ready()) { return db::error::not_ready; }
+	if (!is_ready()) { return not_ready(); }
 	sqlite3_stmt* stmt = nullptr;
 	int rc = sqlite3_prepare_v2(connection, sql.c_str(), -1, &stmt, nullptr);
 	if (rc != SQLITE_OK) { return sqlite_runtime_error(rc); }
@@ -514,7 +514,7 @@ db::outcome db::sql_count_check(const std::string& sql, size_t expected, executo
 }
 
 db::outcome db::sql_delete_except(const db::delete_except_params& params) {
-	if (!is_ready()) { return db::error::not_ready; }
+	if (!is_ready()) { return not_ready(); }
 	std::string sql = std::format("DELETE FROM {} WHERE {} = ?", params.table, params.filter_column);
 
 	if (!params.preserve_ids.empty()) {
@@ -540,14 +540,14 @@ db::outcome db::sql_delete_except(const db::delete_except_params& params) {
 }
 
 db::outcome db::sql_execute(sqlite3_stmt* stmt, executor bind) {
-	if (!is_ready()) { return db::error::not_ready; }
+	if (!is_ready()) { return not_ready(); }
 	sqlite3_reset(stmt);
 	bind(stmt);
 	int rc = sqlite3_step(stmt);
 	if (SQLITE_DONE != rc) {
 		return sqlite_runtime_error(rc);
 	}
-	return db::error::none;
+	return error::none;
 }
 
 template<typename T>
@@ -1308,7 +1308,7 @@ db::outcome db::prepare_import(import::pending_import& pending) {
 		);
 		if (!account_query) {
 			if (account_query.status().code == error::not_found) {
-				return outcome(db::error::rejected, "Cannot import from an unrecognized bank account");
+				return outcome(error::rejected, "Cannot import from an unrecognized bank account");
 			}
 			return account_query.status();
 		}
@@ -1932,7 +1932,7 @@ std::shared_ptr<db> db::open_memory() {
 }
 
 db::outcome db::backup(const std::string& path) {
-	if (!is_ready()) { return db::error::not_ready; }
+	if (!is_ready()) { return not_ready(); }
 
 	sqlite3* destination;
 	int rc = sqlite3_open(path.c_str(), &destination);
@@ -1950,25 +1950,25 @@ db::outcome db::backup(const std::string& path) {
 		return outcome(classify_sqlite_open_error(rc), msg);
 	}
 
-	auto classify = [this](int rc) -> db::error {
+	auto classify = [this](int rc) -> error {
 		switch (rc & 0xFF) {
 			case SQLITE_FULL:
-				return db::error::disk_full;
+				return error::disk_full;
 			case SQLITE_NOMEM:
-				return db::error::out_of_memory;
+				return error::out_of_memory;
 			case SQLITE_BUSY:
 			case SQLITE_LOCKED:
-				return db::error::unavailable;
+				return error::unavailable;
 			case SQLITE_READONLY:
-				return db::error::readonly;
+				return error::readonly;
 			case SQLITE_CORRUPT: // Definitely an error on the source
 				close();
 				[[fallthrough]];
 			case SQLITE_IOERR: // could be an error on source or destination
-				return db::error::corrupted;
+				return error::corrupted;
 			default:
 				FUNDOS_ASSERT(false, "unhandled sqlite3 backup result code");
-				return db::error::internal;
+				return error::internal;
 		}
 	};
 
