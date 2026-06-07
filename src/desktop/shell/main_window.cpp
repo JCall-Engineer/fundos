@@ -210,6 +210,7 @@ void MainWindow::db_backup() {
 		tr("SQLite Database (*.sqlite)")
 	);
 	if (destination.isEmpty()) { return; }
+	QFile::remove(destination); // Delete the existing file
 
 	if (database && database->is_connected()) {
 		// Shows a message box on failure, loads an error page if the database is closed as a result
