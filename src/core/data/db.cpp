@@ -474,23 +474,23 @@ static inline void bind_optional_int64(sqlite3_stmt* stmt, int index, const std:
 db::error db::classify_sqlite_runtime_error(int rc) {
 	switch (rc & 0xFF) {
 		case SQLITE_FULL:
-			return db::error::disk_full;
+			return error::disk_full;
 		case SQLITE_NOMEM:
-			return db::error::out_of_memory;
+			return error::out_of_memory;
 		case SQLITE_BUSY:
 		case SQLITE_LOCKED:
 		// READONLY cannot be returned at step time
-			return db::error::unavailable;
+			return error::unavailable;
 		case SQLITE_CORRUPT:
 		// NOTADB cannot be returned at step time
 		case SQLITE_IOERR:
-			return db::error::corrupted;
+			return error::corrupted;
 		case SQLITE_CONSTRAINT:
-			return db::error::constraint;
+			return error::constraint;
 		// SQLITE_INTERRUPT: not expected, would indicate external sqlite3_interrupt() call
 		default:
 			FUNDOS_ASSERT(false, "unhandled sqlite3 step result code");
-			return db::error::internal;
+			return error::internal;
 	}
 }
 
@@ -772,10 +772,10 @@ db::outcome db::set_currency_locale(const currency_locale::selection& locale) {
 				if (!result) { return result; }
 				break;
 			default:
-				return error::internal;
+				return outcome(error::rejected, "Scale was not a recognized value (valid options: 1, 10, 100, 1000)");
 		}
 
-		if (locale.info().symbol.length() > 4) { return error::internal; }
+		if (locale.info().symbol.length() > 4) { return outcome(error::rejected, "Locale symbol is maximally 4 bytes"); }
 		result = set_meta(locale_meta.currency_locale_symbol_key, locale.info().symbol);
 		if (!result) { return result; }
 
@@ -786,12 +786,12 @@ db::outcome db::set_currency_locale(const currency_locale::selection& locale) {
 		if (!result) { return result; }
 
 		auto symbol_pos = enum_to_string(currency_symbol_placement_map, locale.info().symbol_position);
-		if (!symbol_pos.has_value()) { return error::internal; }
+		if (!symbol_pos.has_value()) { return outcome(error::internal, "Unhandled symbol position"); }
 		result = set_meta(locale_meta.currency_locale_symbol_position_key, symbol_pos.value());
 		if (!result) { return result; }
 
 		auto negative_format = enum_to_string(currency_negative_notation_map, locale.info().negative_format);
-		if (!negative_format.has_value()) { return error::internal; }
+		if (!negative_format.has_value()) { return outcome(error::internal, "unhandled negative notation"); }
 		result = set_meta(locale_meta.currency_locale_negative_format_key, negative_format.value());
 		if (!result) { return result; }
 
@@ -859,7 +859,7 @@ db::outcome db::set_percentage_locale(const percentage_locale::selection& locale
 		if (!result) { return result; }
 
 		auto symbol_pos = enum_to_string(percentage_symbol_placement_map, locale.info().symbol_position);
-		if (!symbol_pos.has_value()) { return error::internal; }
+		if (!symbol_pos.has_value()) { return outcome(error::internal, "Unhandled symbol placement"); }
 		result = set_meta(locale_meta.percentage_locale_symbol_position_key, symbol_pos.value());
 		if (!result) { return result; }
 
@@ -1345,7 +1345,7 @@ db::outcome db::prepare_import(import::pending_import& pending) {
 		// Search for matching records for each imported transaction
 		for (auto &txn : account.transactions) {
 			if (!txn.importing.fitid || !txn.importing.date_cleared) {
-				return error::bad_request;
+				return outcome(error::bad_request, "Importer must set both fitid and date_cleared");
 			}
 			auto match = [&txn](const transaction* candidate) {
 				txn.set_match(candidate);
@@ -1508,7 +1508,7 @@ db::outcome db::perform_import(import::pending_import& pending) {
 db::outcome db::save_transaction(transaction& saving) {
 	if (!saving.is_persisted()) {
 		if (saving.corrects_id.has_value() != saving.correct_action.has_value()) {
-			return error::bad_request;
+			return outcome(error::bad_request, "correct_action and corrects_id must be set together");
 		}
 		std::optional<result<fundos::transaction>> corrects;
 		if (saving.corrects_id) {
@@ -1582,13 +1582,13 @@ db::outcome db::save_transaction(transaction& saving) {
 }
 
 db::outcome db::allocate_transaction(std::vector<allocation>& allocations) {
-	if (allocations.empty()) { return error::bad_request; }
+	if (allocations.empty()) { return outcome(error::bad_request, "Cannot allocate an empty set"); }
 	int64_t transaction_id = allocations[0].transaction_id;
 	std::vector<int64_t> preserve_ids;
 
 	{
 		// Validate the transaction
-		if (transaction_id == 0) { return error::bad_request; }
+		if (transaction_id == 0) { return outcome(error::bad_request, "Did not set transaction id on allocations"); }
 		auto transaction_result = sql_fetch_one<currency>(
 			prepared->named.get_transaction_amount.statement,
 			[&transaction_id](sqlite3_stmt* stmt) {
@@ -1642,14 +1642,14 @@ db::outcome db::allocate_transaction(std::vector<allocation>& allocations) {
 			fund_finder_sql += seen_funds.empty() ? "?" : ", ?";
 
 			if (seen_funds.contains(allocation.fund_id)) {
-				return error::bad_request;
+				return outcome(error::bad_request, "Cannot have duplicate fund allocations in the same set");
 			}
 			seen_funds.insert(allocation.fund_id);
 
 			sum += allocation.amount;
 		}
 		if (sum != total) {
-			return error::rejected;
+			return outcome(error::rejected, "Cannot partially allocate a transaction");
 		}
 		fund_finder_sql += ")";
 		allocation_finder_sql += ")";
