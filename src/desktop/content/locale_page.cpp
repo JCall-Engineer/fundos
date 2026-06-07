@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QScrollArea>
@@ -267,6 +268,10 @@ LocalePage::LocalePage(
 }
 
 void LocalePage::on_confirm() {
+	if (currency_fields.symbol.size() > 4) {
+		QMessageBox::information(this, tr("Invalid Input"), tr("Currency symbol is limited to 4 characters (some international characters count as 2 or more)"));
+		return;
+	}
 	int currency_index = currency_combo->currentData().toInt();
 	if (currency_index == -1) {
 		auto custom = currency_locale(currency_fields);
