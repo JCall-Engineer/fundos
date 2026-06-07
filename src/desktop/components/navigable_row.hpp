@@ -4,9 +4,22 @@
 
 class NavigableRow : public QWidget {
 	Q_OBJECT
+
 public:
-	explicit NavigableRow(int index, const QString& name, QLabel* amount_label, QWidget* parent = nullptr);
+	struct props {
+		size_t index;
+		bool is_closed;
+		bool has_amount = false;
+	};
+
+	explicit NavigableRow(const props& data, const QString& name, QLabel* amount_label, QWidget* parent = nullptr);
+
+private:
+	props properties;
+
+public slots:
+	void on_toggle(bool);
 
 signals:
-	void clicked(int index);
+	void clicked(size_t index);
 };

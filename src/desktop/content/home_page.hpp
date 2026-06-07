@@ -33,10 +33,13 @@ public:
 	void initialize();
 
 signals:
+	void toggle_closed_accounts(bool);
+	void toggle_closed_funds(bool);
+
 	void db_outcome(const fundos::db::outcome& outcome);
-	void open_account(std::shared_ptr<fundos::account> opening);
-	void open_fund(std::shared_ptr<fundos::fund> opening);
-	void open_budget(std::shared_ptr<fundos::budget> opening);
+	void open_account(const fundos::account& opening);
+	void open_fund(const fundos::fund& opening);
+	void open_budget(const fundos::budget& opening);
 	void import_ofx();
-	void go_home();
+	void refresh();
 };

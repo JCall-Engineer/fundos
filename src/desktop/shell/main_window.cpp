@@ -41,6 +41,7 @@ void MainWindow::open_database() {
 	if (database != nullptr) {
 		// Close previous db so it doesn't lock an attempt to create a new db instance
 		database->close();
+		context = nullptr;
 	}
 	database = fundos::db::open_file(db_path);
 	status_bar->set_database(database);
@@ -53,87 +54,30 @@ void MainWindow::open_database() {
 	load_error_page(new ErrorPage(status, this));
 }
 
-bool MainWindow::try_get_locales(std::optional<fundos::currency_locale::selection>& currency_locale, std::optional<fundos::percentage_locale::selection>& percentage_locale) {
-	FUNDOS_ASSERT(database->is_ready(), "get_locales called when database is not ready");
-
-	currency_locale = std::nullopt;
-	percentage_locale = std::nullopt;
-
-	auto currency_locale_fetch = database->get_currency_locale();
-	while (!currency_locale_fetch) {
-		if (currency_locale_fetch.status().code == fundos::db::error::not_found) {
-			break;
-		}
-		if (!database->is_ready()) {
-			load_error_page(new ErrorPage(currency_locale_fetch.status(), this));
-			return false;
-		}
-		QString detail = tr("Error Code:") + " " + QString::number(static_cast<int>(currency_locale_fetch.status().code));
-		if (currency_locale_fetch.status().msg.has_value()) {
-			const auto& view = currency_locale_fetch.status().msg->view();
-			detail += "\n\n" + tr("Error Message:") + " " + QString::fromUtf8(view.data(), view.size());
-		}
-		int choice = QMessageBox::critical(
-			this,
-			tr("Settings Error"),
-			tr("FundOS could not read its settings from the database and cannot continue.") + "\n\n" + detail,
-			QMessageBox::StandardButton::Retry,
-			QMessageBox::StandardButton::Abort
-		);
-		if (choice == QMessageBox::Abort) {
-			QApplication::quit();
-			return false;
-		}
-		currency_locale_fetch = database->get_currency_locale();
-	}
-	if (currency_locale_fetch) { currency_locale = currency_locale_fetch.value(); }
-
-	auto percentage_locale_fetch = database->get_percentage_locale();
-	while (!percentage_locale_fetch) {
-		if (percentage_locale_fetch.status().code == fundos::db::error::not_found) {
-			break;
-		}
-		if (!database->is_ready()) {
-			load_error_page(new ErrorPage(percentage_locale_fetch.status(), this));
-			return false;
-		}
-		QString detail = tr("Error Code:") + " " + QString::number(static_cast<int>(percentage_locale_fetch.status().code));
-		if (percentage_locale_fetch.status().msg.has_value()) {
-			const auto& view = percentage_locale_fetch.status().msg->view();
-			detail += "\n\n" + tr("Error Message:") + " " + QString::fromUtf8(view.data(), view.size());
-		}
-		int choice = QMessageBox::critical(
-			this,
-			tr("Settings Error"),
-			tr("FundOS could not read its settings from the database and cannot continue.") + "\n\n" + detail,
-			QMessageBox::StandardButton::Retry,
-			QMessageBox::StandardButton::Abort
-		);
-		if (choice == QMessageBox::Abort) {
-			QApplication::quit();
-			return false;
-		}
-		percentage_locale_fetch = database->get_percentage_locale();
-	}
-	if (percentage_locale_fetch) { percentage_locale = percentage_locale_fetch.value(); }
-	return true;
-}
-
 void MainWindow::create_context() {
 	FUNDOS_ASSERT(database->is_ready(), "create_context called when database is not ready");
 	context = nullptr;
 
-	std::optional<fundos::currency_locale::selection> currency_locale;
-	std::optional<fundos::percentage_locale::selection> percentage_locale;
-	if (!try_get_locales(currency_locale, percentage_locale)) {
-		return;
-	}
+	AppContext::try_create(database, this, {
+		.on_success = [this](std::shared_ptr<AppContext> ctx) {
+			on_context_refreshed(ctx);
+			go_home();
+		},
+		.on_needs_locale = [this](std::shared_ptr<AppContext> ctx) {
+			open_locale_page(ctx->currency, ctx->percentage);
+		},
+		.on_fatal = [this](const fundos::db::outcome& failure) {
+			load_error_page(new ErrorPage(failure, this));
+		},
+	});
+}
 
-	if (!currency_locale || !percentage_locale) {
-		return open_locale_page(currency_locale, percentage_locale);
+void MainWindow::on_context_refreshed(std::shared_ptr<AppContext> new_context) {
+	if (context != nullptr) {
+		disconnect(context.get(), &AppContext::refreshed, this, &MainWindow::on_context_refreshed);
 	}
-	context = std::make_shared<AppContext>(database, *currency_locale, *percentage_locale);
-	go_home();
+	context = new_context;
+	connect(context.get(), &AppContext::refreshed, this, &MainWindow::on_context_refreshed);
 }
 
 void MainWindow::load_error_page(ErrorPage* page) {
@@ -146,17 +90,6 @@ void MainWindow::load_error_page(ErrorPage* page) {
 	setCentralWidget(page);
 }
 
-void MainWindow::open_locale_page() {
-	FUNDOS_ASSERT(database->is_ready(), "open_locale_page called when database is not ready");
-
-	std::optional<fundos::currency_locale::selection> currency_locale;
-	std::optional<fundos::percentage_locale::selection> percentage_locale;
-	if (!try_get_locales(currency_locale, percentage_locale)) {
-		return;
-	}
-
-	open_locale_page(currency_locale, percentage_locale);
-}
 void MainWindow::open_locale_page(std::optional<fundos::currency_locale::selection> currency_locale, std::optional<fundos::percentage_locale::selection> percentage_locale) {
 	FUNDOS_ASSERT(database->is_ready(), "open_locale_page called when database is not ready");
 
@@ -231,7 +164,7 @@ void MainWindow::go_home() {
 	connect(home_page, &HomePage::open_fund,    this, &MainWindow::open_fund);
 	connect(home_page, &HomePage::open_budget,  this, &MainWindow::open_budget);
 	connect(home_page, &HomePage::import_ofx,   this, &MainWindow::import_ofx);
-	connect(home_page, &HomePage::go_home,      this, &MainWindow::go_home);
+	connect(home_page, &HomePage::refresh,      this, &MainWindow::go_home);
 	home_page->initialize();
 	setCentralWidget(home_page);
 }
@@ -263,45 +196,20 @@ void MainWindow::db_restore() {
 	QMessageBox::information(this, tr("Title"), tr("Restore Called"));
 }
 void MainWindow::db_manage_locale() {
-	open_locale_page();
+	if (context == nullptr) { return; }
+	open_locale_page(context->currency, context->percentage);
 }
 
 void MainWindow::import_ofx() {
 
 }
 
-void MainWindow::create_account() {
+void MainWindow::open_account(const fundos::account& opening) {
 
 }
-void MainWindow::open_account(std::shared_ptr<fundos::account> opening) {
+void MainWindow::open_fund(const fundos::fund& opening) {
 
 }
-void MainWindow::save_account(std::shared_ptr<fundos::account> saving) {
-
-}
-
-void MainWindow::create_fund() {
-
-}
-void MainWindow::open_fund(std::shared_ptr<fundos::fund> opening) {
-
-}
-void MainWindow::save_fund(std::shared_ptr<fundos::fund> saving) {
-
-}
-
-// create_budget is open_budget with a default constructed budget
-void MainWindow::open_budget(std::shared_ptr<fundos::budget> opening) {
-
-}
-void MainWindow::save_budget(std::shared_ptr<fundos::budget> saving) {
-
-}
-
-// Create transaction is open_transaction with minimal properties set
-void MainWindow::open_transaction(std::shared_ptr<fundos::transaction> opening) {
-
-}
-void MainWindow::save_transaction(std::shared_ptr<fundos::transaction> saving) {
+void MainWindow::open_budget(const fundos::budget& opening) {
 
 }

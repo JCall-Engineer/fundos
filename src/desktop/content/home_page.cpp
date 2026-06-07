@@ -1,8 +1,6 @@
 #include "home_page.hpp"
 #include "theme.hpp"
-#include "components/account_list.hpp"
-#include "components/fund_list.hpp"
-#include "components/budget_list.hpp"
+#include "components/navigable_row.hpp"
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -52,18 +50,46 @@ QWidget* HomePage::make_panel(QWidget* list, const QString& title, std::vector<b
 }
 
 void HomePage::initialize() {
-	auto* accounts = new AccountList(context, this);
-	connect(accounts, &AccountList::db_outcome,   this, &HomePage::db_outcome);
-	connect(accounts, &AccountList::open_account, this, &HomePage::open_account);
-	accounts->initialize();
-	account_panel = make_panel(accounts, tr("ACCOUNTS"), {
+	auto* accounts_list = new QWidget(this);
+	{
+		auto* layout = new QVBoxLayout(accounts_list);
+		layout->setContentsMargins(0, 0, 0, 0);
+		layout->setSpacing(0);
+		layout->setAlignment(Qt::AlignTop);
+
+		const auto& accounts = context->accounts();
+		for (size_t i = 0; i < accounts.size(); ++i) {
+			const auto& record = accounts[i];
+			auto props = NavigableRow::props{
+				.index = i,
+				.is_closed = record.closed_at.has_value(),
+			};
+			auto balance = context->db()->get_account_balance(record.id());
+			QLabel* amount = nullptr;
+			if (balance) {
+				amount = theme::currency_label(balance.value(), context->currency_locale().info());
+				if (balance.value().minor_units != 0) {
+					props.has_amount = true;
+				}
+			} else {
+				emit db_outcome(balance.status());
+			}
+
+			auto* row = new NavigableRow(props, QString::fromStdString(accounts[i].name), amount, this);
+			connect(row, &NavigableRow::clicked, this, [this](size_t index) {
+				emit open_account(context->accounts()[index]);
+			});
+			layout->addWidget(row);
+		}
+	}
+	account_panel = make_panel(accounts_list, tr("ACCOUNTS"), {
 		{
 			QString(":/icons/upload.svg"),
 			[this]() { emit import_ofx(); },
 		},
 		{
 			QString(":/icons/plus.svg"),
-			[this, accounts]() {
+			[this]() {
 				bool accepted = false;
 				QString name = QInputDialog::getText(this, tr("New Account"), tr("Account name:"), QLineEdit::Normal, "", &accepted);
 				if (!accepted) { return; }
@@ -71,24 +97,55 @@ void HomePage::initialize() {
 				if (name.isEmpty()) { return; }
 
 				fundos::account creating = { .name = name.toStdString() };
-				auto saved = context->database->save_account(creating);
+				auto saved = context->db()->save_account(creating);
 				if (!saved) {
 					emit db_outcome(saved);
 					return;
 				}
-				accounts->initialize();
+				context->refresh_accounts();
+				emit refresh();
 			},
 		},
 	});
 
-	auto* funds = new FundList(context, this);
-	connect(funds, &FundList::db_outcome, this, &HomePage::db_outcome);
-	connect(funds, &FundList::open_fund, this,  &HomePage::open_fund);
-	funds->initialize();
-	fund_panel = make_panel(funds, tr("FUNDS"), {
+	auto* funds_list = new QWidget(this);
+	{
+		auto* layout = new QVBoxLayout(funds_list);
+		layout->setContentsMargins(0, 0, 0, 0);
+		layout->setSpacing(0);
+		layout->setAlignment(Qt::AlignTop);
+
+		const auto& funds = context->funds();
+		for (size_t i = 0; i < funds.size(); ++i) {
+			const auto& record = funds[i];
+
+			auto props = NavigableRow::props{
+				.index = i,
+				.is_closed = record.closed_at.has_value(),
+			};
+
+			auto balance = context->db()->get_fund_balance(record.id());
+			QLabel* amount = nullptr;
+			if (balance) {
+				amount = theme::currency_label(balance.value(), context->currency_locale().info());
+				if (balance.value().minor_units != 0) {
+					props.has_amount = true;
+				}
+			} else {
+				emit db_outcome(balance.status());
+			}
+
+			auto* row = new NavigableRow(props, QString::fromStdString(record.name), amount, this);
+			connect(row, &NavigableRow::clicked, this, [this](size_t index) {
+				emit open_fund(context->funds()[index]);
+			});
+			layout->addWidget(row);
+		}
+	}
+	fund_panel = make_panel(funds_list, tr("FUNDS"), {
 		{
 			QString(":/icons/plus.svg"),
-			[this, funds]() {
+			[this]() {
 				bool accepted = false;
 				QString name = QInputDialog::getText(this, tr("New Fund"), tr("Fund name:"), QLineEdit::Normal, "", &accepted);
 				if (!accepted) { return; }
@@ -96,25 +153,45 @@ void HomePage::initialize() {
 				if (name.isEmpty()) { return; }
 
 				fundos::fund creating = { .name = name.toStdString() };
-				auto saved = context->database->save_fund(creating);
+				auto saved = context->db()->save_fund(creating);
 				if (!saved) {
 					emit db_outcome(saved);
 					return;
 				}
-				funds->initialize();
+				context->refresh_funds();
+				emit refresh();
 			},
 		},
 	});
 
-	auto* budgets = new BudgetList(context, this);
-	connect(budgets, &BudgetList::db_outcome,  this, &HomePage::db_outcome);
-	connect(budgets, &BudgetList::open_budget, this, &HomePage::open_budget);
-	budget_panel = make_panel(budgets, tr("BUDGETS"), {
+	auto* budget_list = new QWidget(this);
+	{
+		auto* layout = new QVBoxLayout(budget_list);
+		layout->setContentsMargins(0, 0, 0, 0);
+		layout->setSpacing(0);
+		layout->setAlignment(Qt::AlignTop);
+
+		const auto& budgets = context->budgets();
+		for (size_t i = 0; i < budgets.size(); ++i) {
+			const auto& record = budgets[i];
+
+			auto props = NavigableRow::props{
+				.index = i,
+				.is_closed = false,
+			};
+
+			auto* row = new NavigableRow(props, QString::fromStdString(record.name), nullptr, this);
+			connect(row, &NavigableRow::clicked, this, [this](size_t index) {
+				emit open_budget(context->budgets()[index]);
+			});
+			layout->addWidget(row);
+		}
+	}
+	budget_panel = make_panel(budget_list, tr("BUDGETS"), {
 		{
 			QString(":/icons/plus.svg"),
 			[this]() {
-				auto creating = std::make_shared<fundos::budget>();
-				emit open_budget(creating);
+				emit open_budget(fundos::budget{});
 			},
 		},
 	});
