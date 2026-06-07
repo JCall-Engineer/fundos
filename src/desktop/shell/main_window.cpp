@@ -2,7 +2,10 @@
 #include "content/home_page.hpp"
 #include "content/locale_page.hpp"
 #include <QApplication>
+#include <QDate>
 #include <QDir>
+#include <QFile>
+#include <QFileDialog>
 #include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
@@ -18,7 +21,7 @@ MainWindow::MainWindow() {
 	restoreState(settings.value("mainwindow/state", QByteArray()).toByteArray(), WINDOW_VERSION);
 
 	QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
-	db_path = (QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/fundos.sqlite").toStdString();
+	db_path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/fundos.sqlite";
 
 	status_bar = new StatusBar(this);
 	setStatusBar(status_bar);
@@ -43,7 +46,7 @@ void MainWindow::open_database() {
 		database->close();
 		context = nullptr;
 	}
-	database = fundos::db::open_file(db_path);
+	database = fundos::db::open_file(db_path.toStdString());
 	status_bar->set_database(database);
 
 	if (database->is_ready()) {
@@ -186,14 +189,80 @@ void MainWindow::db_migrate() {
 		create_context();
 	}
 }
+
+static QMessageBox::StandardButton confirm_destruction(QWidget* parent) {
+	return QMessageBox::question(
+		parent,
+		QObject::tr("Destructive Operation"),
+		QObject::tr("This operation deletes the old database. You should perform a backup first. Continue?"),
+		QMessageBox::Ok | QMessageBox::Cancel,
+		QMessageBox::Cancel
+	);
+}
 void MainWindow::db_backup() {
-	QMessageBox::information(this, tr("Title"), tr("Backup Called"));
+	QString defaultName = QString("FundOS Backup %1.sqlite")
+		.arg(QDate::currentDate().toString("yyyy-MM-dd"));
+
+	QString destination = QFileDialog::getSaveFileName(
+		this,
+		tr("Backup Database"),
+		QDir::homePath() + "/" + defaultName,
+		tr("SQLite Database (*.sqlite)")
+	);
+	if (destination.isEmpty()) { return; }
+
+	if (database && database->is_connected()) {
+		// Shows a message box on failure, loads an error page if the database is closed as a result
+		on_result(database->backup(destination.toStdString()));
+	} else {
+		if (!QFile::copy(db_path, destination)) {
+			QMessageBox::critical(this, tr("Backup Error"), tr("Could not export database file."));
+		}
+	}
 }
 void MainWindow::db_create_new() {
-	QMessageBox::information(this, tr("Title"), tr("Create new called"));
+	if (QMessageBox::Ok != confirm_destruction(this)) { return; }
+	if (database && database->is_connected()) {
+		database->close();
+	}
+	if (!QFile::remove(db_path)) {
+		QMessageBox::critical(this, tr("Error"), tr("Could not delete the database file. Ensure it is not open in another program and that you have write permissions to the file."));
+		return;
+	}
+	open_database();
 }
 void MainWindow::db_restore() {
-	QMessageBox::information(this, tr("Title"), tr("Restore Called"));
+	if (QMessageBox::Ok != confirm_destruction(this)) { return; }
+
+	QString source = QFileDialog::getOpenFileName(
+		this,
+		tr("Restore Database"),
+		QDir::homePath(),
+		tr("SQLite Database (*.sqlite *.db)")
+	);
+	if (source.isEmpty()) { return; }
+
+	bool was_open = false;
+	if (database && database->is_connected()) {
+		database->close();
+		was_open = true;
+	}
+	QString temp_path = db_path + ".tmp";
+	if (!QFile::rename(db_path, temp_path)) {
+		QMessageBox::critical(this, tr("Restore Error"), tr("Could not move existing database file."));
+		return;
+	}
+	if (!QFile::copy(source, db_path)) {
+		if (QFile::rename(temp_path, db_path)) { // best effort recovery
+			if (was_open) { open_database(); }
+		} else {
+			QMessageBox::critical(this, tr("Restore Error"), tr("Could not recover original database file. Your data may be at risk."));
+		}
+		QMessageBox::critical(this, tr("Restore Error"), tr("Could not import database file."));
+		return;
+	}
+	QFile::remove(temp_path);
+	open_database();
 }
 void MainWindow::db_manage_locale() {
 	if (context == nullptr) { return; }

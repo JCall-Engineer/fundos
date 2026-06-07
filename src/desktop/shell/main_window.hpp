@@ -3,11 +3,12 @@
 #include "shell/status_bar.hpp"
 #include "content/error_page.hpp"
 #include <QMainWindow>
+#include <QString>
 
 class MainWindow : public QMainWindow {
 	Q_OBJECT
 
-	std::string db_path;
+	QString db_path;
 	std::shared_ptr<fundos::db> database;
 	std::shared_ptr<AppContext> context;
 	StatusBar* status_bar = nullptr;
