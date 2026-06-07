@@ -133,7 +133,7 @@ struct statements {
 	)sql" };
 
 	statement_slot get_funds { .sql = R"sql(
-		SELECT id, name, closed_at FROM funds
+		SELECT id, name, closed_at FROM funds ORDER BY name
 	)sql" };
 	statement_slot insert_fund { .sql = R"sql(
 		INSERT INTO funds (name) VALUES (?)
@@ -150,7 +150,7 @@ struct statements {
 	)sql" };
 
 	statement_slot get_accounts { .sql = R"sql(
-		SELECT id, name, closed_at, bank_account_id FROM accounts
+		SELECT id, name, closed_at, bank_account_id FROM accounts ORDER BY name
 	)sql" };
 	statement_slot insert_account { .sql = R"sql(
 		INSERT INTO accounts (name, bank_account_id)
