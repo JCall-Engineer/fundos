@@ -36,9 +36,22 @@ QWidget* HomePage::make_panel(QWidget* list, const QString& title, std::vector<b
 
 	for (auto& spec : buttons) {
 		auto* button = new QToolButton(panel);
+		button->setToolTip(spec.tooltip);
 		button->setIcon(theme::colored_svg_icon(spec.icon_path, theme::text, button_size));
 		button->setAutoRaise(true);
-		connect(button, &QToolButton::clicked, this, spec.action);
+		if (spec.toggle_signal && !spec.checked_icon_path.isEmpty()) {
+			button->setStyleSheet("QToolButton:checked { background: transparent; border: none; }");
+			button->setCheckable(true);
+			button->setChecked(false);
+			connect(button, &QToolButton::toggled, this, spec.toggle_signal);
+			connect(button, &QToolButton::toggled, this, [button, spec, button_size](bool checked) {
+				const auto& path = checked ? spec.checked_icon_path : spec.icon_path;
+				button->setIcon(theme::colored_svg_icon(path, theme::text, button_size));
+			});
+		}
+		if (spec.action) {
+			connect(button, &QToolButton::clicked, this, spec.action);
+		}
 		header->addWidget(button);
 	}
 
@@ -79,17 +92,27 @@ void HomePage::initialize() {
 			connect(row, &NavigableRow::clicked, this, [this](size_t index) {
 				emit open_account(context->accounts()[index]);
 			});
+			connect(this, &HomePage::toggle_closed_accounts, row, &NavigableRow::on_toggle);
+			row->on_toggle(false); // set the initial state
 			layout->addWidget(row);
 		}
 	}
 	account_panel = make_panel(accounts_list, tr("ACCOUNTS"), {
 		{
-			QString(":/icons/upload.svg"),
-			[this]() { emit import_ofx(); },
+			.tooltip   = QString("Import OFX File"),
+			.icon_path = QString(":/icons/upload.svg"),
+			.action    = [this]() { emit import_ofx(); },
 		},
 		{
-			QString(":/icons/plus.svg"),
-			[this]() {
+			.tooltip           = QString("Toggle Closed Accounts"),
+			.icon_path         = QString(":/icons/eye-off.svg"),
+			.checked_icon_path = QString(":/icons/eye.svg"),
+			.toggle_signal     = &HomePage::toggle_closed_accounts,
+		},
+		{
+			.tooltip   = QString("Create Account"),
+			.icon_path = QString(":/icons/plus.svg"),
+			.action    = [this]() {
 				bool accepted = false;
 				QString name = QInputDialog::getText(this, tr("New Account"), tr("Account name:"), QLineEdit::Normal, "", &accepted);
 				if (!accepted) { return; }
@@ -139,13 +162,22 @@ void HomePage::initialize() {
 			connect(row, &NavigableRow::clicked, this, [this](size_t index) {
 				emit open_fund(context->funds()[index]);
 			});
+			connect(this, &HomePage::toggle_closed_funds, row, &NavigableRow::on_toggle);
+			row->on_toggle(false); // set the initial state
 			layout->addWidget(row);
 		}
 	}
 	fund_panel = make_panel(funds_list, tr("FUNDS"), {
 		{
-			QString(":/icons/plus.svg"),
-			[this]() {
+			.tooltip           = QString("Toggle Closed Funds"),
+			.icon_path         = QString(":/icons/eye-off.svg"),
+			.checked_icon_path = QString(":/icons/eye.svg"),
+			.toggle_signal     = &HomePage::toggle_closed_funds,
+		},
+		{
+			.tooltip   = QString("Create Fund"),
+			.icon_path = QString(":/icons/plus.svg"),
+			.action    = [this]() {
 				bool accepted = false;
 				QString name = QInputDialog::getText(this, tr("New Fund"), tr("Fund name:"), QLineEdit::Normal, "", &accepted);
 				if (!accepted) { return; }
@@ -189,8 +221,9 @@ void HomePage::initialize() {
 	}
 	budget_panel = make_panel(budget_list, tr("BUDGETS"), {
 		{
-			QString(":/icons/plus.svg"),
-			[this]() {
+			.tooltip   = QString("Create Fund"),
+			.icon_path = QString(":/icons/plus.svg"),
+			.action    = [this]() {
 				emit open_budget(fundos::budget{});
 			},
 		},

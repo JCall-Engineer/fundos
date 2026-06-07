@@ -16,8 +16,12 @@ class HomePage : public QWidget {
 	QWidget*     budget_panel  = nullptr;
 
 	struct button_spec {
+		QString tooltip;
 		QString icon_path;
 		std::function<void()> action;
+
+		QString checked_icon_path;
+		void (HomePage::*toggle_signal)(bool) = nullptr;
 	};
 
 	QWidget* make_panel(QWidget* list, const QString& title, std::vector<button_spec> buttons);
