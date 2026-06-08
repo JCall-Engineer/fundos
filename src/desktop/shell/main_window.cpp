@@ -17,7 +17,7 @@ static constexpr int WINDOW_VERSION = 1;
 MainWindow::MainWindow() {
 	setWindowTitle("FundOS");
 	resize(1280, 720);
-	setMinimumWidth(300);
+	setMinimumWidth(600);
 
 	QSettings settings;
 	restoreGeometry(settings.value("mainwindow/geometry", QByteArray()).toByteArray());
