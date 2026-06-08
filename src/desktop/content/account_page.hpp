@@ -22,6 +22,7 @@ private slots:
 	void rename(QString name);
 	void new_transaction();
 	void on_toggle_open();
+	void refresh();
 
 signals:
 	void db_outcome(const fundos::db::outcome& outcome);

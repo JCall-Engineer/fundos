@@ -15,7 +15,7 @@ AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account openin
 		auto* header_layout = new QHBoxLayout(header_row);
 		header_layout->setContentsMargins(8, 8, 8, 8);
 		header_layout->setSpacing(8);
-		
+
 		name_label = new EditableLabel(QString::fromStdString(record.name), this);
 		connect(name_label, &EditableLabel::value_changed, this, &AccountPage::rename);
 		QSize button_size = QSize(name_label->sizeHint().height(), name_label->sizeHint().height());
@@ -23,6 +23,7 @@ AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account openin
 		auto* home_button = new QPushButton(this);
 		home_button->setIcon(theme::colored_svg_icon(":/icons/home.svg", theme::text, button_size));
 		home_button->setIconSize(button_size);
+		home_button->setToolTip(tr("Home"));
 		connect(home_button, &QPushButton::clicked, this, &AccountPage::go_home);
 
 		auto* import_button = new QPushButton(tr("Import OFX"), this);
@@ -121,4 +122,8 @@ void AccountPage::on_toggle_open() {
 		context->update_account(record);
 	}
 	update_close_button();
+}
+
+void AccountPage::refresh() {
+	QMessageBox::information(this, "Opened", "Refreshing dates");
 }
