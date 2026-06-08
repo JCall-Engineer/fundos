@@ -1,5 +1,8 @@
 #pragma once
+#include <cstdint>
 #include "context.hpp"
+#include "components/editable_label.hpp"
+#include <QPushButton>
 #include <QWidget>
 
 class AccountPage : public QWidget {
@@ -7,9 +10,21 @@ class AccountPage : public QWidget {
 
 	std::shared_ptr<AppContext> context;
 	fundos::account record;
+	EditableLabel* name_label;
+	QPushButton* close_button;
+
+	void update_close_button();
 
 public:
 	explicit AccountPage(std::shared_ptr<AppContext> ctx, fundos::account opening, QWidget* parent = nullptr);
 
+private slots:
+	void rename(QString name);
+	void new_transaction();
+	void on_toggle_open();
+
 signals:
+	void db_outcome(const fundos::db::outcome& outcome);
+	void go_home();
+	void import_ofx();
 };

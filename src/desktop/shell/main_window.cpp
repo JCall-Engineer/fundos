@@ -1,6 +1,9 @@
 #include "main_window.hpp"
 #include "content/home_page.hpp"
 #include "content/locale_page.hpp"
+#include "content/account_page.hpp"
+#include "content/fund_page.hpp"
+#include "content/budget_page.hpp"
 #include <QApplication>
 #include <QDate>
 #include <QDir>
@@ -276,7 +279,11 @@ void MainWindow::import_ofx() {
 }
 
 void MainWindow::open_account(const fundos::account& opening) {
-
+	auto account_page = new AccountPage(context, opening, this);
+	connect(account_page, &AccountPage::db_outcome, this, &MainWindow::on_result);
+	connect(account_page, &AccountPage::go_home,    this, &MainWindow::go_home);
+	connect(account_page, &AccountPage::import_ofx, this, &MainWindow::import_ofx);
+	setCentralWidget(account_page);
 }
 void MainWindow::open_fund(const fundos::fund& opening) {
 
