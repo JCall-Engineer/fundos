@@ -265,6 +265,7 @@ void MainWindow::db_restore() {
 	QFile::remove(temp_path);
 	open_database();
 }
+
 void MainWindow::db_manage_locale() {
 	if (context == nullptr) { return; }
 	open_locale_page(context->currency, context->percentage);
