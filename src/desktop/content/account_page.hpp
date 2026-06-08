@@ -2,6 +2,7 @@
 #include <cstdint>
 #include "context.hpp"
 #include "components/editable_label.hpp"
+#include <QDateTimeEdit>
 #include <QPushButton>
 #include <QWidget>
 
@@ -12,6 +13,8 @@ class AccountPage : public QWidget {
 	fundos::account record;
 	EditableLabel* name_label;
 	QPushButton* close_button;
+	QDateTimeEdit* after_picker;
+	QDateTimeEdit* before_picker;
 
 	void update_close_button();
 

@@ -47,6 +47,43 @@ AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account openin
 
 		layout->addWidget(header_row);
 	}
+	{
+		auto* filter_row = new QWidget(this);
+		auto* filter_layout = new QHBoxLayout(filter_row);
+		filter_layout->setContentsMargins(8, 8, 8, 8);
+		filter_layout->setSpacing(8);
+
+		auto* after_label = new QLabel(tr("From"), this);
+		after_picker = new QDateTimeEdit(this);
+		after_picker->setDisplayFormat("yyyy-MM-dd");
+		after_picker->setCalendarPopup(true);
+		after_picker->setDate(QDate::currentDate().addMonths(-1));
+
+		auto* before_label = new QLabel(tr("Until"), this);
+		before_picker = new QDateTimeEdit(this);
+		before_picker->setDisplayFormat("yyyy-MM-dd");
+		before_picker->setCalendarPopup(true);
+		before_picker->setDate(QDate::currentDate());
+
+		QSize button_size = QSize(after_label->sizeHint().height(), after_label->sizeHint().height());
+
+		auto* reload_button = new QPushButton(this);
+		reload_button->setIcon(theme::colored_svg_icon(":/icons/reload.svg", theme::text, button_size));
+		reload_button->setIconSize(button_size);
+		reload_button->setToolTip(tr("Refresh"));
+		connect(reload_button, &QPushButton::clicked, this, &AccountPage::refresh);
+
+		filter_layout->addWidget(after_label);
+		filter_layout->addWidget(after_picker);
+		filter_layout->addSpacing(8);
+		filter_layout->addWidget(before_label);
+		filter_layout->addWidget(before_picker);
+		filter_layout->addSpacing(8);
+		filter_layout->addWidget(reload_button);
+		filter_layout->addStretch();
+
+		layout->addWidget(filter_row);
+	}
 	layout->addStretch();
 }
 
