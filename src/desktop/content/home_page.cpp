@@ -38,6 +38,7 @@ QWidget* HomePage::make_panel(QWidget* list, const QString& title, std::vector<b
 		auto* button = new QToolButton(panel);
 		button->setToolTip(spec.tooltip);
 		button->setIcon(theme::colored_svg_icon(spec.icon_path, theme::text, button_size));
+		button->setIconSize(button_size);
 		button->setAutoRaise(true);
 		if (spec.toggle_signal && !spec.checked_icon_path.isEmpty()) {
 			button->setStyleSheet("QToolButton:checked { background: transparent; border: none; }");
