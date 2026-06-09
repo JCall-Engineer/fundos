@@ -1,9 +1,9 @@
 #include "account_page.hpp"
 #include "theme.hpp"
+#include "components/loading_spinner.hpp"
 #include <QDateTime>
 #include <QHboxLayout>
-#include <QVboxLayout>
-#include <QMessageBox>
+#include <QScrollArea>
 #include <QSize>
 
 AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account opening, QWidget *parent) : QWidget(parent), context(std::move(ctx)), record(std::move(opening)) {
@@ -12,6 +12,8 @@ AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account openin
 	layout->setSpacing(0);
 	{
 		auto* header_row = new QWidget(this);
+		header_row->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+
 		auto* header_layout = new QHBoxLayout(header_row);
 		header_layout->setContentsMargins(8, 8, 8, 8);
 		header_layout->setSpacing(8);
@@ -34,38 +36,65 @@ AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account openin
 		new_transaction_button->setIcon(theme::colored_svg_icon(":/icons/plus.svg", theme::text, button_size));
 		connect(new_transaction_button, &QPushButton::clicked, this, &AccountPage::new_transaction);
 
-		close_button = new QPushButton(this);
-		update_close_button();
-		connect(close_button, &QPushButton::clicked, this, &AccountPage::on_toggle_open);
+		open_close_button = new QPushButton(this);
+		update_open_close_button();
+		connect(open_close_button, &QPushButton::clicked, this, &AccountPage::on_toggle_open);
 
 		header_layout->addWidget(home_button);
 		header_layout->addWidget(name_label);
 		header_layout->addStretch();
 		header_layout->addWidget(import_button);
 		header_layout->addWidget(new_transaction_button);
-		header_layout->addWidget(close_button);
+		header_layout->addWidget(open_close_button);
 
 		layout->addWidget(header_row);
 	}
 	{
 		auto* filter_row = new QWidget(this);
+		filter_row->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+
 		auto* filter_layout = new QHBoxLayout(filter_row);
 		filter_layout->setContentsMargins(8, 8, 8, 8);
 		filter_layout->setSpacing(8);
 
+		auto today = QDate::currentDate();
 		auto* after_label = new QLabel(tr("From"), this);
-		auto* after_picker = new DatePicker(QDate::currentDate().addMonths(-1), this);
+		after_picker = new DatePicker(today.addMonths(-1), this);
 
 		auto* before_label = new QLabel(tr("Until"), this);
-		before_picker = new DatePicker(QDate::currentDate(), this);
+		before_picker = new DatePicker(today, this);
 
 		QSize button_size = QSize(after_label->sizeHint().height(), after_label->sizeHint().height());
 
-		auto* reload_button = new QPushButton(this);
-		reload_button->setIcon(theme::colored_svg_icon(":/icons/reload.svg", theme::text, button_size));
-		reload_button->setIconSize(button_size);
-		reload_button->setToolTip(tr("Refresh"));
-		connect(reload_button, &QPushButton::clicked, this, &AccountPage::refresh);
+		auto* month_button = new QPushButton(tr("Last Month"), this);
+		connect(month_button, &QPushButton::clicked, this, [this]() {
+			loading_preset = true;
+			auto today = QDate::currentDate();
+			after_picker->set_date(today.addMonths(-1));
+			before_picker->set_date(today);
+			loading_preset = false;
+			fetch_history();
+		});
+
+		auto* quarter_button = new QPushButton(tr("3 Months"), this);
+		connect(quarter_button, &QPushButton::clicked, this, [this]() {
+			loading_preset = true;
+			auto today = QDate::currentDate();
+			after_picker->set_date(today.addMonths(-3));
+			before_picker->set_date(today);
+			loading_preset = false;
+			fetch_history();
+		});
+
+		auto* ytd_button = new QPushButton(tr("YTD"), this);
+		connect(ytd_button, &QPushButton::clicked, this, [this]() {
+			loading_preset = true;
+			auto today = QDate::currentDate();
+			after_picker->set_date(QDate(today.year(), 1, 1));
+			before_picker->set_date(today);
+			loading_preset = false;
+			fetch_history();
+		});
 
 		filter_layout->addWidget(after_label);
 		filter_layout->addWidget(after_picker);
@@ -73,12 +102,27 @@ AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account openin
 		filter_layout->addWidget(before_label);
 		filter_layout->addWidget(before_picker);
 		filter_layout->addSpacing(8);
-		filter_layout->addWidget(reload_button);
+		filter_layout->addWidget(month_button);
+		filter_layout->addWidget(quarter_button);
+		filter_layout->addWidget(ytd_button);
 		filter_layout->addStretch();
 
 		layout->addWidget(filter_row);
 	}
-	layout->addStretch();
+	{
+		auto* history_scroll = new QScrollArea(this);
+		history_scroll->setWidgetResizable(true);
+
+		auto* history_panel = new QWidget();
+		history_scroll->setWidget(history_panel);
+
+		history_layout = new QVBoxLayout(history_panel);
+		history_layout->setContentsMargins(0, 0, 0, 0);
+		history_layout->setSpacing(0);
+		fetch_history();
+
+		layout->addWidget(history_scroll, 1);
+	}
 }
 
 void AccountPage::rename(QString name) {
@@ -98,12 +142,12 @@ void AccountPage::new_transaction() {
 
 }
 
-void AccountPage::update_close_button() {
+void AccountPage::update_open_close_button() {
 	QSize button_size = QSize(name_label->sizeHint().height(), name_label->sizeHint().height());
 	if (record.closed_at.has_value()) {
-		close_button->setText(tr("Open Account"));
-		close_button->setIcon(theme::colored_svg_icon(":/icons/lock-open.svg", theme::success_foreground, button_size));
-		close_button->setStyleSheet(QString(
+		open_close_button->setText(tr("Open Account"));
+		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock-open.svg", theme::success_foreground, button_size));
+		open_close_button->setStyleSheet(QString(
 			"QPushButton {"
 			"  color: %1;"
 			"  border: 1px solid %1;"
@@ -119,9 +163,9 @@ void AccountPage::update_close_button() {
 			theme::success_foreground.lighter(120).name()
 		));
 	} else {
-		close_button->setText(tr("Close Account"));
-		close_button->setIcon(theme::colored_svg_icon(":/icons/lock.svg", theme::error_foreground, button_size));
-		close_button->setStyleSheet(QString(
+		open_close_button->setText(tr("Close Account"));
+		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock.svg", theme::error_foreground, button_size));
+		open_close_button->setStyleSheet(QString(
 			"QPushButton {"
 			"  color: %1;"
 			"  border: 1px solid %1;"
@@ -152,9 +196,31 @@ void AccountPage::on_toggle_open() {
 	} else {
 		context->update_account(record);
 	}
-	update_close_button();
+	update_open_close_button();
 }
 
-void AccountPage::refresh() {
-	QMessageBox::information(this, "Opened", "Refreshing dates");
+void AccountPage::fetch_history() {
+	if (loading_preset) { return; }
+	while (QLayoutItem* item = history_layout->takeAt(0)) {
+		delete item->widget();
+		delete item;
+	}
+
+	auto* info_row = new QWidget(this);
+	history_layout->addWidget(info_row);
+
+	auto* info_layout = new QHBoxLayout(info_row);
+
+	auto* spinner = new LoadingSpinner(this);
+	info_layout->addWidget(spinner);
+
+	fundos::datetime after  = {after_picker->date().startOfDay().toMSecsSinceEpoch()};
+	fundos::datetime before = {before_picker->date().endOfDay().toMSecsSinceEpoch()};
+	auto history = context->db()->account_history(record.id(), after, before);
+	if (!history) {
+		emit db_outcome(history.status());
+		// Replace spinner with a QLabel explaining the error
+		return;
+	}
+	// Replace spinner with transaction history
 }
