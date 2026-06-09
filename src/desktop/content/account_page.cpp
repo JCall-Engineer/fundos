@@ -54,16 +54,10 @@ AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account openin
 		filter_layout->setSpacing(8);
 
 		auto* after_label = new QLabel(tr("From"), this);
-		after_picker = new QDateTimeEdit(this);
-		after_picker->setDisplayFormat("yyyy-MM-dd");
-		after_picker->setCalendarPopup(true);
-		after_picker->setDate(QDate::currentDate().addMonths(-1));
+		auto* after_picker = new DatePicker(QDate::currentDate().addMonths(-1), this);
 
 		auto* before_label = new QLabel(tr("Until"), this);
-		before_picker = new QDateTimeEdit(this);
-		before_picker->setDisplayFormat("yyyy-MM-dd");
-		before_picker->setCalendarPopup(true);
-		before_picker->setDate(QDate::currentDate());
+		before_picker = new DatePicker(QDate::currentDate(), this);
 
 		QSize button_size = QSize(after_label->sizeHint().height(), after_label->sizeHint().height());
 
