@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <shared_mutex>
 #include <span>
 #include <string>
 #include <utility>
@@ -46,6 +47,7 @@ public:
 		not_found,       // query did not yield resulting data
 		bad_request,     // incorrect API usage
 		rejected,        // data does not satisfy preconditions
+		interrupted,     // sqlite3_interrupt was called, most likely from fundos::db::interrupt
 		internal,        // an unexpected situation that would abort a debug build
 	};
 
@@ -122,6 +124,7 @@ private:
 	bool managed;
 	sqlite3* connection;
 	db_prepared_statements* prepared;
+	mutable std::shared_mutex connection_mutex;
 
 	int64_t schema = 0;
 	status open_result = {};
@@ -164,7 +167,7 @@ private:
 
 public:
 	/// Opens or creates a database file at the given path.
-	static std::shared_ptr<db> open_file(std::string);
+	static std::shared_ptr<db> open_file(const char* path);
 
 	/// Creates a private in-memory database.
 	static std::shared_ptr<db> open_memory();
@@ -187,12 +190,15 @@ public:
 	db(const db&) = delete;
 	db& operator=(const db&) = delete;
 
-	const status&                get_status()     const { return open_result; }
-	bool                         is_connected()   const { return connection != nullptr; }
-	bool                         is_ready()       const { return open_result.is_ok() && is_connected(); }
+	const status&                get_status()     { return open_result; }
+	bool                         is_connected()   { return connection != nullptr; }
+	bool                         is_ready()       { return open_result.is_ok() && is_connected(); }
+
+	/// Meant to be called from another thread in order to cancel a current request
+	void interrupt();
 
 	/// @return 0 on an errored or uninitialized db
-	int64_t                      schema_version() const { return schema; }
+	int64_t                      schema_version() { return schema; }
 
 	/// @return 0 on an errored or closed db
 	int64_t                      size_on_disk();

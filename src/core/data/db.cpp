@@ -487,7 +487,8 @@ db::error db::classify_sqlite_runtime_error(int rc) {
 			return error::corrupted;
 		case SQLITE_CONSTRAINT:
 			return error::constraint;
-		// SQLITE_INTERRUPT: not expected, would indicate external sqlite3_interrupt() call
+		case SQLITE_INTERRUPT: // can occur from db::interrupt
+			return error::interrupted;
 		default:
 			FUNDOS_ASSERT(false, "unhandled sqlite3 step result code");
 			return error::internal;
@@ -607,9 +608,11 @@ db::outcome db::sql_transaction(std::function<outcome(std::vector<std::function<
 				return sqlite_runtime_error(rc);
 			}
 			return success();
+		case error::interrupted:
+			return result;
 		default: {
 			rc = sqlite3_exec(connection, "ROLLBACK", nullptr, nullptr, nullptr);
-			if (SQLITE_OK == rc) {
+			if (SQLITE_OK == rc || rc == SQLITE_INTERRUPT) {
 				return result;
 			}
 			auto msg = sqlite_error_message();
@@ -1908,9 +1911,9 @@ db::error db::classify_sqlite_open_error(int rc) {
 	}
 }
 
-std::shared_ptr<db> db::open_file(std::string path) {
+std::shared_ptr<db> db::open_file(const char* path) {
 	sqlite3* connection;
-	int rc = sqlite3_open(path.c_str(), &connection);
+	int rc = sqlite3_open(path, &connection);
 	if (rc != SQLITE_OK) {
 		auto msg = db::sqlite_error_message(connection);
 		sqlite3_close(connection); // must still close even on failure
@@ -1921,14 +1924,7 @@ std::shared_ptr<db> db::open_file(std::string path) {
 }
 
 std::shared_ptr<db> db::open_memory() {
-	sqlite3* connection;
-	int rc = sqlite3_open(":memory:", &connection);
-	if (rc != SQLITE_OK) {
-		auto msg = db::sqlite_error_message(connection);
-		sqlite3_close(connection); // must still close even on failure
-		return std::make_shared<db>(outcome(classify_sqlite_open_error(rc), msg));
-	}
-	return std::make_shared<db>(connection, owns_connection{});
+	return open_file(":memory:");
 }
 
 db::outcome db::backup(const std::string& path) {
@@ -2213,6 +2209,7 @@ void db::open() {
 	prepare(); // if prepare succeeds we will "trust" this db
 }
 void db::close() {
+	std::unique_lock lock(connection_mutex);
 	if (connection == nullptr) { return; }  // prepared and connection have parity and are managed as one resource
 	for (size_t i = 0; i < num_prepared; ++i) {
 		sqlite3_finalize(prepared->slots[i].statement); // passing a nullptr is a noop
@@ -2224,6 +2221,11 @@ void db::close() {
 	delete prepared;
 	prepared = nullptr;
 	connection = nullptr;
+}
+
+void db::interrupt() {
+	std::shared_lock lock(connection_mutex);
+	sqlite3_interrupt(connection);
 }
 
 int64_t db::size_on_disk() {

@@ -49,7 +49,8 @@ void MainWindow::open_database() {
 		database->close();
 		context = nullptr;
 	}
-	database = fundos::db::open_file(db_path.toStdString());
+	std::string path = db_path.toStdString();
+	database = fundos::db::open_file(path.c_str());
 	status_bar->set_database(database);
 
 	if (database->is_ready()) {
