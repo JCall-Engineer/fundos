@@ -2,7 +2,7 @@
 #include "theme.hpp"
 #include "components/loading_spinner.hpp"
 #include <QDateTime>
-#include <QHboxLayout>
+#include <QHBoxLayout>
 #include <QScrollArea>
 #include <QSize>
 

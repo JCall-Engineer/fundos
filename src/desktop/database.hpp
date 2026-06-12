@@ -72,6 +72,7 @@ public slots:
 	void save_fund(fundos::fund fund);
 
 	void request_account_history(int64_t account_id, fundos::datetime after, fundos::datetime before);
+	void request_fund_history(int64_t fund_id, fundos::datetime after, fundos::datetime before);
 
 signals:
 	void operation_started(QString description);
@@ -103,4 +104,5 @@ signals:
 	void fund_saved(fundos::db::outcome status);
 
 	void account_history_received(fundos::db::result<fundos::db::transaction_history> history);
+	void fund_history_received(fundos::db::result<fundos::db::allocation_history> history);
 };

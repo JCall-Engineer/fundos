@@ -266,7 +266,9 @@ void MainWindow::open_account(const fundos::account& opening) {
 	setCentralWidget(account_page);
 }
 void MainWindow::open_fund(const fundos::fund& opening) {
-
+	auto fund_page = new FundPage(coordinator, opening, this);
+	connect(fund_page, &FundPage::go_home,    this, &MainWindow::go_home);
+	setCentralWidget(fund_page);
 }
 void MainWindow::open_budget(const fundos::budget& opening) {
 

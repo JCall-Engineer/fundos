@@ -203,3 +203,12 @@ void AppDatabase::request_account_history(int64_t account_id, fundos::datetime a
 	emit operation_finished();
 	update_status(history);
 }
+
+void AppDatabase::request_fund_history(int64_t fund_id, fundos::datetime after, fundos::datetime before) {
+	if (!database) { return; }
+	emit operation_started(tr("fetching fund history..."));
+	auto history = database->fund_history(fund_id, after, before);
+	emit fund_history_received(history);
+	emit operation_finished();
+	update_status(history);
+}
