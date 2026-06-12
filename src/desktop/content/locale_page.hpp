@@ -10,8 +10,6 @@
 class LocalePage : public QWidget {
 	Q_OBJECT
 
-	std::shared_ptr<fundos::db> database;
-
 	QComboBox*    currency_combo                    = nullptr;
 	QComboBox*    percentage_combo                  = nullptr;
 
@@ -33,11 +31,12 @@ class LocalePage : public QWidget {
 	fundos::currency_locale::spec   currency_fields;
 	fundos::percentage_locale::spec percentage_fields;
 
+	std::optional<std::pair<fundos::currency_locale::selection, fundos::percentage_locale::selection>> pending_locales;
+
 	void setup_layout(bool can_cancel = false);
 
 public:
 	explicit LocalePage(
-		std::shared_ptr<fundos::db> db,
 		std::optional<fundos::currency_locale::selection>   current_currency,
 		std::optional<fundos::percentage_locale::selection> current_percentage,
 		QWidget* parent = nullptr
@@ -51,6 +50,10 @@ private slots:
 	void on_percentage_preview();
 
 signals:
-	void db_outcome(const fundos::db::outcome& outcome);
-	void done();
+	void save_requested(fundos::currency_locale::selection currency, fundos::percentage_locale::selection percentage);
+	void saved(fundos::currency_locale::selection currency, fundos::percentage_locale::selection percentage);
+	void cancelled();
+
+public slots:
+	void on_save_result(fundos::db::outcome outcome);
 };

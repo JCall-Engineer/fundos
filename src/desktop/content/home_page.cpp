@@ -10,15 +10,122 @@
 #include <QToolButton>
 #include <QScrollArea>
 
-HomePage::HomePage(std::shared_ptr<AppContext> ctx, QWidget* parent) : QWidget(parent), context(std::move(ctx)) {
+HomePage::HomePage(AppCoordinator* coordinator, QWidget* parent) : QWidget(parent), app_coordinator(std::move(coordinator)) {
 	auto* root_layout = new QVBoxLayout(this);
 	root_layout->setContentsMargins(0, 0, 0, 0);
+
+	connect(this, &HomePage::toggle_closed_accounts, this, [this](bool visible) {
+		show_closed_accounts = visible;
+	});
+	connect(this, &HomePage::toggle_closed_funds,    this, [this](bool visible) {
+		show_closed_funds = visible;
+	});
 
 	scroll_area = new QScrollArea(this);
 	scroll_area->setWidgetResizable(true);
 	scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	scroll_area->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	root_layout->addWidget(scroll_area);
+
+	auto* database = app_coordinator->database();
+	connect(database, &AppDatabase::accounts_received,      this, &HomePage::on_accounts);
+	connect(database, &AppDatabase::funds_received,         this, &HomePage::on_funds);
+	connect(database, &AppDatabase::budgets_received,       this, &HomePage::on_budgets);
+	connect(database, &AppDatabase::account_saved,          this, &HomePage::on_account_created);
+	connect(database, &AppDatabase::fund_saved,             this, &HomePage::on_fund_created);
+	connect(this, &HomePage::create_account,            database, &AppDatabase::save_account);
+	connect(this, &HomePage::create_fund,               database, &AppDatabase::save_fund);
+	connect(this, &HomePage::account_balance_requested, database, &AppDatabase::request_account_balance);
+	connect(this, &HomePage::fund_balance_requested,    database, &AppDatabase::request_fund_balance);
+	connect(this, &HomePage::accounts_requested,        database, &AppDatabase::request_accounts);
+	connect(this, &HomePage::funds_requested,           database, &AppDatabase::request_funds);
+
+	account_list = new QWidget(this);
+	{
+		auto* layout = new QVBoxLayout(account_list);
+		layout->setContentsMargins(0, 0, 0, 0);
+		layout->setSpacing(0);
+		layout->setAlignment(Qt::AlignTop);
+	}
+	account_panel = make_panel(account_list, tr("ACCOUNTS"), {
+		{
+			.tooltip   = QString("Import OFX File"),
+			.icon_path = QString(":/icons/upload.svg"),
+			.action    = [this]() { emit import_ofx(); },
+		},
+		{
+			.tooltip           = QString("Toggle Closed Accounts"),
+			.icon_path         = QString(":/icons/eye-off.svg"),
+			.checked_icon_path = QString(":/icons/eye.svg"),
+			.toggle_signal     = &HomePage::toggle_closed_accounts,
+		},
+		{
+			.tooltip   = QString("Create Account"),
+			.icon_path = QString(":/icons/plus.svg"),
+			.action    = [this]() {
+				bool accepted = false;
+				QString name = QInputDialog::getText(this, tr("New Account"), tr("Account name:"), QLineEdit::Normal, "", &accepted);
+				if (!accepted) { return; }
+				name = name.trimmed();
+				if (name.isEmpty()) { return; }
+
+				fundos::account creating = { .name = name.toStdString() };
+				emit create_account(creating);
+			},
+		},
+	});
+
+	fund_list = new QWidget(this);
+	{
+		auto* layout = new QVBoxLayout(fund_list);
+		layout->setContentsMargins(0, 0, 0, 0);
+		layout->setSpacing(0);
+		layout->setAlignment(Qt::AlignTop);
+	}
+	fund_panel = make_panel(fund_list, tr("FUNDS"), {
+		{
+			.tooltip           = QString("Toggle Closed Funds"),
+			.icon_path         = QString(":/icons/eye-off.svg"),
+			.checked_icon_path = QString(":/icons/eye.svg"),
+			.toggle_signal     = &HomePage::toggle_closed_funds,
+		},
+		{
+			.tooltip   = QString("Create Fund"),
+			.icon_path = QString(":/icons/plus.svg"),
+			.action    = [this]() {
+				bool accepted = false;
+				QString name = QInputDialog::getText(this, tr("New Fund"), tr("Fund name:"), QLineEdit::Normal, "", &accepted);
+				if (!accepted) { return; }
+				name = name.trimmed();
+				if (name.isEmpty()) { return; }
+
+				fundos::fund creating = { .name = name.toStdString() };
+				emit create_fund(creating);
+			},
+		},
+	});
+
+	budget_list = new QWidget(this);
+	{
+		auto* layout = new QVBoxLayout(budget_list);
+		layout->setContentsMargins(0, 0, 0, 0);
+		layout->setSpacing(0);
+		layout->setAlignment(Qt::AlignTop);
+	}
+	budget_panel = make_panel(budget_list, tr("BUDGETS"), {
+		{
+			.tooltip   = QString("Create Fund"),
+			.icon_path = QString(":/icons/plus.svg"),
+			.action    = [this]() {
+				emit open_budget(fundos::budget{});
+			},
+		},
+	});
+
+	make_accounts(app_coordinator->context()->accounts());
+	make_funds(app_coordinator->context()->funds());
+	make_budgets(app_coordinator->context()->budgets());
+	relayout();
 }
 
 QWidget* HomePage::make_panel(QWidget* list, const QString& title, std::vector<button_spec> buttons) {
@@ -63,175 +170,103 @@ QWidget* HomePage::make_panel(QWidget* list, const QString& title, std::vector<b
 	return panel;
 }
 
-void HomePage::initialize() {
-	auto* accounts_list = new QWidget(this);
-	{
-		auto* layout = new QVBoxLayout(accounts_list);
-		layout->setContentsMargins(0, 0, 0, 0);
-		layout->setSpacing(0);
-		layout->setAlignment(Qt::AlignTop);
+void HomePage::make_accounts(const std::vector<fundos::account>& accounts) {
+	auto* database = app_coordinator->database();
+	auto* layout = account_list->layout();
+	while (QLayoutItem* item = layout->takeAt(0)) {
+		delete item->widget();
+		delete item;
+	}
 
-		const auto& accounts = context->accounts();
-		for (size_t i = 0; i < accounts.size(); ++i) {
-			const auto& record = accounts[i];
-			auto props = NavigableRow::props{
-				.index = i,
-				.is_closed = record.closed_at.has_value(),
-			};
-			auto balance = context->db()->get_account_balance(record.id());
-			QLabel* amount = nullptr;
-			if (balance) {
-				amount = theme::currency_label(balance.value(), context->currency_locale().info());
-				if (balance.value().minor_units != 0) {
-					props.has_amount = true;
-				}
-			} else {
-				emit db_outcome(balance.status());
+	for (size_t i = 0; i < accounts.size(); ++i) {
+		const auto& record = accounts[i];
+		const int64_t id = record.id();
+
+		auto props = NavigableRow::props{
+			.index = i,
+			.is_closed = record.closed_at.has_value(),
+		};
+
+		auto* row = new NavigableRow(props, QString::fromStdString(accounts[i].name), this);
+		connect(row, &NavigableRow::clicked, this, [this](size_t index) {
+			emit open_account(app_coordinator->context()->accounts()[index]);
+		});
+		connect(this, &HomePage::toggle_closed_accounts, row, &NavigableRow::on_toggle);
+		row->on_toggle(show_closed_accounts);
+
+		connect(database, &AppDatabase::account_balance_received, row, [this, row, id](int64_t account_id, fundos::db::result<fundos::currency> amount) {
+			if (amount && account_id == id) {
+				row->set_amount(theme::currency_label(amount.value(), app_coordinator->context()->currency_locale().info()), amount.value().minor_units != 0);
 			}
+		});
+		emit account_balance_requested(id);
 
-			auto* row = new NavigableRow(props, QString::fromStdString(accounts[i].name), amount, this);
-			connect(row, &NavigableRow::clicked, this, [this](size_t index) {
-				emit open_account(context->accounts()[index]);
-			});
-			connect(this, &HomePage::toggle_closed_accounts, row, &NavigableRow::on_toggle);
-			row->on_toggle(false); // set the initial state
-			layout->addWidget(row);
-		}
+		layout->addWidget(row);
 	}
-	account_panel = make_panel(accounts_list, tr("ACCOUNTS"), {
-		{
-			.tooltip   = QString("Import OFX File"),
-			.icon_path = QString(":/icons/upload.svg"),
-			.action    = [this]() { emit import_ofx(); },
-		},
-		{
-			.tooltip           = QString("Toggle Closed Accounts"),
-			.icon_path         = QString(":/icons/eye-off.svg"),
-			.checked_icon_path = QString(":/icons/eye.svg"),
-			.toggle_signal     = &HomePage::toggle_closed_accounts,
-		},
-		{
-			.tooltip   = QString("Create Account"),
-			.icon_path = QString(":/icons/plus.svg"),
-			.action    = [this]() {
-				bool accepted = false;
-				QString name = QInputDialog::getText(this, tr("New Account"), tr("Account name:"), QLineEdit::Normal, "", &accepted);
-				if (!accepted) { return; }
-				name = name.trimmed();
-				if (name.isEmpty()) { return; }
-
-				fundos::account creating = { .name = name.toStdString() };
-				auto saved = context->db()->save_account(creating);
-				if (!saved) {
-					emit db_outcome(saved);
-					return;
-				}
-				context->refresh_accounts();
-				emit refresh();
-			},
-		},
-	});
-
-	auto* funds_list = new QWidget(this);
-	{
-		auto* layout = new QVBoxLayout(funds_list);
-		layout->setContentsMargins(0, 0, 0, 0);
-		layout->setSpacing(0);
-		layout->setAlignment(Qt::AlignTop);
-
-		const auto& funds = context->funds();
-		for (size_t i = 0; i < funds.size(); ++i) {
-			const auto& record = funds[i];
-
-			auto props = NavigableRow::props{
-				.index = i,
-				.is_closed = record.closed_at.has_value(),
-			};
-
-			auto balance = context->db()->get_fund_balance(record.id());
-			QLabel* amount = nullptr;
-			if (balance) {
-				amount = theme::currency_label(balance.value(), context->currency_locale().info());
-				if (balance.value().minor_units != 0) {
-					props.has_amount = true;
-				}
-			} else {
-				emit db_outcome(balance.status());
-			}
-
-			auto* row = new NavigableRow(props, QString::fromStdString(record.name), amount, this);
-			connect(row, &NavigableRow::clicked, this, [this](size_t index) {
-				emit open_fund(context->funds()[index]);
-			});
-			connect(this, &HomePage::toggle_closed_funds, row, &NavigableRow::on_toggle);
-			row->on_toggle(false); // set the initial state
-			layout->addWidget(row);
-		}
-	}
-	fund_panel = make_panel(funds_list, tr("FUNDS"), {
-		{
-			.tooltip           = QString("Toggle Closed Funds"),
-			.icon_path         = QString(":/icons/eye-off.svg"),
-			.checked_icon_path = QString(":/icons/eye.svg"),
-			.toggle_signal     = &HomePage::toggle_closed_funds,
-		},
-		{
-			.tooltip   = QString("Create Fund"),
-			.icon_path = QString(":/icons/plus.svg"),
-			.action    = [this]() {
-				bool accepted = false;
-				QString name = QInputDialog::getText(this, tr("New Fund"), tr("Fund name:"), QLineEdit::Normal, "", &accepted);
-				if (!accepted) { return; }
-				name = name.trimmed();
-				if (name.isEmpty()) { return; }
-
-				fundos::fund creating = { .name = name.toStdString() };
-				auto saved = context->db()->save_fund(creating);
-				if (!saved) {
-					emit db_outcome(saved);
-					return;
-				}
-				context->refresh_funds();
-				emit refresh();
-			},
-		},
-	});
-
-	auto* budget_list = new QWidget(this);
-	{
-		auto* layout = new QVBoxLayout(budget_list);
-		layout->setContentsMargins(0, 0, 0, 0);
-		layout->setSpacing(0);
-		layout->setAlignment(Qt::AlignTop);
-
-		const auto& budgets = context->budgets();
-		for (size_t i = 0; i < budgets.size(); ++i) {
-			const auto& record = budgets[i];
-
-			auto props = NavigableRow::props{
-				.index = i,
-				.is_closed = false,
-			};
-
-			auto* row = new NavigableRow(props, QString::fromStdString(record.name), nullptr, this);
-			connect(row, &NavigableRow::clicked, this, [this](size_t index) {
-				emit open_budget(context->budgets()[index]);
-			});
-			layout->addWidget(row);
-		}
-	}
-	budget_panel = make_panel(budget_list, tr("BUDGETS"), {
-		{
-			.tooltip   = QString("Create Fund"),
-			.icon_path = QString(":/icons/plus.svg"),
-			.action    = [this]() {
-				emit open_budget(fundos::budget{});
-			},
-		},
-	});
-
-	relayout();
 }
+void HomePage::make_funds(const std::vector<fundos::fund>& funds) {
+	auto* database = app_coordinator->database();
+	auto* layout = fund_list->layout();
+	while (QLayoutItem* item = layout->takeAt(0)) {
+		delete item->widget();
+		delete item;
+	}
+
+	for (size_t i = 0; i < funds.size(); ++i) {
+		const auto& record = funds[i];
+		const int64_t id = record.id();
+
+		auto props = NavigableRow::props{
+			.index = i,
+			.is_closed = record.closed_at.has_value(),
+		};
+
+		auto* row = new NavigableRow(props, QString::fromStdString(record.name), this);
+		connect(row, &NavigableRow::clicked, this, [this](size_t index) {
+			emit open_fund(app_coordinator->context()->funds()[index]);
+		});
+		connect(this, &HomePage::toggle_closed_funds, row, &NavigableRow::on_toggle);
+		row->on_toggle(show_closed_funds);
+
+		connect(database, &AppDatabase::fund_balance_received, row, [this, row, id](int64_t fund_id, fundos::db::result<fundos::currency> amount) {
+			if (amount && fund_id == id) {
+				row->set_amount(theme::currency_label(amount.value(), app_coordinator->context()->currency_locale().info()), amount.value().minor_units != 0);
+			}
+		});
+		emit fund_balance_requested(id);
+
+		layout->addWidget(row);
+	}
+}
+void HomePage::make_budgets(const std::vector<fundos::budget>& budgets) {
+	auto* layout = budget_list->layout();
+	while (QLayoutItem* item = layout->takeAt(0)) {
+		delete item->widget();
+		delete item;
+	}
+
+	for (size_t i = 0; i < budgets.size(); ++i) {
+		const auto& record = budgets[i];
+
+		auto props = NavigableRow::props{
+			.index = i,
+			.is_closed = false,
+		};
+
+		auto* row = new NavigableRow(props, QString::fromStdString(record.name), this);
+		connect(row, &NavigableRow::clicked, this, [this](size_t index) {
+			emit open_budget(app_coordinator->context()->budgets()[index]);
+		});
+		layout->addWidget(row);
+	}
+}
+
+void HomePage::on_account_created(fundos::db::outcome saved) { if (saved) { emit accounts_requested(); } }
+void HomePage::on_fund_created   (fundos::db::outcome saved) { if (saved) { emit funds_requested();    } }
+
+void HomePage::on_accounts(fundos::db::result<std::vector<fundos::account>> accounts) { if (accounts) { make_accounts(accounts.value()); } }
+void HomePage::on_funds   (fundos::db::result<std::vector<fundos::fund>>    funds)    { if (funds)    { make_funds   (funds.value());    } }
+void HomePage::on_budgets (fundos::db::result<std::vector<fundos::budget>> budgets)   { if (budgets)  { make_budgets (budgets.value());  } }
 
 void HomePage::resizeEvent(QResizeEvent* event) {
 	QWidget::resizeEvent(event);

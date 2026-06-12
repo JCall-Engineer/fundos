@@ -1,5 +1,5 @@
 #pragma once
-#include "fundos.hpp"
+#include "database.hpp"
 #include <QStatusBar>
 #include <QLabel>
 #include <QToolButton>
@@ -7,11 +7,14 @@
 class StatusBar : public QStatusBar {
 	Q_OBJECT
 
-	QWidget*     dot       = nullptr;
-	QLabel*      text      = nullptr;
-	QToolButton* db_button = nullptr;
+	QWidget*     dot          = nullptr;
+	QLabel*      text         = nullptr;
+	QToolButton* db_button    = nullptr;
+	QLabel*      info_size    = nullptr;
+	QLabel*      info_journal = nullptr;
+	QLabel*      info_schema  = nullptr;
 
-	std::shared_ptr<fundos::db> database;
+	bool is_connected = false;
 
 	void apply_ready();
 	void apply_yellow(const QString& message);
@@ -21,13 +24,17 @@ class StatusBar : public QStatusBar {
 public:
 	explicit StatusBar(QWidget* parent = nullptr);
 
-	void set_database(std::shared_ptr<fundos::db> db);
 	void set_status(const fundos::db::outcome& outcome);
 
 private slots:
 	void show_db_menu();
 
+public slots:
+	void on_db_open(fundos::db::status open_result);
+	void on_db_info(AppDatabase::DatabaseInfo info);
+
 signals:
+	void db_info_requested();
 	void backup_requested();
 	void restore_requested();
 	void create_new_requested();

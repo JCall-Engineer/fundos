@@ -6,7 +6,11 @@
 #include <QScrollArea>
 #include <QSize>
 
-AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account opening, QWidget *parent) : QWidget(parent), context(std::move(ctx)), record(std::move(opening)) {
+AccountPage::AccountPage(
+	AppCoordinator* coordinator,
+	fundos::account opening,
+	QWidget *parent
+) : QWidget(parent), app_coordinator(std::move(coordinator)), record(std::move(opening)) {
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(0);
@@ -68,31 +72,31 @@ AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account openin
 
 		auto* month_button = new QPushButton(tr("Last Month"), this);
 		connect(month_button, &QPushButton::clicked, this, [this]() {
-			loading_preset = true;
+			loading_preset_date_range = true;
 			auto today = QDate::currentDate();
 			after_picker->set_date(today.addMonths(-1));
 			before_picker->set_date(today);
-			loading_preset = false;
+			loading_preset_date_range = false;
 			fetch_history();
 		});
 
 		auto* quarter_button = new QPushButton(tr("3 Months"), this);
 		connect(quarter_button, &QPushButton::clicked, this, [this]() {
-			loading_preset = true;
+			loading_preset_date_range = true;
 			auto today = QDate::currentDate();
 			after_picker->set_date(today.addMonths(-3));
 			before_picker->set_date(today);
-			loading_preset = false;
+			loading_preset_date_range = false;
 			fetch_history();
 		});
 
 		auto* ytd_button = new QPushButton(tr("YTD"), this);
 		connect(ytd_button, &QPushButton::clicked, this, [this]() {
-			loading_preset = true;
+			loading_preset_date_range = true;
 			auto today = QDate::currentDate();
 			after_picker->set_date(QDate(today.year(), 1, 1));
 			before_picker->set_date(today);
-			loading_preset = false;
+			loading_preset_date_range = false;
 			fetch_history();
 		});
 
@@ -123,19 +127,17 @@ AccountPage::AccountPage(std::shared_ptr<AppContext> ctx, fundos::account openin
 
 		layout->addWidget(history_scroll, 1);
 	}
+
+	auto* database = app_coordinator->database();
+	connect(this,     &AccountPage::save_account_requested, database, &AppDatabase::save_account);
+	connect(database, &AppDatabase::account_saved,          this,     &AccountPage::on_account_saved);
 }
 
 void AccountPage::rename(QString name) {
-	std::string old = record.name;
+	previous_name = record.name;
+	previous_closed_at = record.closed_at;
 	record.name = name.toStdString();
-	auto saved = context->db()->save_account(record);
-	emit db_outcome(saved);
-	if (!saved) {
-		record.name = old;
-		name_label->set_text(QString::fromStdString(old));
-	} else {
-		context->update_account(record);
-	}
+	emit save_account_requested(record);
 }
 
 void AccountPage::new_transaction() {
@@ -183,24 +185,29 @@ void AccountPage::update_open_close_button() {
 	}
 }
 void AccountPage::on_toggle_open() {
-	auto old = record.closed_at;
-	if (old.has_value()) {
+	previous_name = record.name;
+	previous_closed_at = record.closed_at;
+	if (previous_closed_at.has_value()) {
 		record.closed_at = std::nullopt;
 	} else {
 		record.closed_at = fundos::datetime{QDateTime::currentMSecsSinceEpoch()};
 	}
-	auto saved = context->db()->save_account(record);
-	emit db_outcome(saved);
+	emit save_account_requested(record);
+}
+
+void AccountPage::on_account_saved(fundos::db::outcome saved) {
 	if (!saved) {
-		record.closed_at = old;
+		record.name = previous_name;
+		name_label->set_text(QString::fromStdString(previous_name));
+		record.closed_at = previous_closed_at;
 	} else {
-		context->update_account(record);
+		app_coordinator->update_account(record);
 	}
 	update_open_close_button();
 }
 
 void AccountPage::fetch_history() {
-	if (loading_preset) { return; }
+	if (loading_preset_date_range) { return; }
 	while (QLayoutItem* item = history_layout->takeAt(0)) {
 		delete item->widget();
 		delete item;
@@ -216,11 +223,4 @@ void AccountPage::fetch_history() {
 
 	fundos::datetime after  = {after_picker->date().startOfDay().toMSecsSinceEpoch()};
 	fundos::datetime before = {before_picker->date().endOfDay().toMSecsSinceEpoch()};
-	auto history = context->db()->account_history(record.id(), after, before);
-	if (!history) {
-		emit db_outcome(history.status());
-		// Replace spinner with a QLabel explaining the error
-		return;
-	}
-	// Replace spinner with transaction history
 }

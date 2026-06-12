@@ -7,7 +7,6 @@
 NavigableRow::NavigableRow(
 	const props& data,
 	const QString& name,
-	QLabel* amount_label,
 	QWidget* parent
 ) : QWidget(parent), properties(data) {
 	auto* layout = new QHBoxLayout(this);
@@ -28,10 +27,14 @@ NavigableRow::NavigableRow(
 
 	layout->addWidget(name_label);
 	layout->addStretch();
-	if (amount_label) {
-		layout->addWidget(amount_label);
-	}
 	layout->addWidget(open_button);
+}
+
+void NavigableRow::set_amount(QLabel* amount_label, bool has_amount) {
+	amount_label->setParent(this);
+	// Insert before the open_button (last item), after the stretch
+	static_cast<QHBoxLayout*>(layout())->insertWidget(2, amount_label);
+	properties.has_amount = has_amount;
 }
 
 void NavigableRow::on_toggle(bool show_closed) {

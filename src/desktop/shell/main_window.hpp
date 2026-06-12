@@ -1,5 +1,5 @@
 #pragma once
-#include "context.hpp"
+#include "coordinator.hpp"
 #include "shell/status_bar.hpp"
 #include "content/error_page.hpp"
 #include <QMainWindow>
@@ -8,12 +8,10 @@
 class MainWindow : public QMainWindow {
 	Q_OBJECT
 
-	QString db_path;
-	std::shared_ptr<fundos::db> database;
-	std::shared_ptr<AppContext> context;
+	AppDatabase* database;
+	AppCoordinator* coordinator;
 	StatusBar* status_bar = nullptr;
 
-	void open_database();
 	void create_context();
 	void load_error_page(ErrorPage* page);
 	void open_locale_page(std::optional<fundos::currency_locale::selection> currency_locale, std::optional<fundos::percentage_locale::selection> percentage_locale);
@@ -24,18 +22,35 @@ public:
 protected:
 	void closeEvent(QCloseEvent* event) override;
 
+signals:
+	void db_open_requested();
+	void db_migrate_requested();
+	void context_requested();
+
+	void db_backup_requested(QString destination);
+	void db_create_new_requested();
+	void db_restore_requested(QString source);
+
 private slots:
-	void on_context_refreshed(std::shared_ptr<AppContext> new_context);
+	void on_db_open(fundos::db::status open_result);
+	void on_migrate(fundos::db::outcome status);
+
+	void on_context_failure(fundos::db::outcome status);
 
 	void on_result(const fundos::db::outcome& result);
 	void go_home();
-	void quit();
+	void on_quit();
 
-	void db_retry();
-	void db_migrate();
 	void db_backup();
+	void on_backup_result(fundos::db::outcome status);
+	void on_backup_copy_failed();
+
 	void db_create_new();
+	void on_create_new(bool succeeded);
+
 	void db_restore();
+	void on_restore(AppDatabase::RestoreResult result);
+
 	void db_manage_locale();
 
 	void import_ofx();

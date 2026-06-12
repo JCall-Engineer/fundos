@@ -23,17 +23,34 @@ MainWindow::MainWindow() {
 	restoreGeometry(settings.value("mainwindow/geometry", QByteArray()).toByteArray());
 	restoreState(settings.value("mainwindow/state", QByteArray()).toByteArray(), WINDOW_VERSION);
 
-	QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
-	db_path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/fundos.sqlite";
+	database = new AppDatabase(this);
+	connect(this,     &MainWindow::db_open_requested,       database, &AppDatabase::open);
+	connect(this,     &MainWindow::db_backup_requested,     database, &AppDatabase::backup);
+	connect(this,     &MainWindow::db_restore_requested,    database, &AppDatabase::restore);
+	connect(this,     &MainWindow::db_create_new_requested, database, &AppDatabase::create_new);
+	connect(database, &AppDatabase::connection_opened,      this,     &MainWindow::on_db_open);
+	connect(database, &AppDatabase::connection_migrated,    this,     &MainWindow::on_migrate);
+	connect(database, &AppDatabase::backup_complete,        this,     &MainWindow::on_backup_result);
+	connect(database, &AppDatabase::backup_copy_failed,     this,     &MainWindow::on_backup_copy_failed);
+	connect(database, &AppDatabase::restore_complete,       this,     &MainWindow::on_restore);
+	connect(database, &AppDatabase::create_new_complete,    this,     &MainWindow::on_create_new);
+
+	coordinator = new AppCoordinator(database, this);
+	connect(this,        &MainWindow::context_requested, coordinator, &AppCoordinator::on_database_open);
+	connect(coordinator, &AppCoordinator::creation_failure, this,        &MainWindow::on_context_failure);
+	connect(coordinator, &AppCoordinator::needs_locale,     this,        &MainWindow::db_manage_locale);
+	connect(coordinator, &AppCoordinator::created,          this,        &MainWindow::go_home);
 
 	status_bar = new StatusBar(this);
 	setStatusBar(status_bar);
-	connect(status_bar, &StatusBar::backup_requested,        this, &MainWindow::db_backup);
-	connect(status_bar, &StatusBar::restore_requested,       this, &MainWindow::db_restore);
-	connect(status_bar, &StatusBar::create_new_requested,    this, &MainWindow::db_create_new);
-	connect(status_bar, &StatusBar::manage_locale_requested, this, &MainWindow::db_manage_locale);
+	connect(status_bar, &StatusBar::db_info_requested,       database,   &AppDatabase::request_db_info);
+	connect(database,   &AppDatabase::db_info_received,      status_bar, &StatusBar::on_db_info);
+	connect(status_bar, &StatusBar::backup_requested,        this,       &MainWindow::db_backup);
+	connect(status_bar, &StatusBar::restore_requested,       this,       &MainWindow::db_restore);
+	connect(status_bar, &StatusBar::create_new_requested,    this,       &MainWindow::db_create_new);
+	connect(status_bar, &StatusBar::manage_locale_requested, this,       &MainWindow::db_manage_locale);
 
-	open_database();
+	emit db_open_requested();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
@@ -43,66 +60,39 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 	QMainWindow::closeEvent(event);
 }
 
-void MainWindow::open_database() {
-	if (database != nullptr) {
-		// Close previous db so it doesn't lock an attempt to create a new db instance
-		database->close();
-		context = nullptr;
+void MainWindow::on_db_open(fundos::db::status open_result) {
+	if (open_result.is_ok()) {
+		emit context_requested();
+	} else {
+		load_error_page(new ErrorPage(open_result, this));
 	}
-	std::string path = db_path.toStdString();
-	database = fundos::db::open_file(path.c_str());
-	status_bar->set_database(database);
+}
 
-	if (database->is_ready()) {
-		return create_context();
-	}
-
-	auto& status = database->get_status();
+void MainWindow::on_context_failure(fundos::db::outcome status) {
 	load_error_page(new ErrorPage(status, this));
 }
 
-void MainWindow::create_context() {
-	FUNDOS_ASSERT(database->is_ready(), "create_context called when database is not ready");
-	context = nullptr;
-
-	AppContext::try_create(database, this, {
-		.on_success = [this](std::shared_ptr<AppContext> ctx) {
-			on_context_refreshed(ctx);
-			go_home();
-		},
-		.on_needs_locale = [this](std::shared_ptr<AppContext> ctx) {
-			open_locale_page(ctx->currency, ctx->percentage);
-		},
-		.on_fatal = [this](const fundos::db::outcome& failure) {
-			load_error_page(new ErrorPage(failure, this));
-		},
-	});
-}
-
-void MainWindow::on_context_refreshed(std::shared_ptr<AppContext> new_context) {
-	if (context != nullptr) {
-		disconnect(context.get(), &AppContext::refreshed, this, &MainWindow::on_context_refreshed);
-	}
-	context = new_context;
-	connect(context.get(), &AppContext::refreshed, this, &MainWindow::on_context_refreshed);
-}
-
 void MainWindow::load_error_page(ErrorPage* page) {
-	connect(page, &ErrorPage::retry_requested,      this, &MainWindow::db_retry);
-	connect(page, &ErrorPage::migrate_requested,    this, &MainWindow::db_migrate);
-	connect(page, &ErrorPage::backup_requested,     this, &MainWindow::db_backup);
-	connect(page, &ErrorPage::create_new_requested, this, &MainWindow::db_create_new);
-	connect(page, &ErrorPage::restore_requested,    this, &MainWindow::db_restore);
-	connect(page, &ErrorPage::quit_requested,       this, &MainWindow::quit);
+	connect(page, &ErrorPage::retry_requested,      database, &AppDatabase::open);
+	connect(page, &ErrorPage::migrate_requested,    database, &AppDatabase::migrate);
+	connect(page, &ErrorPage::backup_requested,     this,     &MainWindow::db_backup);
+	connect(page, &ErrorPage::create_new_requested, this,     &MainWindow::db_create_new);
+	connect(page, &ErrorPage::restore_requested,    this,     &MainWindow::db_restore);
+	connect(page, &ErrorPage::quit_requested,       this,     &MainWindow::on_quit);
 	setCentralWidget(page);
 }
 
-void MainWindow::open_locale_page(std::optional<fundos::currency_locale::selection> currency_locale, std::optional<fundos::percentage_locale::selection> percentage_locale) {
-	FUNDOS_ASSERT(database->is_ready(), "open_locale_page called when database is not ready");
-
-	auto* locale_page = new LocalePage(database, currency_locale, percentage_locale, this);
-	connect(locale_page, &LocalePage::db_outcome, this, &MainWindow::on_result);
-	connect(locale_page, &LocalePage::done,       this, [this]() { create_context(); });
+void MainWindow::open_locale_page(
+	std::optional<fundos::currency_locale::selection> currency_locale,
+	std::optional<fundos::percentage_locale::selection> percentage_locale
+) {
+	auto* locale_page = new LocalePage(currency_locale, percentage_locale, this);
+	connect(locale_page, &LocalePage::save_requested, database,    &AppDatabase::set_locales);
+	connect(database,    &AppDatabase::locales_saved, locale_page, &LocalePage::on_save_result);
+	connect(locale_page, &LocalePage::cancelled,      this,        &MainWindow::go_home);
+	connect(locale_page, &LocalePage::saved,          this, [this](fundos::currency_locale::selection currency, fundos::percentage_locale::selection percentage) {
+		coordinator->update_locales(currency, percentage);
+	});
 	setCentralWidget(locale_page);
 }
 
@@ -121,6 +111,10 @@ void MainWindow::on_result(const fundos::db::outcome& result) {
 			case error::inaccessible: // would prevent the db from opening, making this function unreachable
 			case error::readonly:     // would prevent the db from opening, making this function unreachable
 				FUNDOS_UNREACHABLE();
+				return;
+
+			case error::interrupted:
+				QMessageBox::information(this, tr("Interrupted"), tr("A database operation was interrupted.") + msg);
 				return;
 
 			case error::corrupted:
@@ -162,35 +156,22 @@ void MainWindow::on_result(const fundos::db::outcome& result) {
 	}
 }
 void MainWindow::go_home() {
-	FUNDOS_ASSERT(database->is_ready(), "go_home called when database is not ready");
-	FUNDOS_ASSERT(context != nullptr, "go_home called before context is created");
-
-	auto* home_page = new HomePage(context, this);
-	connect(home_page, &HomePage::db_outcome,   this, &MainWindow::on_result);
+	auto* home_page = new HomePage(coordinator, this);
 	connect(home_page, &HomePage::open_account, this, &MainWindow::open_account);
 	connect(home_page, &HomePage::open_fund,    this, &MainWindow::open_fund);
 	connect(home_page, &HomePage::open_budget,  this, &MainWindow::open_budget);
 	connect(home_page, &HomePage::import_ofx,   this, &MainWindow::import_ofx);
-	connect(home_page, &HomePage::refresh,      this, &MainWindow::go_home);
-	home_page->initialize();
 	setCentralWidget(home_page);
 }
-void MainWindow::quit() {
+void MainWindow::on_quit() {
 	QApplication::quit();
 }
 
-void MainWindow::db_retry() {
-	open_database();
-}
-void MainWindow::db_migrate() {
-	if (database == nullptr || !database->is_connected()) {
-		FUNDOS_ASSERT(false, "Migrate was called on a non-existent or closed db");
-		return;
-	}
-	auto migrated = database->migrate();
-	on_result(migrated);
-	if (migrated) {
-		create_context();
+void MainWindow::on_migrate(fundos::db::outcome status) {
+	if (!status) {
+		QMessageBox::information(this, tr("Error"), tr("Migration failed."));
+	} else {
+		emit context_requested();
 	}
 }
 
@@ -203,6 +184,7 @@ static QMessageBox::StandardButton confirm_destruction(QWidget* parent) {
 		QMessageBox::Cancel
 	);
 }
+
 void MainWindow::db_backup() {
 	QString defaultName = QString("FundOS Backup %1.sqlite")
 		.arg(QDate::currentDate().toString("yyyy-MM-dd"));
@@ -214,27 +196,30 @@ void MainWindow::db_backup() {
 		tr("SQLite Database (*.sqlite)")
 	);
 	if (destination.isEmpty()) { return; }
-	QFile::remove(destination); // Delete the existing file
+	emit db_backup_requested(destination);
+}
 
-	if (database && database->is_connected()) {
-		// Shows a message box on failure, loads an error page if the database is closed as a result
-		on_result(database->backup(destination.toStdString()));
+void MainWindow::on_backup_result(fundos::db::outcome status) {
+	if (status) {
+		QMessageBox::information(this, tr("Success"), "Backup Created");
 	} else {
-		if (!QFile::copy(db_path, destination)) {
-			QMessageBox::critical(this, tr("Backup Error"), tr("Could not export database file."));
-		}
+		QMessageBox::information(this, tr("Error"), "Backup Failed");
 	}
 }
+void MainWindow::on_backup_copy_failed() {
+	QMessageBox::critical(this, tr("Error"), "Backup could not be created");
+}
+
 void MainWindow::db_create_new() {
 	if (QMessageBox::Ok != confirm_destruction(this)) { return; }
-	if (database && database->is_connected()) {
-		database->close();
-	}
-	if (!QFile::remove(db_path)) {
+	emit db_create_new_requested();
+}
+void MainWindow::on_create_new(bool succeeded) {
+	if (succeeded) {
+		QMessageBox::information(this, tr("Success"), tr("Created new database."));
+	} else {
 		QMessageBox::critical(this, tr("Error"), tr("Could not delete the database file. Ensure it is not open in another program and that you have write permissions to the file."));
-		return;
 	}
-	open_database();
 }
 void MainWindow::db_restore() {
 	if (QMessageBox::Ok != confirm_destruction(this)) { return; }
@@ -246,33 +231,28 @@ void MainWindow::db_restore() {
 		tr("SQLite Database (*.sqlite *.db)")
 	);
 	if (source.isEmpty()) { return; }
-
-	bool was_open = false;
-	if (database && database->is_connected()) {
-		database->close();
-		was_open = true;
-	}
-	QString temp_path = db_path + ".tmp";
-	if (!QFile::rename(db_path, temp_path)) {
-		QMessageBox::critical(this, tr("Restore Error"), tr("Could not move existing database file."));
-		return;
-	}
-	if (!QFile::copy(source, db_path)) {
-		if (QFile::rename(temp_path, db_path)) { // best effort recovery
-			if (was_open) { open_database(); }
-		} else {
+	emit db_restore_requested(source);
+}
+void MainWindow::on_restore(AppDatabase::RestoreResult result) {
+	switch (result) {
+		case AppDatabase::RestoreResult::success:
+			QMessageBox::information(this, tr("Restore Success"), tr("Database Restoration Successful"));
+			return;
+		case AppDatabase::RestoreResult::failed_to_move:
+			QMessageBox::critical(this, tr("Restore Error"), tr("Could not move existing database file."));
+			return;
+		case AppDatabase::RestoreResult::failed_to_copy:
+			QMessageBox::critical(this, tr("Restore Error"), tr("Could not import database file."));
+			return;
+		case AppDatabase::RestoreResult::data_at_risk:
 			QMessageBox::critical(this, tr("Restore Error"), tr("Could not recover original database file. Your data may be at risk."));
-		}
-		QMessageBox::critical(this, tr("Restore Error"), tr("Could not import database file."));
-		return;
+			return;
 	}
-	QFile::remove(temp_path);
-	open_database();
 }
 
 void MainWindow::db_manage_locale() {
-	if (context == nullptr) { return; }
-	open_locale_page(context->currency, context->percentage);
+	auto context = coordinator->context();
+	open_locale_page(context->optional_currency_locale(), context->optional_percentage_locale());
 }
 
 void MainWindow::import_ofx() {
@@ -280,8 +260,7 @@ void MainWindow::import_ofx() {
 }
 
 void MainWindow::open_account(const fundos::account& opening) {
-	auto account_page = new AccountPage(context, opening, this);
-	connect(account_page, &AccountPage::db_outcome, this, &MainWindow::on_result);
+	auto account_page = new AccountPage(coordinator, opening, this);
 	connect(account_page, &AccountPage::go_home,    this, &MainWindow::go_home);
 	connect(account_page, &AccountPage::import_ofx, this, &MainWindow::import_ofx);
 	setCentralWidget(account_page);

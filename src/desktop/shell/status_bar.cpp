@@ -36,8 +36,6 @@ StatusBar::StatusBar(QWidget* parent) : QStatusBar(parent) {
 }
 
 void StatusBar::apply_ready() {
-	FUNDOS_ASSERT(database != nullptr,  "apply_ready called with no database");
-	FUNDOS_ASSERT(database->is_ready(), "apply_ready called but database reports not ready");
 	dot->setStyleSheet(QString("background: %1; border-radius: 5px;").arg(theme::success_foreground.name()));
 	text->setText(tr("ready"));
 }
@@ -53,29 +51,23 @@ void StatusBar::apply_red(const QString& message) {
 }
 
 void StatusBar::apply_error(const QString& message) {
-	if (database == nullptr || !database->is_connected()) {
+	if (!is_connected) {
 		apply_red(message);
-		return;
+	} else {
+		apply_yellow(message);
 	}
-	apply_yellow(message);
 }
 
-void StatusBar::set_database(std::shared_ptr<fundos::db> db) {
-	database = db;
+void StatusBar::on_db_open(fundos::db::status open_result) {
 	text->setToolTip({});
-	db_button->setEnabled(database != nullptr && database->is_connected());
-
-	if (database == nullptr) {
-		return apply_red(tr("disconnected"));
-	}
+	is_connected = !open_result.has_error();
+	db_button->setEnabled(is_connected);
 
 	using code = fundos::db::status::code;
 	using schema = fundos::db::schema_state;
 	using error = fundos::db::error;
 
-	const auto& status = database->get_status();
-
-	switch (status.result) {
+	switch (open_result.result) {
 		case code::ok:
 			return apply_ready();
 		case code::needs_migration:
@@ -83,7 +75,7 @@ void StatusBar::set_database(std::shared_ptr<fundos::db> db) {
 		case code::null_db:
 			return apply_error(tr("db error: null"));
 		case code::schema_error: {
-			switch (status.schema_status) {
+			switch (open_result.schema_status) {
 				case schema::newer_schema:
 					return apply_error(tr("database requires a newer version of fundos"));
 				case schema::schema_mismatch:
@@ -91,19 +83,21 @@ void StatusBar::set_database(std::shared_ptr<fundos::db> db) {
 				case schema::app_mismatch:
 					return apply_error(tr("unrecognized database file"));
 				default:
-					return apply_error(tr("schema error code: ") + QString::number(static_cast<int>(status.schema_status)));
+					return apply_error(tr("schema error code: ") + QString::number(static_cast<int>(open_result.schema_status)));
 			}
 		}
 		case code::sqlite3_error: {
-			if (status.sqlite3_outcome.msg.has_value()) {
-				const auto& view = status.sqlite3_outcome.msg->view();
+			if (open_result.sqlite3_outcome.msg.has_value()) {
+				const auto& view = open_result.sqlite3_outcome.msg->view();
 				text->setToolTip(QString::fromUtf8(view.data(), view.size()));
 			}
-			switch (status.sqlite3_outcome.code) {
+			switch (open_result.sqlite3_outcome.code) {
 				case error::corrupted:
 					return apply_error(tr("database is corrupted"));
 				case error::unavailable:
 					return apply_error(tr("database unavailable"));
+				case error::inaccessible:
+					return apply_error(tr("could not open the database"));
 				case error::readonly:
 					return apply_error(tr("database is read-only"));
 				case error::out_of_memory:
@@ -113,7 +107,7 @@ void StatusBar::set_database(std::shared_ptr<fundos::db> db) {
 				case error::internal:
 					return apply_error(tr("unexpected internal error"));
 				default:
-					return apply_error(tr("db error code: ") + QString::number(static_cast<int>(status.sqlite3_outcome.code)));
+					return apply_error(tr("db error code: ") + QString::number(static_cast<int>(open_result.sqlite3_outcome.code)));
 			}
 		}
 	}
@@ -121,13 +115,13 @@ void StatusBar::set_database(std::shared_ptr<fundos::db> db) {
 
 void StatusBar::set_status(const fundos::db::outcome& outcome) {
 	text->setToolTip({});
-	db_button->setEnabled(database != nullptr && database->is_connected());
+	if (outcome.code == fundos::db::error::corrupted || outcome.code == fundos::db::error::internal) {
+		is_connected = false;
+		db_button->setEnabled(false);
+	}
 
 	QString disconnected;
-	if (database == nullptr) {
-		return apply_red(tr("disconnected"));
-	}
-	if (!database->is_connected()) {
+	if (!is_connected) {
 		disconnected = tr("disconnected") + ": ";
 	}
 
@@ -179,9 +173,9 @@ static QString format_size(int64_t bytes) {
 }
 
 void StatusBar::show_db_menu() {
-	QMenu menu(this);
+	auto* menu = new QMenu(this);
 	auto add_section_header = [&](const QString& title) {
-		auto* widget = new QWidget(&menu);
+		auto* widget = new QWidget(menu);
 		auto* layout = new QHBoxLayout(widget);
 		layout->setContentsMargins(8, 6, 16, 2);
 
@@ -193,49 +187,66 @@ void StatusBar::show_db_menu() {
 
 		layout->addWidget(label);
 
-		auto* action = new QWidgetAction(&menu);
+		auto* action = new QWidgetAction(menu);
 		action->setDefaultWidget(widget);
-		menu.addAction(action);
+		menu->addAction(action);
 	};
-	auto add_info_row = [&](const QString& key, const QString& value) {
-		auto* widget = new QWidget(&menu);
+	auto add_info_row = [&](const QString& key, QLabel** value_label) {
+		auto* widget = new QWidget(menu);
 		auto* layout = new QHBoxLayout(widget);
 		layout->setContentsMargins(16, 4, 16, 4);
 
 		auto* key_label = new QLabel(key, widget);
-		auto* value_label = new QLabel(value, widget);
-		value_label->setAlignment(Qt::AlignRight);
+		*value_label = new QLabel(widget);
+
+		// Minimum width is derived from the longest value we expect to display (a size like "123.4 MB").
+		// The label starts empty; on_db_info fills it once the database thread responds.
+		(*value_label)->setMinimumWidth((*value_label)->fontMetrics().horizontalAdvance(tr("123.4 MB")));
+		(*value_label)->setAlignment(Qt::AlignRight);
 
 		layout->addWidget(key_label);
-		layout->addWidget(value_label);
+		layout->addWidget(*value_label);
 
-		auto* action = new QWidgetAction(&menu);
+		auto* action = new QWidgetAction(menu);
 		action->setDefaultWidget(widget);
-		menu.addAction(action);
+		menu->addAction(action);
 	};
 
 	// DATABASE section
 	add_section_header(tr("DATABASE"));
-	add_info_row(tr("size on disk"), format_size(database->size_on_disk()));
-	add_info_row(tr("journal mode"), QString::fromStdString(database->get_status().journal_mode));
-	add_info_row(tr("schema version"), QString::number(database->schema_version()));
+	add_info_row(tr("size on disk"),   &info_size);
+	add_info_row(tr("journal mode"),   &info_journal);
+	add_info_row(tr("schema version"), &info_schema);
 
 	// ACTIONS section
 	add_section_header(tr("ACTIONS"));
-	connect(menu.addAction(tr("Manage Locale...")), &QAction::triggered, this, &StatusBar::manage_locale_requested);
-	connect(menu.addAction(tr("Back Up Database...")), &QAction::triggered, this, &StatusBar::backup_requested);
+	connect(menu->addAction(tr("Manage Locale...")), &QAction::triggered, this, &StatusBar::manage_locale_requested);
+	connect(menu->addAction(tr("Back Up Database...")), &QAction::triggered, this, &StatusBar::backup_requested);
 
-	menu.addSeparator();
-	auto* restore_action = menu.addAction(tr("Restore from Backup..."));
+	menu->addSeparator();
+	auto* restore_action = menu->addAction(tr("Restore from Backup..."));
 	restore_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning_foreground, icon_size));
 	connect(restore_action, &QAction::triggered, this, &StatusBar::restore_requested);
 
-	auto* replace_action = menu.addAction(tr("Replace with New Database..."));
+	auto* replace_action = menu->addAction(tr("Replace with New Database..."));
 	replace_action->setIcon(theme::colored_svg_icon(":/icons/alert-triangle.svg", theme::warning_foreground, icon_size));
 	connect(replace_action, &QAction::triggered, this, &StatusBar::create_new_requested);
 
-	menu.adjustSize();
-	menu.exec(db_button->mapToGlobal(
-		db_button->rect().topRight() - QPoint(menu.width(), menu.height())
+	connect(menu, &QMenu::aboutToHide, this, [this]() {
+		info_size    = nullptr;
+		info_journal = nullptr;
+		info_schema  = nullptr;
+	});
+
+	emit db_info_requested();
+	menu->adjustSize();
+	menu->exec(db_button->mapToGlobal(
+		db_button->rect().topRight() - QPoint(menu->width(), menu->height())
 	));
+}
+
+void StatusBar::on_db_info(AppDatabase::DatabaseInfo info) {
+	if (info_size)    { info_size->setText(format_size(info.size_on_disk)); }
+	if (info_journal) { info_journal->setText(QString::fromStdString(info.journal_mode)); }
+	if (info_schema)  { info_schema->setText(QString::number(info.schema_version)); }
 }

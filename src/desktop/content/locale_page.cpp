@@ -23,7 +23,7 @@ void LocalePage::setup_layout(bool can_cancel) {
 
 	if (can_cancel) {
 		auto* cancel_button = new QPushButton(tr("&Cancel"), actions);
-		connect(cancel_button, &QPushButton::clicked, this, &LocalePage::done);
+		connect(cancel_button, &QPushButton::clicked, this, &LocalePage::cancelled);
 		actions_layout->addWidget(cancel_button);
 	}
 
@@ -170,11 +170,10 @@ void LocalePage::setup_layout(bool can_cancel) {
 }
 
 LocalePage::LocalePage(
-	std::shared_ptr<fundos::db>      db,
 	std::optional<currency_locale>   current_currency,
 	std::optional<percentage_locale> current_percentage,
 	QWidget* parent
-) : QWidget(parent), database(std::move(db)) {
+) : QWidget(parent) {
 	setup_layout(current_currency.has_value() && current_percentage.has_value());
 	if (!current_currency.has_value()) {
 		current_currency = currency_locale(&fundos::currency_locale::locales.named.USD);
@@ -182,7 +181,8 @@ LocalePage::LocalePage(
 	if (!current_percentage.has_value()) {
 		current_percentage = percentage_locale(&fundos::percentage_locale::locales.named.en);
 	}
-// Populate currency combo
+
+	// Populate currency combo
 	for (std::size_t i = 0; i < fundos::currency_locale::num_locales; i++) {
 		const auto& entry = fundos::currency_locale::locales.entries[i];
 		currency_combo->addItem(QString::fromUtf8(entry.identifier), QVariant::fromValue(static_cast<int>(i)));
@@ -272,33 +272,27 @@ void LocalePage::on_confirm() {
 		QMessageBox::information(this, tr("Invalid Input"), tr("Currency symbol is limited to 4 characters (some international characters count as 2 or more)"));
 		return;
 	}
+
 	int currency_index = currency_combo->currentData().toInt();
-	if (currency_index == -1) {
-		auto custom = currency_locale(currency_fields);
-		auto saved = database->set_currency_locale(custom);
-		emit db_outcome(saved);
-		if (!saved) { return; }
-	} else {
-		auto preset = currency_locale(&fundos::currency_locale::locales.entries[currency_index]);
-		auto saved = database->set_currency_locale(preset);
-		emit db_outcome(saved);
-		if (!saved) { return; }
-	}
+	fundos::currency_locale::selection currency
+		= currency_index == -1
+		? currency_locale(currency_fields)
+		: currency_locale(&fundos::currency_locale::locales.entries[currency_index]);
 
 	int percentage_index = percentage_combo->currentData().toInt();
-	if (percentage_index == -1) {
-		auto custom = percentage_locale(percentage_fields);
-		auto saved = database->set_percentage_locale(custom);
-		emit db_outcome(saved);
-		if (!saved) { return; }
-	} else {
-		auto preset = percentage_locale(&fundos::percentage_locale::locales.entries[percentage_index]);
-		auto saved = database->set_percentage_locale(preset);
-		emit db_outcome(saved);
-		if (!saved) { return; }
-	}
+	fundos::percentage_locale::selection percentage
+		= percentage_index == -1
+		? percentage_locale(percentage_fields)
+		: percentage_locale(&fundos::percentage_locale::locales.entries[percentage_index]);
 
-	emit done();
+	pending_locales = { currency, percentage };
+	emit save_requested(currency, percentage);
+}
+
+void LocalePage::on_save_result(fundos::db::outcome outcome) {
+	if (outcome && pending_locales) {
+		emit saved(pending_locales->first, pending_locales->second);
+	}
 }
 
 void LocalePage::on_currency_preset() {
