@@ -168,14 +168,16 @@ struct budget_phase : db_managed {
 		FUNDOS_UNREACHABLE();
 	}
 
+#pragma region Const Accessors
+
 	///-------------------------------------------------------------------------------------------------------------------+
 	/// Finds the first target satisfying the predicate.                                                                  |
 	/// @param on_target Called with (position, target*); return true to stop iteration early.                            |
 	/// @return Pointer to the first target for which on_target returned true, or nullptr.                                |
 	///-------------------------------------------------------------------------------------------------------------------+
-	inline TargetType* find_target(std::function<bool(int, TargetType*)> on_target) {
+	inline const TargetType* find_target(std::function<bool(int, const TargetType*)> on_target) const {
 		int position = 0;
-		for (auto& target : targets) {
+		for (const auto& target : targets) {
 			if (on_target(position, &target)) { return &target; }
 			++position;
 		}
@@ -186,12 +188,41 @@ struct budget_phase : db_managed {
 	/// Visits every target in their defined order.                                                                       |
 	/// @param on_target Called with (position, target*) for every target.                                                |
 	///-------------------------------------------------------------------------------------------------------------------+
-	inline void each_target(std::function<void(int, TargetType*)> on_target) {
-		find_target([&](int position, TargetType* target) {
+	inline void each_target(std::function<void(int, const TargetType*)> on_target) const {
+		find_target([&](int position, const TargetType* target) {
 			on_target(position, target);
 			return false;
 		});
 	}
+
+#pragma endregion
+#pragma region NonConst Accessors
+
+	///-------------------------------------------------------------------------------------------------------------------+
+	/// Finds the first target satisfying the predicate.                                                                  |
+	/// @param on_target Called with (position, target*); return true to stop iteration early.                            |
+	/// @return Pointer to the first target for which on_target returned true, or nullptr.                                |
+	///-------------------------------------------------------------------------------------------------------------------+
+	inline TargetType* find_target(std::function<bool(int, TargetType*)> on_target) {
+		const auto* self = this;
+		const TargetType* result = self->find_target([&](int position, const TargetType* target) {
+			return on_target(position, const_cast<TargetType*>(target));
+		});
+		return const_cast<TargetType*>(result);
+	}
+
+	///-------------------------------------------------------------------------------------------------------------------+
+	/// Visits every target in their defined order.                                                                       |
+	/// @param on_target Called with (position, target*) for every target.                                                |
+	///-------------------------------------------------------------------------------------------------------------------+
+	inline void each_target(std::function<void(int, TargetType*)> on_target) {
+		const auto* self = this;
+		self->each_target([&](int position, const TargetType* target) {
+			on_target(position, const_cast<TargetType*>(target));
+		});
+	}
+
+#pragma endregion
 
 	///-------------------------------------------------------------------------------------------------------------------+
 	/// Moves target to immediately before before_target in the defined order.                                            |
@@ -231,14 +262,16 @@ struct budget : db_managed {
 	int64_t overflow_fund = 0;
 	std::list<any_budget_phase> phases;
 
+#pragma region Const Accessors
+
 	///-------------------------------------------------------------------------------------------------------------------+
-	/// Iterates phases in their defined order, passing each as an any_budget_phase* to on_phase.                         |
+	/// Iterates phases in their defined order, passing each as a const any_budget_phase* to on_phase.                    |
 	/// @param on_phase Called with (position, phase*); return true to stop iteration early.                              |
 	/// @return Pointer to the first phase for which on_phase returned true, or nullptr.                                  |
 	///-------------------------------------------------------------------------------------------------------------------+
-	inline any_budget_phase* find_phase(std::function<bool(int, any_budget_phase*)> on_phase) {
+	inline const any_budget_phase* find_phase(std::function<bool(int, const any_budget_phase*)> on_phase) const {
 		int position = 0;
-		for (auto& phase : phases) {
+		for (const auto& phase : phases) {
 			if (on_phase(position, &phase)) { return &phase; }
 			++position;
 		}
@@ -251,13 +284,13 @@ struct budget : db_managed {
 	/// @param on_percentage Called with (position, phase*) for percentage phases; return true to stop iteration early.   |
 	/// @return Pointer to the first phase for which either visitor returned true, or nullptr.                            |
 	///-------------------------------------------------------------------------------------------------------------------+
-	inline any_budget_phase* find_phase(
-		std::function<bool(int, budget_phase<fixed_target>*)> on_fixed,
-		std::function<bool(int, budget_phase<percentage_target>*)> on_percentage
-	) {
-		return find_phase([&](int position, any_budget_phase* phase) -> bool {
+	inline const any_budget_phase* find_phase(
+		std::function<bool(int, const budget_phase<fixed_target>*)> on_fixed,
+		std::function<bool(int, const budget_phase<percentage_target>*)> on_percentage
+	) const {
+		return find_phase([&](int position, const any_budget_phase* phase) -> bool {
 			bool stop = false;
-			std::visit([&](auto& typed_phase) {
+			std::visit([&](const auto& typed_phase) {
 				using T = std::decay_t<decltype(typed_phase)>;
 				if constexpr (std::is_same_v<T, budget_phase<fixed_target>>) {
 					stop = on_fixed(position, &typed_phase);
@@ -272,13 +305,80 @@ struct budget : db_managed {
 	}
 
 	///-------------------------------------------------------------------------------------------------------------------+
+	/// Visits every phase in their defined order, passing each as a const any_budget_phase* to on_phase.                 |
+	/// @param on_phase Called with (position, phase*) for every phase.                                                   |
+	///-------------------------------------------------------------------------------------------------------------------+
+	inline void each_phase(std::function<void(int, const any_budget_phase*)> on_phase) const {
+		find_phase([&](int position, const any_budget_phase* phase) {
+			on_phase(position, phase);
+			return false;
+		});
+	}
+
+	///-------------------------------------------------------------------------------------------------------------------+
+	/// Visits every phase in their defined order, dispatching to on_fixed or on_percentage based on each phase's type.   |
+	/// @param on_fixed Called with (position, phase*) for every fixed phase.                                             |
+	/// @param on_percentage Called with (position, phase*) for every percentage phase.                                   |
+	///-------------------------------------------------------------------------------------------------------------------+
+	inline void each_phase(
+		std::function<void(int, const budget_phase<fixed_target>*)> on_fixed,
+		std::function<void(int, const budget_phase<percentage_target>*)> on_percentage
+	) const {
+		find_phase([&](int position, const budget_phase<fixed_target>* phase) {
+			on_fixed(position, phase);
+			return false;
+		}, [&](int position, const budget_phase<percentage_target>* phase) {
+			on_percentage(position, phase);
+			return false;
+		});
+	}
+
+#pragma endregion
+#pragma region NonConst Accessors
+
+	///-------------------------------------------------------------------------------------------------------------------+
+	/// Iterates phases in their defined order, passing each as an any_budget_phase* to on_phase.                         |
+	/// @param on_phase Called with (position, phase*); return true to stop iteration early.                              |
+	/// @return Pointer to the first phase for which on_phase returned true, or nullptr.                                  |
+	///-------------------------------------------------------------------------------------------------------------------+
+	inline any_budget_phase* find_phase(std::function<bool(int, any_budget_phase*)> on_phase) {
+		const budget* self = this;
+		const any_budget_phase* result = self->find_phase([&](int position, const any_budget_phase* phase) {
+			return on_phase(position, const_cast<any_budget_phase*>(phase));
+		});
+		return const_cast<any_budget_phase*>(result);
+	}
+
+	///-------------------------------------------------------------------------------------------------------------------+
+	/// Iterates phases in their defined order, dispatching to on_fixed or on_percentage based on each phase's type.      |
+	/// @param on_fixed Called with (position, phase*) for fixed phases; return true to stop iteration early.             |
+	/// @param on_percentage Called with (position, phase*) for percentage phases; return true to stop iteration early.   |
+	/// @return Pointer to the first phase for which either visitor returned true, or nullptr.                            |
+	///-------------------------------------------------------------------------------------------------------------------+
+	inline any_budget_phase* find_phase(
+		std::function<bool(int, budget_phase<fixed_target>*)> on_fixed,
+		std::function<bool(int, budget_phase<percentage_target>*)> on_percentage
+	) {
+		const budget* self = this;
+		const any_budget_phase* result = self->find_phase(
+			[&](int position, const budget_phase<fixed_target>* phase) {
+				return on_fixed(position, const_cast<budget_phase<fixed_target>*>(phase));
+			},
+			[&](int position, const budget_phase<percentage_target>* phase) {
+				return on_percentage(position, const_cast<budget_phase<percentage_target>*>(phase));
+			}
+		);
+		return const_cast<any_budget_phase*>(result);
+	}
+
+	///-------------------------------------------------------------------------------------------------------------------+
 	/// Visits every phase in their defined order, passing each as an any_budget_phase* to on_phase.                      |
 	/// @param on_phase Called with (position, phase*) for every phase.                                                   |
 	///-------------------------------------------------------------------------------------------------------------------+
 	inline void each_phase(std::function<void(int, any_budget_phase*)> on_phase) {
-		find_phase([&](int position, any_budget_phase* phase) {
-			on_phase(position, phase);
-			return false;
+		const budget* self = this;
+		self->each_phase([&](int position, const any_budget_phase* phase) {
+			on_phase(position, const_cast<any_budget_phase*>(phase));
 		});
 	}
 
@@ -291,14 +391,18 @@ struct budget : db_managed {
 		std::function<void(int, budget_phase<fixed_target>*)> on_fixed,
 		std::function<void(int, budget_phase<percentage_target>*)> on_percentage
 	) {
-		find_phase([&](int position, budget_phase<fixed_target>* phase) {
-			on_fixed(position, phase);
-			return false;
-		}, [&](int position, budget_phase<percentage_target>* phase) {
-			on_percentage(position, phase);
-			return false;
-		});
+		const budget* self = this;
+		self->each_phase(
+			[&](int position, const budget_phase<fixed_target>* phase) {
+				on_fixed(position, const_cast<budget_phase<fixed_target>*>(phase));
+			},
+			[&](int position, const budget_phase<percentage_target>* phase) {
+				on_percentage(position, const_cast<budget_phase<percentage_target>*>(phase));
+			}
+		);
 	}
+
+#pragma endregion
 
 	///-------------------------------------------------------------------------------------------------------------------+
 	/// Moves phase to immediately before before_phase in the defined order.                                              |
@@ -334,13 +438,11 @@ struct budget : db_managed {
 	/// - fixed phases claim a set amount from the remainder.                                                             |
 	/// - percentage phases claim a percentage of the remainder at the point they run.                                    |
 	/// Any unclaimed remainder (or negative remainder) goes to the overflow fund.                                        |
-	/// @note Not marked const because that would require duplicating find/each.                                          |
-	///       This function does not modify the budget.                                                                   |
 	/// @param transaction The transaction to allocate; must already be persisted.                                        |
 	/// @param current_balances Current balance per fund_id, used to enforce caps.                                        |
 	/// @return One allocation per fund that received a nonzero amount.                                                   |
 	///-------------------------------------------------------------------------------------------------------------------+
-	inline std::vector<allocation> apply(const transaction& transaction, const std::unordered_map<int64_t, currency>& current_balances) {
+	inline std::vector<allocation> apply(const transaction& transaction, const std::unordered_map<int64_t, currency>& current_balances) const {
 		// unordered_map operator[] default constructs currency{} on non-existent keys
 		std::unordered_map<int64_t, currency> allocations;
 		currency remainder = transaction.amount;
@@ -367,13 +469,13 @@ struct budget : db_managed {
 		};
 
 		// phase ordering is user-defined; fixed and percentage phases may be interleaved
-		each_phase([&](int, budget_phase<fixed_target>* phase) -> void {
-			phase->each_target([&](int, fixed_target* target) -> void {
+		each_phase([&](int, const budget_phase<fixed_target>* phase) -> void {
+			phase->each_target([&](int, const fixed_target* target) -> void {
 				allocate(target, target->amount);
 			});
-		}, [&](int, budget_phase<percentage_target>* phase) -> void {
+		}, [&](int, const budget_phase<percentage_target>* phase) -> void {
 			currency phase_balance = remainder.minor_units < 0 ? currency{0} : remainder;
-			phase->each_target([&](int, percentage_target* target) -> void {
+			phase->each_target([&](int, const percentage_target* target) -> void {
 				allocate(target, target->amount.scale(phase_balance));
 			});
 		});
