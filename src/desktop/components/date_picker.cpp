@@ -708,6 +708,16 @@ void DatePicker::set_date(QDate value) {
 	emit updated(value);
 }
 
+void DatePicker::set_enabled(bool value) {
+	enabled = value;
+	section_widget->setEnabled(value);
+	calendar_button->setEnabled(value);
+	if (!value && popup->isVisible()) {
+		popup->hide();
+	}
+	update();
+}
+
 void DatePicker::open_popup() {
 	popup->show_for_date(picked_date);
 	popup->move(mapToGlobal(rect().bottomLeft()));
@@ -740,6 +750,10 @@ void DatePicker::paintEvent(QPaintEvent*) {
 	painter.setPen(QPen(border_color, 1));
 	painter.setBrush(theme::surface);
 	painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 4, 4);
+
+	if (!enabled) {
+		painter.fillRect(rect(), QColor(0, 0, 0, 60));
+	}
 }
 
 void DatePicker::enterEvent(QEnterEvent*) {

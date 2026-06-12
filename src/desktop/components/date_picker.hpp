@@ -22,6 +22,7 @@ class DatePicker : public QWidget {
 
 	bool hovered = false;
 	bool is_active = false;
+	bool enabled = true;
 	void set_active(bool value);
 
 	bool eventFilter(QObject*, QEvent*) override;
@@ -35,6 +36,7 @@ public:
 
 	QDate date() const;
 	void set_date(QDate value);
+	void set_enabled(bool value);
 
 signals:
 	void updated(QDate value);
