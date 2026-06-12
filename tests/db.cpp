@@ -898,20 +898,17 @@ TEST(DbQuery, AccountHistory_ClearedAndPending) {
 	).c_str(), nullptr, nullptr, nullptr);
 	ASSERT_EQ(rc, SQLITE_OK);
 
-	auto pending = database->account_pending(1, date(2026, std::chrono::February, 1), date(2026, std::chrono::March, 1));
 	auto history = database->account_history(1, date(2026, std::chrono::February, 1), date(2026, std::chrono::March, 1));
 	ASSERT_TRUE(static_cast<bool>(history));
-	ASSERT_TRUE(static_cast<bool>(pending));
 
 	ASSERT_EQ(history.value().ledger_balances.size(), 0);
-	ASSERT_EQ(history.value().transactions.size(), 1);
-	ASSERT_EQ(pending.value().transactions.size(), 1);
+	ASSERT_EQ(history.value().transactions.size(), 2);
 
 	ASSERT_EQ(history.value().transactions[0].record.id(), 3);
 	ASSERT_EQ(history.value().transactions[0].account_balance, currency{122});
 	
-	ASSERT_EQ(pending.value().transactions[0].record.id(), 4);
-	ASSERT_EQ(pending.value().transactions[0].account_balance, currency{210});
+	ASSERT_EQ(history.value().transactions[1].record.id(), 4);
+	ASSERT_EQ(history.value().transactions[1].account_balance, currency{210});
 }
 
 TEST(DbQuery, FundHistory_Basic) {
