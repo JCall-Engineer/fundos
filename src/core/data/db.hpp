@@ -378,17 +378,13 @@ public:
 	struct transaction_history {
 		struct allocated_transaction {
 			transaction record;
+			datetime effective_date;
 			currency account_balance;
 			std::vector<allocation> allocations;
 		};
 
 		std::vector<allocated_transaction> transactions;
 		std::vector<import_ledger_balance> ledger_balances;
-	};
-
-	/// Return type for account_pending; groups uncleared transactions with projected balances and allocations.
-	struct pending_transactions {
-		std::vector<transaction_history::allocated_transaction> transactions;
 	};
 
 	/// Result type for fund-level transaction views over a specified date range.
@@ -403,7 +399,6 @@ public:
 		std::vector<allocated_transaction> transactions;
 	};
 
-	result<pending_transactions> account_pending(int64_t account_id, datetime after, datetime before);
 	result<transaction_history>  account_history(int64_t account_id, datetime after, datetime before);
 	result<allocation_history>   fund_history(int64_t fund_id, datetime after, datetime before);
 

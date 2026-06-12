@@ -280,36 +280,21 @@ struct statements {
 		VALUES (?, ?, ?)
 	)sql" };
 
-	statement_slot filter_cleared_transactions { .sql = R"sql(
-		WITH all_cleared AS (
+	statement_slot filter_transactions { .sql = R"sql(
+		WITH params AS (
 			SELECT
-				id,
-				amount,
-				date_recorded,
-				memo,
-				date_reconciled,
-				fitid,
-				date_cleared,
-				corrects_fitid,
-				correct_action,
-				corrects_id,
-				superseded_by,
-				SUM(amount) OVER (ORDER BY COALESCE(date_reconciled, date_cleared) ROWS UNBOUNDED PRECEDING) AS account_balance
-			FROM transactions
-			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NOT NULL AND superseded_by IS NULL
-		)
-		SELECT * FROM all_cleared
-		WHERE COALESCE(date_reconciled, date_cleared) BETWEEN ? AND ?
-		ORDER BY COALESCE(date_reconciled, date_cleared)
-	)sql" };
-
-	statement_slot filter_pending_transactions { .sql = R"sql(
-		WITH cleared_total AS (
-			SELECT COALESCE(SUM(amount), 0) AS total
-			FROM transactions
-			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NOT NULL AND superseded_by IS NULL
+				? AS account_id,
+				? AS range_start,
+				? AS range_end
 		),
-		all_pending AS (
+		cleared_total AS (
+			SELECT COALESCE(SUM(amount), 0) AS total
+			FROM transactions, params
+			WHERE account_id = params.account_id
+				AND COALESCE(date_reconciled, date_cleared) IS NOT NULL
+				AND superseded_by IS NULL
+		),
+		all_transactions AS (
 			SELECT
 				id,
 				amount,
@@ -322,13 +307,40 @@ struct statements {
 				correct_action,
 				corrects_id,
 				superseded_by,
-				(SELECT total FROM cleared_total) + SUM(amount) OVER (ORDER BY date_recorded ROWS UNBOUNDED PRECEDING) AS account_balance
-			FROM transactions
-			WHERE account_id = ? AND COALESCE(date_reconciled, date_cleared) IS NULL AND superseded_by IS NULL
+				CASE
+					WHEN COALESCE(date_reconciled, date_cleared) IS NOT NULL THEN 0
+					ELSE 1
+				END AS is_pending,
+				COALESCE(date_reconciled, date_cleared, date_recorded) AS effective_date
+			FROM transactions, params
+			WHERE account_id = params.account_id
+				AND superseded_by IS NULL
+		),
+		with_balance AS (
+			SELECT
+				all_transactions.*,
+				CASE
+					WHEN is_pending = 0 THEN
+						SUM(amount) OVER (
+							PARTITION BY is_pending
+							ORDER BY effective_date
+							ROWS UNBOUNDED PRECEDING
+						)
+					ELSE
+						(SELECT total FROM cleared_total) +
+						SUM(amount) OVER (
+							PARTITION BY is_pending
+							ORDER BY date_recorded
+							ROWS UNBOUNDED PRECEDING
+						)
+				END AS account_balance
+			FROM all_transactions
 		)
-		SELECT * FROM all_pending
-		WHERE date_recorded BETWEEN ? AND ?
-		ORDER BY date_recorded
+		SELECT * FROM with_balance
+		WHERE
+			(is_pending = 0 AND effective_date BETWEEN (SELECT range_start FROM params) AND (SELECT range_end FROM params)) OR
+			(is_pending = 1 AND date_recorded BETWEEN (SELECT range_start FROM params) AND (SELECT range_end FROM params))
+		ORDER BY effective_date, is_pending
 	)sql" };
 
 	statement_slot filter_allocations { .sql = R"sql(
@@ -1724,63 +1736,10 @@ db::outcome db::allocate_transaction(std::vector<allocation>& allocations) {
 	});
 }
 
-db::result<db::pending_transactions> db::account_pending(int64_t account_id, datetime after, datetime before) {
-	using transaction = transaction_history::allocated_transaction;
-	auto fetched_transactions = sql_fetch_many<transaction>(
-		prepared->named.filter_pending_transactions.statement,
-		[&](sqlite3_stmt* stmt) -> void {
-			sqlite3_bind_int64(stmt, 1, account_id);
-			sqlite3_bind_int64(stmt, 2, account_id);
-			sqlite3_bind_int64(stmt, 3, after.milliseconds_since_epoch);
-			sqlite3_bind_int64(stmt, 4, before.milliseconds_since_epoch);
-		},
-		[&](sqlite3_stmt* stmt) -> transaction {
-			transaction out;
-			out.record.account_id      =                                         account_id;
-			out.record.id_             =                                         sqlite3_column_int64  (stmt, 0);
-			out.record.amount          =                               currency {sqlite3_column_int64  (stmt, 1)};
-			out.record.date_recorded   =                               datetime {sqlite3_column_int64  (stmt, 2)};
-			out.record.memo            =                                         extract_text          (stmt, 3);
-			out.record.date_reconciled =                   as_optional<datetime>(extract_optional_int64(stmt, 4));
-			out.record.fitid           =                                         extract_optional_text (stmt, 5);
-			out.record.date_cleared    =                   as_optional<datetime>(extract_optional_int64(stmt, 6));
-			out.record.corrects_fitid  =                                         extract_optional_text (stmt, 7);
-			out.record.correct_action  = optional_string_to_enum(correction_map, extract_optional_text (stmt, 8));
-			out.record.corrects_id     =                                         extract_optional_int64(stmt, 9);
-			out.record.superseded_by   =                                         extract_optional_int64(stmt, 10);
-			out.account_balance        =                               currency {sqlite3_column_int64  (stmt, 11)};
-			return out;
-		}
-	);
-	if (!fetched_transactions) { return fetched_transactions.status(); }
-	for (auto &fetched_transaction : fetched_transactions.value()) {
-		auto fetched_allocations = sql_fetch_many<allocation>(
-			prepared->named.get_transaction_allocations.statement,
-			[&](sqlite3_stmt* stmt) -> void {
-				sqlite3_bind_int64(stmt, 1, fetched_transaction.record.id_);
-			},
-			[&](sqlite3_stmt* stmt) -> allocation {
-				allocation out;
-				out.transaction_id = fetched_transaction.record.id_;
-				out.id_     =          sqlite3_column_int64(stmt, 0);
-				out.fund_id =          sqlite3_column_int64(stmt, 1);
-				out.amount  = currency{sqlite3_column_int64(stmt, 2)};
-				return out;
-			}
-		);
-		if (!fetched_allocations) { return fetched_allocations.status(); }
-		fetched_transaction.allocations = std::move(fetched_allocations.value());
-	}
-
-	return pending_transactions{
-		.transactions = std::move(fetched_transactions.value()),
-	};
-}
-
 db::result<db::transaction_history> db::account_history(int64_t account_id, datetime after, datetime before) {
 	using transaction = transaction_history::allocated_transaction;
 	auto fetched_transactions = sql_fetch_many<transaction>(
-		prepared->named.filter_cleared_transactions.statement,
+		prepared->named.filter_transactions.statement,
 		[&](sqlite3_stmt* stmt) -> void {
 			sqlite3_bind_int64(stmt, 1, account_id);
 			sqlite3_bind_int64(stmt, 2, after.milliseconds_since_epoch);
@@ -1800,7 +1759,9 @@ db::result<db::transaction_history> db::account_history(int64_t account_id, date
 			out.record.correct_action  = optional_string_to_enum(correction_map, extract_optional_text (stmt, 8));
 			out.record.corrects_id     =                                         extract_optional_int64(stmt, 9);
 			out.record.superseded_by   =                                         extract_optional_int64(stmt, 10);
-			out.account_balance        =                               currency {sqlite3_column_int64  (stmt, 11)};
+			// is_pending can be derived from !record.date_cleared && !record.date_reconciled          (stmt, 11)
+			out.effective_date         =                               datetime {sqlite3_column_int64  (stmt, 12)};
+			out.account_balance        =                               currency {sqlite3_column_int64  (stmt, 13)};
 			return out;
 		}
 	);
