@@ -84,7 +84,7 @@ Active development: core library complete.
 |-------|------------------------------------|----------------|-------------------------------------------------------------------------|
 | 1     | Core library                       | ✅ Complete    |                                                                         |
 | 2     | OFX parser tests                   | 🔲 Planned     |                                                                         |
-| 3     | Qt desktop app                     | 🔲 Planned     | Windows and Linux, macOS testing pending access to a Mac                |
+| 3     | Qt desktop app                     | 🚧 In Progress | Windows and Linux, macOS testing pending access to a Mac                |
 | 4     | Android app (Kotlin)               | 🔲 Planned     |                                                                         |
 | 5     | iOS app (Swift)                    | 🔲 Planned     | Pending access to a Mac                                                 |
 | 6     | Cross-device sync                  | 🔲 Planned     | Significant undertaking; design TBD                                     |
