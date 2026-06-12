@@ -11,6 +11,12 @@ AccountPage::AccountPage(
 	fundos::account opening,
 	QWidget *parent
 ) : QWidget(parent), app_coordinator(std::move(coordinator)), record(std::move(opening)) {
+	auto* database = app_coordinator->database();
+	connect(this,     &AccountPage::save_account_requested,   database, &AppDatabase::save_account);
+	connect(this,     &AccountPage::history_requested,        database, &AppDatabase::request_account_history);
+	connect(database, &AppDatabase::account_saved,            this,     &AccountPage::on_account_saved);
+	connect(database, &AppDatabase::account_history_received, this,     &AccountPage::on_history);
+
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(0);
@@ -117,7 +123,7 @@ AccountPage::AccountPage(
 		auto* history_scroll = new QScrollArea(this);
 		history_scroll->setWidgetResizable(true);
 
-		auto* history_panel = new QWidget();
+		history_panel = new QWidget();
 		history_scroll->setWidget(history_panel);
 
 		history_layout = new QVBoxLayout(history_panel);
@@ -127,10 +133,6 @@ AccountPage::AccountPage(
 
 		layout->addWidget(history_scroll, 1);
 	}
-
-	auto* database = app_coordinator->database();
-	connect(this,     &AccountPage::save_account_requested, database, &AppDatabase::save_account);
-	connect(database, &AppDatabase::account_saved,          this,     &AccountPage::on_account_saved);
 }
 
 void AccountPage::rename(QString name) {
@@ -206,14 +208,18 @@ void AccountPage::on_account_saved(fundos::db::outcome saved) {
 	update_open_close_button();
 }
 
-void AccountPage::fetch_history() {
-	if (loading_preset_date_range) { return; }
+void AccountPage::clear_history() {
 	while (QLayoutItem* item = history_layout->takeAt(0)) {
 		delete item->widget();
 		delete item;
 	}
+}
 
-	auto* info_row = new QWidget(this);
+void AccountPage::fetch_history() {
+	if (loading_preset_date_range) { return; }
+	clear_history();
+
+	auto* info_row = new QWidget(history_panel);
 	history_layout->addWidget(info_row);
 
 	auto* info_layout = new QHBoxLayout(info_row);
@@ -223,4 +229,56 @@ void AccountPage::fetch_history() {
 
 	fundos::datetime after  = {after_picker->date().startOfDay().toMSecsSinceEpoch()};
 	fundos::datetime before = {before_picker->date().endOfDay().toMSecsSinceEpoch()};
+	emit history_requested(record.id(), after, before);
+}
+
+void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history> received) {
+	clear_history();
+	if (!received) {
+		auto* info_row = new QWidget(this);
+		history_layout->addWidget(info_row);
+
+		auto* info_layout = new QHBoxLayout(info_row);
+		info_layout->addWidget(theme::header_label(tr("Error getting transaction history."), history_panel), 0, Qt::AlignCenter);
+		return;
+	}
+	auto& history = received.value();
+	if (history.transactions.empty() && history.ledger_balances.empty()) {
+		auto* info_row = new QWidget(this);
+		history_layout->addWidget(info_row);
+
+		auto* info_layout = new QHBoxLayout(info_row);
+		info_layout->addWidget(theme::header_label(tr("No transactions recorded during the selected period."), history_panel), 0, Qt::AlignCenter);
+		return;
+	}
+	std::optional<fundos::currency> balance_checker;
+	size_t tx_index = 0;
+	size_t lb_index = 0;
+	auto add_transaction = [this, &balance_checker](fundos::db::transaction_history::allocated_transaction& transaction) -> void {
+		// todo
+	};
+	auto add_ledger_balance = [this, &balance_checker](fundos::import_ledger_balance& ledger_balance) -> void {
+		// todo
+	};
+
+	while (tx_index < history.transactions.size() || lb_index < history.ledger_balances.size()) {
+		if (tx_index >= history.transactions.size()) {
+			add_ledger_balance(history.ledger_balances[lb_index++]);
+			continue;
+		}
+		if (lb_index >= history.ledger_balances.size()) {
+			add_transaction(history.transactions[tx_index++]);
+			continue;
+		}
+		auto& transaction = history.transactions[tx_index];
+		auto& ledger_balance = history.ledger_balances[lb_index];
+
+		// TODO: decide tie-breaking order when ledger_balance.date_as_of == transaction.effective_date
+		if (ledger_balance.date_as_of < transaction.effective_date) {
+			add_ledger_balance(history.ledger_balances[lb_index++]);
+		} else {
+			add_transaction(history.transactions[tx_index++]);
+		}
+	}
+	history_layout->addStretch();
 }
