@@ -290,7 +290,7 @@ struct statements {
 		cleared_total AS (
 			SELECT COALESCE(SUM(amount), 0) AS total
 			FROM transactions, params
-			WHERE account_id = params.account_id
+			WHERE transactions.account_id = params.account_id
 				AND COALESCE(date_reconciled, date_cleared) IS NOT NULL
 				AND superseded_by IS NULL
 		),
@@ -313,7 +313,7 @@ struct statements {
 				END AS is_pending,
 				COALESCE(date_reconciled, date_cleared, date_recorded) AS effective_date
 			FROM transactions, params
-			WHERE account_id = params.account_id
+			WHERE transactions.account_id = params.account_id
 				AND superseded_by IS NULL
 		),
 		with_balance AS (
