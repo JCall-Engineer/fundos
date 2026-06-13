@@ -14,7 +14,9 @@
 namespace fundos {
 
 /// Not exposed publicly
+namespace schema {
 union db_prepared_statements;
+}
 
 class db {
 public:
@@ -123,7 +125,7 @@ public:
 private:
 	bool managed;
 	sqlite3* connection;
-	db_prepared_statements* prepared;
+	schema::db_prepared_statements* prepared;
 	mutable std::shared_mutex connection_mutex;
 
 	int64_t schema = 0;
