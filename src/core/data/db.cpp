@@ -1120,43 +1120,162 @@ db::outcome db::perform_import(import::pending_import& pending) {
 	});
 }
 
-db::outcome db::save_transaction(transaction& saving) {
-	if (!saving.is_persisted()) {
-		if (saving.corrects_id.has_value() != saving.correct_action.has_value()) {
-			return outcome(error::bad_request, "correct_action and corrects_id must be set together");
+db::outcome db::save_allocations(transaction& saving, std::vector<allocation>& allocations, std::vector<std::function<void()>>& rollback) {
+	std::vector<int64_t> preserve_ids;
+
+	currency sum = {0};
+	std::unordered_set<int64_t> seen_funds;
+	std::string allocation_finder_sql = R"sql(
+		SELECT COUNT(*)
+		FROM allocations
+		WHERE transaction_id = ?
+		AND id IN (
+	)sql";
+	std::string fund_finder_sql = R"sql(
+		SELECT COUNT(*)
+		FROM funds
+		WHERE closed_at IS NULL
+		AND id IN (
+	)sql";
+
+	for (auto& entry : allocations) {
+		if (entry.transaction_id == 0) {
+			auto old = entry.transaction_id;
+			entry.transaction_id = saving.id();
+			rollback.push_back([&entry, old]() {
+				entry.transaction_id = old;
+			});
 		}
-		std::optional<result<fundos::transaction>> corrects;
-		if (saving.corrects_id) {
-			corrects = fetch_transaction(*saving.corrects_id);
-			if (!*corrects) {
-				if (corrects->status().code == error::not_found) {
-					return outcome(error::bad_request, "Transaction corrects a record that doesn't exist");
-				}
-				return corrects->status();
+		if (entry.transaction_id != saving.id()) {
+			return outcome(error::bad_request, "Allocation has non-matching transaction_id");
+		}
+
+		if (entry.fund_id == 0) {
+			return outcome(error::bad_request, "Allocation must include a fund");
+		}
+
+		// Gather ids to preserve in upsert and build sql to validate allocations belong the correct transaction
+		if (entry.is_persisted()) {
+			allocation_finder_sql += preserve_ids.empty() ? "?" : ", ?";
+			preserve_ids.push_back(entry.id_);
+		}
+
+		// Build sql to validate that funds exist and are not closed
+		fund_finder_sql += seen_funds.empty() ? "?" : ", ?";
+
+		if (seen_funds.contains(entry.fund_id)) {
+			return outcome(error::bad_request, "Cannot have duplicate fund allocations in the same set");
+		}
+		seen_funds.insert(entry.fund_id);
+
+		sum += entry.amount;
+	}
+	if (!allocations.empty() && sum != saving.amount) {
+		return outcome(error::rejected, "Cannot partially allocate a transaction");
+	}
+	fund_finder_sql += ")";
+	allocation_finder_sql += ")";
+
+	// Make sure funds exist and are not closed
+	outcome find_funds = sql_count_check(
+		fund_finder_sql,
+		allocations.size(),
+		[&](sqlite3_stmt* stmt) {
+			for (size_t i = 0; i < allocations.size(); ++i) {
+				sqlite3_bind_int64(stmt, static_cast<int>(i) + 1, allocations[i].fund_id);
 			}
-			if (corrects->value().account_id != saving.account_id) { return outcome(error::bad_request, "Transaction corrects a record from a different account"); }
-			if (corrects->value().fitid.has_value()) { return outcome(error::rejected, "Manual transaction corrects a record that is reported by the bank"); }
-			if (corrects->value().superseded_by.has_value()) { return outcome(error::rejected, "Transaction corrects a record that is already superseded"); }
-		}
+		},
+		"Attempted to allocate to one or more funds which do not exist or are closed"
+	);
+	if (!find_funds) { return find_funds; }
 
-		return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
-			outcome insert_transaction = sql_execute(
-				prepared->named.insert_transaction_user.statement,
-				[&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int64 (stmt, 1, saving.account_id);
-					sqlite3_bind_int64 (stmt, 2, saving.amount.minor_units);
-					sqlite3_bind_int64 (stmt, 3, saving.date_recorded.milliseconds_since_epoch);
-					bind_text          (stmt, 4, saving.memo);
-					bind_optional_int64(stmt, 5, as_optional_int64(saving.date_reconciled));
-					bind_optional_int64(stmt, 6, saving.corrects_id);
-					bind_optional_text (stmt, 7, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, saving.correct_action));
+	// Make sure persisted allocations exist and do not belong to a different transaction
+	if (!preserve_ids.empty()) {
+		outcome existing_allocations = sql_count_check(
+			allocation_finder_sql,
+			preserve_ids.size(),
+			[&](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64(stmt, 1, saving.id());
+				for (size_t i = 0; i < preserve_ids.size(); ++i) {
+					sqlite3_bind_int64(stmt, static_cast<int>(i) + 2, preserve_ids[i]);
 				}
-			);
-			if (!insert_transaction) { return insert_transaction; }
-			saving.id_= sqlite3_last_insert_rowid(connection);
-			rollback.push_back([&saving]() { saving.id_ = 0; });
+			},
+			"Attempted to modify an allocation which does not exist"
+		);
+		if (!existing_allocations) { return existing_allocations; }
+	}
 
-			if (!corrects) { return success(); }
+	outcome delete_extra_allocations = sql_delete_except({
+		.table = "allocations",
+		.filter_column = "transaction_id",
+		.filter_value = saving.id(),
+		.preserve_ids = preserve_ids,
+	});
+	if (!delete_extra_allocations) { return delete_extra_allocations; }
+
+	for (auto &entry : allocations) {
+		if (!entry.is_persisted()) {
+			outcome insert_allocation = sql_execute(prepared->named.insert_allocation.statement, [&](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64 (stmt, 1, saving.id());
+				sqlite3_bind_int64 (stmt, 2, entry.fund_id);
+				sqlite3_bind_int64 (stmt, 3, entry.amount.minor_units);
+			});
+			if (!insert_allocation) { return insert_allocation; }
+			entry.id_ = sqlite3_last_insert_rowid(connection);
+			auto* ptr = &entry; // We need a persistent reference that outlives the transaction call
+			rollback.push_back([ptr]() { ptr->id_ = 0; });
+		} else {
+			outcome update_allocation = sql_execute(prepared->named.update_allocation.statement, [&](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64 (stmt, 1, entry.fund_id);
+				sqlite3_bind_int64 (stmt, 2, entry.amount.minor_units);
+				sqlite3_bind_int64 (stmt, 3, entry.id_);
+			});
+			if (!update_allocation) { return update_allocation; }
+			if (sqlite3_changes(connection) != 1) {
+				return outcome(error::internal, "Cannot update allocation which does not exist");
+			}
+		}
+	}
+
+	return success();
+}
+
+db::outcome db::create_transaction(transaction& saving, std::vector<allocation>& allocations) {
+	if (saving.corrects_id.has_value() != saving.correct_action.has_value()) {
+		return outcome(error::bad_request, "correct_action and corrects_id must be set together");
+	}
+	std::optional<result<fundos::transaction>> corrects;
+	if (saving.corrects_id) {
+		corrects = fetch_transaction(*saving.corrects_id);
+		if (!*corrects) {
+			if (corrects->status().code == error::not_found) {
+				return outcome(error::bad_request, "Transaction corrects a record that doesn't exist");
+			}
+			return corrects->status();
+		}
+		if (corrects->value().account_id != saving.account_id) { return outcome(error::bad_request, "Transaction corrects a record from a different account"); }
+		if (corrects->value().fitid.has_value()) { return outcome(error::rejected, "Manual transaction corrects a record that is reported by the bank"); }
+		if (corrects->value().superseded_by.has_value()) { return outcome(error::rejected, "Transaction corrects a record that is already superseded"); }
+	}
+
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
+		outcome insert_transaction = sql_execute(
+			prepared->named.insert_transaction_user.statement,
+			[&](sqlite3_stmt* stmt) {
+				sqlite3_bind_int64 (stmt, 1, saving.account_id);
+				sqlite3_bind_int64 (stmt, 2, saving.amount.minor_units);
+				sqlite3_bind_int64 (stmt, 3, saving.date_recorded.milliseconds_since_epoch);
+				bind_text          (stmt, 4, saving.memo);
+				bind_optional_int64(stmt, 5, as_optional_int64(saving.date_reconciled));
+				bind_optional_int64(stmt, 6, saving.corrects_id);
+				bind_optional_text (stmt, 7, optional_enum_to_string<fundos::transaction::correction_type>(correction_map, saving.correct_action));
+			}
+		);
+		if (!insert_transaction) { return insert_transaction; }
+		saving.id_= sqlite3_last_insert_rowid(connection);
+		rollback.push_back([&saving]() { saving.id_ = 0; });
+
+		if (corrects) {
 			outcome update = sql_execute(
 				prepared->named.update_transaction_correction.statement,
 				[&](sqlite3_stmt* stmt) {
@@ -1168,17 +1287,23 @@ db::outcome db::save_transaction(transaction& saving) {
 			if (sqlite3_changes(connection) != 1) {
 				return outcome(error::not_found, "Cannot correct a transaction which does not exist or is already superseded");
 			}
-			return success();
-		});
-	} else {
-		auto existing = fetch_transaction(saving.id_);
-		if (!existing) {
-			if (existing.status().code == error::not_found) {
-				return outcome(error::bad_request, "Cannot update a transaction that no longer exists");
-			}
-			return existing.status();
 		}
-		if (!safe_match(saving, existing.value())) { return outcome(error::rejected, "End user cannot manually alter protected fields on a transaction"); }
+
+		return save_allocations(saving, allocations, rollback);
+	});
+}
+
+db::outcome db::update_transaction(transaction& saving, std::vector<allocation>& allocations) {
+	auto existing = fetch_transaction(saving.id_);
+	if (!existing) {
+		if (existing.status().code == error::not_found) {
+			return outcome(error::bad_request, "Cannot update a transaction that no longer exists");
+		}
+		return existing.status();
+	}
+	if (!safe_match(saving, existing.value())) { return outcome(error::rejected, "End user cannot manually alter protected fields on a transaction"); }
+
+	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
 		outcome update = sql_execute(
 			prepared->named.update_transaction_user.statement,
 			[&](sqlite3_stmt* stmt) {
@@ -1192,148 +1317,17 @@ db::outcome db::save_transaction(transaction& saving) {
 		if (sqlite3_changes(connection) != 1) {
 			return outcome(error::not_found, "Cannot update transaction which does not exist");
 		}
-		return success();
-	}
+
+		return save_allocations(saving, allocations, rollback);
+	});
 }
 
-db::outcome db::allocate_transaction(std::vector<allocation>& allocations) {
-	if (allocations.empty()) { return outcome(error::bad_request, "Cannot allocate an empty set"); }
-	int64_t transaction_id = allocations[0].transaction_id;
-	std::vector<int64_t> preserve_ids;
-
-	{
-		// Validate the transaction
-		if (transaction_id == 0) { return outcome(error::bad_request, "Did not set transaction id on allocations"); }
-		auto transaction_result = sql_fetch_one<currency>(
-			prepared->named.get_transaction_amount.statement,
-			[&transaction_id](sqlite3_stmt* stmt) {
-				sqlite3_bind_int64(stmt, 1, transaction_id);
-			},
-			[](sqlite3_stmt* stmt) -> currency {
-				return {sqlite3_column_int64(stmt, 0)};
-			}
-		);
-		if (!transaction_result) {
-			if (transaction_result.status().code == error::not_found) {
-				return outcome(error::rejected, "Cannot allocate transaction that does not exist.");
-			}
-			return transaction_result.status();
-		}
-
-		currency total = transaction_result.value();
-		currency sum = {0};
-
-		// Validate the funds
-		std::unordered_set<int64_t> seen_funds;
-		std::string allocation_finder_sql = R"sql(
-			SELECT COUNT(*)
-			FROM allocations
-			WHERE transaction_id = ?
-			AND id IN (
-		)sql";
-		std::string fund_finder_sql = R"sql(
-			SELECT COUNT(*)
-			FROM funds
-			WHERE closed_at IS NULL
-			AND id IN (
-		)sql";
-
-		for (const auto &allocation : allocations) {
-			if (allocation.transaction_id != transaction_id) {
-				return outcome(error::bad_request, "Can only allocate for one transaction at a time");
-			}
-
-			if (allocation.fund_id == 0) {
-				return outcome(error::bad_request, "Allocation must include a fund");
-			}
-
-			// Gather ids to preserve in upsert and build sql to validate allocations belong the correct transaction
-			if (allocation.is_persisted()) {
-				allocation_finder_sql += preserve_ids.empty() ? "?" : ", ?";
-				preserve_ids.push_back(allocation.id_);
-			}
-
-			// Build sql to validate that funds exist and are not closed
-			fund_finder_sql += seen_funds.empty() ? "?" : ", ?";
-
-			if (seen_funds.contains(allocation.fund_id)) {
-				return outcome(error::bad_request, "Cannot have duplicate fund allocations in the same set");
-			}
-			seen_funds.insert(allocation.fund_id);
-
-			sum += allocation.amount;
-		}
-		if (sum != total) {
-			return outcome(error::rejected, "Cannot partially allocate a transaction");
-		}
-		fund_finder_sql += ")";
-		allocation_finder_sql += ")";
-
-		// Make sure funds exist and are not closed
-		outcome find_funds = sql_count_check(
-			fund_finder_sql,
-			allocations.size(),
-			[&](sqlite3_stmt* stmt) {
-				for (size_t i = 0; i < allocations.size(); ++i) {
-					sqlite3_bind_int64(stmt, static_cast<int>(i) + 1, allocations[i].fund_id);
-				}
-			},
-			"Attempted to allocate to one or more funds which do not exist or are closed"
-		);
-		if (!find_funds) { return find_funds; }
-
-		// Make sure persisted allocations exist and do not belong to a different transaction
-		if (!preserve_ids.empty()) {
-			outcome existing_allocations = sql_count_check(
-				allocation_finder_sql,
-				preserve_ids.size(),
-				[&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int64(stmt, 1, transaction_id);
-					for (size_t i = 0; i < preserve_ids.size(); ++i) {
-						sqlite3_bind_int64(stmt, static_cast<int>(i) + 2, preserve_ids[i]);
-					}
-				},
-				"Attempted to modify an allocation which does not exist"
-			);
-			if (!existing_allocations) { return existing_allocations; }
-		}
+db::outcome db::save_transaction(transaction& saving, std::vector<allocation>& allocations) {
+	if (!saving.is_persisted()) {
+		return create_transaction(saving, allocations);
+	} else {
+		return update_transaction(saving, allocations);
 	}
-
-	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
-		outcome delete_extra_allocations = sql_delete_except({
-			.table = "allocations",
-			.filter_column = "transaction_id",
-			.filter_value = transaction_id,
-			.preserve_ids = preserve_ids,
-		});
-		if (!delete_extra_allocations) { return delete_extra_allocations; }
-
-		for (auto &allocation : allocations) {
-			if (!allocation.is_persisted()) {
-				outcome insert_allocation = sql_execute(prepared->named.insert_allocation.statement, [&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int64 (stmt, 1, transaction_id);
-					sqlite3_bind_int64 (stmt, 2, allocation.fund_id);
-					sqlite3_bind_int64 (stmt, 3, allocation.amount.minor_units);
-				});
-				if (!insert_allocation) { return insert_allocation; }
-				allocation.id_ = sqlite3_last_insert_rowid(connection);
-				auto* ptr = &allocation; // We need a persistent reference that outlives the transaction call
-				rollback.push_back([ptr]() { ptr->id_ = 0; });
-			} else {
-				outcome update_allocation = sql_execute(prepared->named.update_allocation.statement, [&](sqlite3_stmt* stmt) {
-					sqlite3_bind_int64 (stmt, 1, allocation.fund_id);
-					sqlite3_bind_int64 (stmt, 2, allocation.amount.minor_units);
-					sqlite3_bind_int64 (stmt, 3, allocation.id_);
-				});
-				if (!update_allocation) { return update_allocation; }
-				if (sqlite3_changes(connection) != 1) {
-					return outcome(error::internal, "Cannot update allocation which does not exist");
-				}
-			}
-		}
-
-		return success();
-	});
 }
 
 db::result<db::transaction_history> db::account_history(int64_t account_id, datetime after, datetime before) {

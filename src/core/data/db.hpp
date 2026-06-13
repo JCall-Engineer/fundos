@@ -349,30 +349,36 @@ public:
 	/// @return bad_request if any imported transaction's import state is corrupt.
 	outcome                      perform_import(import::pending_import& pending);
 
-	/// Saves a user-created or user-edited transaction.
-	/// Insert (id == 0): persists account_id, amount, date, memo, corrects_id, correct_action.
-	///   Sets id on the object. If corrects_id is set, marks the target as superseded_by this record.
-	///   Returns rejected if the correction target is already superseded or has a fitid.
-	///   Returns bad_request if corrects_id and correct_action are not in parity or corrects_id points at an invalid target.
-	/// Update (id != 0): persists date and memo only.
-	///   Returns rejected if account_id, amount, cleared, fitid, corrects_fitid, correct_action, corrects_id, or superseded_by differ from the persisted record.
-	///   Returns bad_request if the record does not exist.
-	outcome                      save_transaction(transaction& saving);
+private:
+	outcome                      save_allocations(transaction& saving, std::vector<allocation>& allocations, std::vector<std::function<void()>>& rollback);
+	outcome                      create_transaction(transaction& saving, std::vector<allocation>& allocations);
+	outcome                      update_transaction(transaction& saving, std::vector<allocation>& allocations);
 
-	/// Replaces the allocations for a transaction atomically.
-	/// - Existing allocations not present in the vector are deleted.
-	/// - Persisted allocations are updated.
-	/// - New allocations are inserted.
+public:
+	/// Saves a transaction and atomically replaces its allocations.
+	///
+	/// On insert (id == 0), persists account_id, amount, date, memo, corrects_id, and correct_action, and sets id on the transaction.
+	/// If corrects_id is set, marks the target transaction as superseded_by this record.
+	/// On update (id != 0), persists date and memo only; all other transaction fields must match the persisted record.
+	///
+	/// In both cases, allocations are replaced wholesale: existing allocations not present in the vector are deleted, persisted ones are updated, and new ones are inserted.
 	/// Sets id on inserted allocations; clears id on rollback.
-	/// @note Allocation amounts must sum exactly to the transaction amount.
-	/// @note All allocations must reference the same transaction_id.
-	/// @note Fund ids must be unique within the vector; funds must exist and not be closed.
-	/// @note Persisted allocations must belong to the given transaction.
-	/// @param allocations The complete intended allocation set for the transaction; must be non-empty.
-	/// @return bad_request if empty, transaction_id is zero, fund_ids are duplicated or zero, or allocations span multiple transactions.
-	/// @return rejected if amounts do not sum to the transaction amount, or the transaction does not exist.
+	/// An empty vector clears all existing allocations, leaving the transaction unallocated.
+	///
+	/// @param saving      The transaction to insert or update.
+	/// @param allocations The complete intended allocation set, or empty to leave the transaction unallocated.
+	///                     transaction_id need not be set; it is filled in automatically.
+	///
+	/// @return bad_request if:
+	///   - The record does not exist on update.
+	///   - corrects_id and correct_action are not in parity, or corrects_id points at an invalid target.
+	///   - transaction_id on an allocation is non-zero and does not match saving.id, or fund ids are duplicated or zero.
+	/// @return rejected if:
+	///   - account_id, amount, cleared, fitid, corrects_fitid, correct_action, corrects_id, or superseded_by differ from the persisted record on update.
+	///   - allocations is non-empty and amounts do not sum exactly to the transaction amount.
+	///   - The correction target is already superseded or has a fitid.
 	/// @return constraint, unavailable, or other db::error on storage failure.
-	outcome                      allocate_transaction(std::vector<allocation>& allocations);
+	outcome                      save_transaction(transaction& saving, std::vector<allocation>& allocations);
 
 	/// Result type for account-level transaction views over a specified date range.
 	/// Each transaction carries its resulting account balance and all of its fund allocations.

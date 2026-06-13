@@ -974,7 +974,8 @@ TEST(DbQuery, FundHistory_Basic) {
 	txn.amount        = currency{10000}; \
 	txn.date_recorded = datetime{0}; \
 	txn.memo          = "Test"; \
-	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn)));
+	std::vector<allocation> allocations; \
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn, allocations)));
 
 static int64_t fetch_int64(sqlite3* connection, const char* sql) {
 	int64_t value{};
@@ -1019,7 +1020,7 @@ TEST(DbQuery, SaveTransaction_Update) {
 	FUNDOS_SEED();
 	txn.date_recorded = datetime{86400000}; // 1 day later
 	txn.memo = "Updated";
-	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn)));
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn, allocations)));
 	EXPECT_EQ(86400000, fetch_int64(connection, "SELECT date_recorded FROM transactions LIMIT 1"));
 	EXPECT_EQ("Updated", fetch_string(connection, "SELECT memo FROM transactions LIMIT 1"));
 }
@@ -1028,14 +1029,14 @@ TEST(DbQuery, SaveTransaction_Update_ImmutableFieldChanged) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	txn.amount = currency{99999};
-	EXPECT_EQ(database->save_transaction(txn).code, db::error::rejected);
+	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::rejected);
 }
 
 TEST(DbQuery, SaveTransaction_Update_NonexistentId) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	sqlite3_exec(connection, "DELETE FROM transactions", nullptr, nullptr, nullptr);
-	EXPECT_EQ(database->save_transaction(txn).code, db::error::bad_request);
+	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection) {
@@ -1048,7 +1049,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection) {
 	correction.memo          = "Correction";
 	correction.corrects_id   = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
-	ASSERT_TRUE(static_cast<bool>(database->save_transaction(correction)));
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(correction, allocations)));
 	ASSERT_NE(correction.id(), 0);
 	auto superseded_by = fetch_optional_int64(connection,
 		std::format("SELECT superseded_by FROM transactions WHERE id = {}", txn.id()).c_str()
@@ -1066,7 +1067,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectAction) {
 	correction.memo          = "Bad";
 	correction.corrects_id   = txn.id();
 	// correct_action intentionally omitted
-	EXPECT_EQ(database->save_transaction(correction).code, db::error::bad_request);
+	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectsId) {
@@ -1079,7 +1080,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectsId) {
 	correction.memo           = "Bad";
 	correction.correct_action = transaction::correction_type::replaces;
 	// corrects_id intentionally omitted
-	EXPECT_EQ(database->save_transaction(correction).code, db::error::bad_request);
+	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_TargetHasFitid) {
@@ -1096,7 +1097,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetHasFitid) {
 	correction.memo           = "Correction";
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
-	EXPECT_EQ(database->save_transaction(correction).code, db::error::rejected);
+	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::rejected);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
@@ -1107,7 +1108,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
 	superseder.amount        = currency{5000};
 	superseder.date_recorded = datetime{0};
 	superseder.memo          = "Superseder";
-	ASSERT_TRUE(static_cast<bool>(database->save_transaction(superseder)));
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(superseder, allocations)));
 	std::string update = std::format(
 		"UPDATE transactions SET superseded_by = {} WHERE id = {}", superseder.id(), txn.id()
 	);
@@ -1119,7 +1120,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
 	correction.memo           = "Correction";
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
-	EXPECT_EQ(database->save_transaction(correction).code, db::error::rejected);
+	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::rejected);
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
@@ -1135,7 +1136,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	correction.memo           = "Correction";
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
-	EXPECT_EQ(database->save_transaction(correction).code, db::error::bad_request);
+	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::bad_request);
 }
 
 #define FUNDOS_SEED_IMPORT() \
@@ -1338,8 +1339,8 @@ TEST(DbQuery, AllocateTransaction_SingleAllocation) {
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 
-	std::vector<allocation> allocations = { alloc };
-	ASSERT_TRUE(static_cast<bool>(database->allocate_transaction(allocations)));
+	allocations.push_back(alloc);
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn, allocations)));
 	EXPECT_NE(allocations[0].id(), 0);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM allocations"), 1);
 }
@@ -1361,8 +1362,9 @@ TEST(DbQuery, AllocateTransaction_MultipleAllocations) {
 	alloc2.fund_id = rent.id();
 	alloc2.amount = currency{4000};
 
-	std::vector<allocation> allocations = { alloc1, alloc2 };
-	ASSERT_TRUE(static_cast<bool>(database->allocate_transaction(allocations)));
+	allocations.push_back(alloc1);
+	allocations.push_back(alloc2);
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn, allocations)));
 	EXPECT_NE(allocations[0].id(), 0);
 	EXPECT_NE(allocations[1].id(), 0);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM allocations"), 2);
@@ -1379,36 +1381,28 @@ TEST(DbQuery, AllocateTransaction_UpdateExisting) {
 	alloc.transaction_id = txn.id();
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
-	std::vector<allocation> allocations = { alloc };
-	ASSERT_TRUE(static_cast<bool>(database->allocate_transaction(allocations)));
+	allocations.push_back(alloc);
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn, allocations)));
 	ASSERT_NE(allocations[0].id(), 0);
 	int64_t original_id = allocations[0].id();
 
 	// Update amount on the existing allocation
 	allocations[0].fund_id = rent.id(); // same sum, different fund
-	ASSERT_TRUE(static_cast<bool>(database->allocate_transaction(allocations)));
+	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn, allocations)));
 	EXPECT_EQ(allocations[0].id(), original_id);
 	std::string query = std::format("SELECT COUNT(*) FROM allocations WHERE fund_id = {}", rent.id());
 	EXPECT_EQ(count_rows(connection, query.c_str()), 1);
 }
 
-TEST(DbQuery, AllocateTransaction_Empty) {
-	FUNDOS_TEST_DB();
-	FUNDOS_SEED();
-
-	std::vector<allocation> allocations;
-	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
-}
-
-TEST(DbQuery, AllocateTransaction_ZeroTransactionId) {
+TEST(DbQuery, AllocationTransactionIdFilledAutomatically) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 
 	allocation alloc;
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
-	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
+	allocations.push_back(alloc);
+	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::none);
 }
 
 TEST(DbQuery, AllocateTransaction_MismatchedTransactionIds) {
@@ -1428,8 +1422,9 @@ TEST(DbQuery, AllocateTransaction_MismatchedTransactionIds) {
 	alloc2.fund_id = rent.id();
 	alloc2.amount = currency{4000};
 
-	std::vector<allocation> allocations = { alloc1, alloc2 };
-	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
+	allocations.push_back(alloc1);
+	allocations.push_back(alloc2);
+	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_DuplicateFund) {
@@ -1446,8 +1441,9 @@ TEST(DbQuery, AllocateTransaction_DuplicateFund) {
 	alloc2.fund_id = groceries.id();
 	alloc2.amount = currency{4000};
 
-	std::vector<allocation> allocations = { alloc1, alloc2 };
-	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
+	allocations.push_back(alloc1);
+	allocations.push_back(alloc2);
+	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_ZeroFundId) {
@@ -1457,8 +1453,8 @@ TEST(DbQuery, AllocateTransaction_ZeroFundId) {
 	allocation alloc;
 	alloc.transaction_id = txn.id();
 	alloc.amount = currency{10000};
-	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::bad_request);
+	allocations.push_back(alloc);
+	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::bad_request);
 }
 
 TEST(DbQuery, AllocateTransaction_WrongSum) {
@@ -1469,20 +1465,8 @@ TEST(DbQuery, AllocateTransaction_WrongSum) {
 	alloc.transaction_id = txn.id();
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{9999};
-	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::rejected);
-}
-
-TEST(DbQuery, AllocateTransaction_NonexistentTransaction) {
-	FUNDOS_TEST_DB();
-	FUNDOS_SEED();
-
-	allocation alloc;
-	alloc.transaction_id = 99999;
-	alloc.fund_id = groceries.id();
-	alloc.amount = currency{10000};
-	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::rejected);
+	allocations.push_back(alloc);
+	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::rejected);
 }
 
 TEST(DbQuery, AllocateTransaction_ClosedFund) {
@@ -1495,6 +1479,6 @@ TEST(DbQuery, AllocateTransaction_ClosedFund) {
 	alloc.transaction_id = txn.id();
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
-	std::vector<allocation> allocations = { alloc };
-	EXPECT_EQ(database->allocate_transaction(allocations).code, db::error::rejected);
+	allocations.push_back(alloc);
+	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::rejected);
 }
