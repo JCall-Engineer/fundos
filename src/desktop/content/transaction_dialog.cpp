@@ -21,6 +21,7 @@ TransactionDialog::TransactionDialog(
 	}
 
 	auto* outer = new QGridLayout(this);
+	outer->setContentsMargins(8, 8, 8, 8);
 	outer->setColumnStretch(0, 1);
 	outer->setColumnStretch(1, 1);
 	outer->setSizeConstraint(QLayout::SetFixedSize);
@@ -90,45 +91,25 @@ TransactionDialog::TransactionDialog(
 	outer->addWidget(justified_by_combo, row, 0, 1, 2);
 	++row;
 
-	allocation_table_widget = new QWidget(this);
-	allocation_table_widget->setAttribute(Qt::WA_StyledBackground, true);
-	allocation_table_widget->setObjectName(QStringLiteral("allocation_table_widget"));
-	allocation_table_widget->setStyleSheet(QStringLiteral(
-		"#allocation_table_widget { border: 1px solid %1; border-radius: 4px; background-color: %2; }"
-	).arg(theme::text_muted.name(), theme::surface.name()));
+	allocation_table = new TableView(false, this);
+	allocation_table->add_header_label(0, tr("Fund"));
+	allocation_table->add_header_label(1, tr("Amount"));
+	allocation_table->add_header_label(2, QStringLiteral(""));
+	allocation_table->body_layout()->setColumnStretch(0, 1);
 
-	allocation_table_layout = new QGridLayout(allocation_table_widget);
-	allocation_table_layout->setContentsMargins(8, 8, 8, 8);
-	allocation_table_layout->setColumnStretch(0, 1);
-
-	QFont allocation_header_font = font();
-	allocation_header_font.setBold(true);
-
-	auto* fund_header_label = new QLabel(tr("Fund"), allocation_table_widget);
-	fund_header_label->setFont(allocation_header_font);
-
-	auto* amount_header_label = new QLabel(tr("Amount"), allocation_table_widget);
-	amount_header_label->setFont(allocation_header_font);
-
-	allocation_table_layout->addWidget(fund_header_label,   0, 0);
-	allocation_table_layout->addWidget(amount_header_label, 0, 1);
-
-	auto* header_separator = new QWidget(allocation_table_widget);
-	header_separator->setFixedHeight(1);
-	header_separator->setStyleSheet(QStringLiteral("background-color: %1;").arg(theme::text_muted.name()));
-	allocation_table_layout->addWidget(header_separator, 1, 0, 1, 3);
-
-	outer->addWidget(allocation_table_widget, row, 0, 1, 2);
+	outer->addWidget(allocation_table, row, 0, 1, 2);
 	++row;
 	rebuild_allocation_table();
 
 	auto* add_row_widget = new QWidget(this);
 	auto* add_row_layout = new QHBoxLayout(add_row_widget);
+	add_row_layout->setContentsMargins(0, 0, 0, 0);
 	outer->addWidget(add_row_widget, row, 0, 1, 2);
 	++row;
 
 	add_fund_combo = new QComboBox(this);
 	add_fund_combo->setItemDelegate(new FundComboDelegate(locale, add_fund_combo));
+	add_fund_combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
 	add_fund_button = new QPushButton(tr("Add row"), this);
 	add_fund_button->setEnabled(false);
@@ -244,20 +225,20 @@ void TransactionDialog::populate_add_fund_combo() {
 }
 
 void TransactionDialog::rebuild_allocation_table() {
-	for (int grid_row = allocation_table_layout->rowCount() - 1; grid_row >= 2; --grid_row) {
+	for (int grid_row = allocation_table->body_layout()->rowCount() - 1; grid_row >= 1; --grid_row) {
 		for (int column = 0; column < 3; ++column) {
-			QLayoutItem* item = allocation_table_layout->itemAtPosition(grid_row, column);
+			QLayoutItem* item = allocation_table->body_layout()->itemAtPosition(grid_row, column);
 			if (item == nullptr) {
 				continue;
 			}
 			QWidget* widget = item->widget();
-			allocation_table_layout->removeWidget(widget);
+			allocation_table->body_layout()->removeWidget(widget);
 			delete widget;
 		}
 	}
 
 	const bool editable = current_justification == justification::custom;
-	int grid_row = 2;
+	int grid_row = 1;
 	for (const auto& row : current_allocations) {
 		add_allocation_row(row, editable, grid_row);
 		++grid_row;
@@ -273,7 +254,7 @@ void TransactionDialog::add_allocation_row(allocation_row row, bool editable, in
 		? QString::fromStdString(found->name)
 		: tr("Unknown fund");
 
-	auto* name_label = new QLabel(allocation_table_widget);
+	auto* name_label = new QLabel(allocation_table->body_container());
 
 	if (adjusted_balances.count(row.fund_id)) {
 		const fundos::currency balance = adjusted_balances.at(row.fund_id);
@@ -289,18 +270,18 @@ void TransactionDialog::add_allocation_row(allocation_row row, bool editable, in
 
 	auto* allocation_amount_field = new QLineEdit(
 		QString::fromStdString(row.amount.to_string(locale)),
-		allocation_table_widget
+		allocation_table->body_container()
 	);
 	allocation_amount_field->setEnabled(editable);
 
-	auto* remove_button = new QPushButton(allocation_table_widget);
+	auto* remove_button = new QPushButton(allocation_table->body_container());
 	remove_button->setIcon(theme::colored_svg_icon(":/icons/trash.svg", theme::text, QSize(24, 24)));
 	remove_button->setVisible(editable);
 	remove_button->setFixedWidth(28);
 
-	allocation_table_layout->addWidget(name_label,              grid_row, 0);
-	allocation_table_layout->addWidget(allocation_amount_field, grid_row, 1);
-	allocation_table_layout->addWidget(remove_button,           grid_row, 2);
+	allocation_table->body_layout()->addWidget(name_label,              grid_row, 0);
+	allocation_table->body_layout()->addWidget(allocation_amount_field, grid_row, 1);
+	allocation_table->body_layout()->addWidget(remove_button,           grid_row, 2);
 
 	const int64_t fund_id = row.fund_id;
 	connect(remove_button, &QPushButton::clicked, this, [this, fund_id] {
@@ -329,6 +310,8 @@ void TransactionDialog::add_allocation_row(allocation_row row, bool editable, in
 			}
 		}
 	});
+
+	adjustSize();
 }
 
 void TransactionDialog::apply_justification(int combo_index) {

@@ -7,6 +7,7 @@
 #include "database.hpp"
 #include "components/date_picker.hpp"
 #include "components/fund_combo_delegate.hpp"
+#include "components/table_view.hpp"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -48,8 +49,7 @@ class TransactionDialog : public QDialog {
 	QComboBox*   add_fund_combo;
 	QPushButton* add_fund_button;
 	QPushButton* save_button;
-	QWidget*     allocation_table_widget;
-	QGridLayout* allocation_table_layout;
+	TableView*   allocation_table;
 
 	void populate_justified_by_combo();
 	void populate_add_fund_combo();
