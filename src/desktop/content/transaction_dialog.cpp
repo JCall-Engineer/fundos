@@ -12,7 +12,6 @@ TransactionDialog::TransactionDialog(
 	QWidget*              parent
 ) : QDialog(parent), app_coordinator(coordinator), transaction(std::move(opening)) {
 	setWindowTitle(tr("Edit transaction"));
-	//setMinimumWidth(400);
 
 	const auto& locale = app_coordinator->context()->currency_locale().info();
 
@@ -24,6 +23,7 @@ TransactionDialog::TransactionDialog(
 	auto* outer = new QGridLayout(this);
 	outer->setColumnStretch(0, 1);
 	outer->setColumnStretch(1, 1);
+	outer->setSizeConstraint(QLayout::SetFixedSize);
 
 	int row = 0;
 
@@ -116,7 +116,7 @@ TransactionDialog::TransactionDialog(
 	auto* header_separator = new QWidget(allocation_table_widget);
 	header_separator->setFixedHeight(1);
 	header_separator->setStyleSheet(QStringLiteral("background-color: %1;").arg(theme::text_muted.name()));
-	allocation_table_layout->addWidget(header_separator, 1, 0, 1, 2);
+	allocation_table_layout->addWidget(header_separator, 1, 0, 1, 3);
 
 	outer->addWidget(allocation_table_widget, row, 0, 1, 2);
 	++row;
@@ -153,6 +153,20 @@ TransactionDialog::TransactionDialog(
 	connect(this,     &TransactionDialog::save_requested,       database, &AppDatabase::save_transaction);
 	connect(database, &AppDatabase::fund_balance_received,      this,     &TransactionDialog::on_balance_received);
 	connect(database, &AppDatabase::transaction_saved,          this,     &TransactionDialog::on_save_completed);
+
+	connect(amount_field, &QLineEdit::editingFinished, this, [this]() {
+		const auto& locale = app_coordinator->context()->currency_locale().info();
+		const auto parsed = fundos::currency::from_string(
+			amount_field->text().toStdString(),
+			locale
+		);
+		if (!parsed.has_value()) {
+			return;
+		}
+		transaction.record.amount = *parsed;
+		amount_field->setText(QString::fromStdString(parsed->to_string(locale)));
+		apply_justification(justified_by_combo->currentIndex());
+	});
 
 	connect(justified_by_combo, &QComboBox::currentIndexChanged, this, &TransactionDialog::apply_justification);
 	connect(add_fund_combo,     &QComboBox::currentIndexChanged, this, [this](int index) {
@@ -248,7 +262,8 @@ void TransactionDialog::rebuild_allocation_table() {
 		add_allocation_row(row, editable, grid_row);
 		++grid_row;
 	}
-}	
+	adjustSize();
+}
 
 void TransactionDialog::add_allocation_row(allocation_row row, bool editable, int grid_row) {
 	const auto& locale = app_coordinator->context()->currency_locale().info();

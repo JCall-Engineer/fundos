@@ -147,6 +147,7 @@ void AccountPage::rename(QString name) {
 void AccountPage::new_transaction() {
 	open_transaction({
 		.record = {
+			.account_id = record.id(),
 			.date_recorded = fundos::datetime{QDateTime::currentDateTime().toMSecsSinceEpoch()}
 		}
 	});
