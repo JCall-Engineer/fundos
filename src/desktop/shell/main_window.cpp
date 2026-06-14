@@ -28,6 +28,7 @@ MainWindow::MainWindow() {
 	connect(this,     &MainWindow::db_backup_requested,     database, &AppDatabase::backup);
 	connect(this,     &MainWindow::db_restore_requested,    database, &AppDatabase::restore);
 	connect(this,     &MainWindow::db_create_new_requested, database, &AppDatabase::create_new);
+	connect(database, &AppDatabase::db_outcome,             this,     &MainWindow::on_result);
 	connect(database, &AppDatabase::connection_opened,      this,     &MainWindow::on_db_open);
 	connect(database, &AppDatabase::connection_migrated,    this,     &MainWindow::on_migrate);
 	connect(database, &AppDatabase::backup_complete,        this,     &MainWindow::on_backup_result);
@@ -61,6 +62,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 }
 
 void MainWindow::on_db_open(fundos::db::status open_result) {
+	status_bar->on_db_open(open_result);
 	if (open_result.is_ok()) {
 		emit context_requested();
 	} else {
@@ -168,6 +170,7 @@ void MainWindow::on_quit() {
 }
 
 void MainWindow::on_migrate(fundos::db::outcome status) {
+	status_bar->set_status(status);
 	if (!status) {
 		QMessageBox::information(this, tr("Error"), tr("Migration failed."));
 	} else {
