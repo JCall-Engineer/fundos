@@ -1,7 +1,9 @@
 #include "account_page.hpp"
 #include "theme.hpp"
+#include "content/transaction_dialog.hpp"
 #include "components/loading_spinner.hpp"
 #include <QDateTime>
+#include <QDialog>
 #include <QHBoxLayout>
 #include <QScrollArea>
 #include <QSize>
@@ -143,7 +145,17 @@ void AccountPage::rename(QString name) {
 }
 
 void AccountPage::new_transaction() {
-
+	open_transaction({
+		.record = {
+			.date_recorded = fundos::datetime{QDateTime::currentDateTime().toMSecsSinceEpoch()}
+		}
+	});
+}
+void AccountPage::open_transaction(const fundos::db::transaction_history::allocated_transaction& opening) {
+	auto* dialog = new TransactionDialog(app_coordinator, opening, this);
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	connect(dialog, &QDialog::accepted, this, &AccountPage::fetch_history);
+	dialog->exec();
 }
 
 void AccountPage::update_open_close_button() {

@@ -59,6 +59,7 @@ public:
 
 	const fundos::account* account(int64_t id) const { return find_item(account_by_id, id); }
 	const fundos::fund*    fund   (int64_t id) const { return find_item(fund_by_id, id); }
+	const fundos::budget*  budget (int64_t id) const { return find_item(budget_by_id, id); }
 
 	// MainWindow needs access to the optional form of locales so it can show the locale editor
 

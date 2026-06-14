@@ -71,6 +71,8 @@ public slots:
 	void save_account(fundos::account account);
 	void save_fund(fundos::fund fund);
 
+	void save_transaction(fundos::transaction transaction, std::vector<fundos::allocation> allocations);
+
 	void request_account_history(int64_t account_id, fundos::datetime after, fundos::datetime before);
 	void request_fund_history(int64_t fund_id, fundos::datetime after, fundos::datetime before);
 
@@ -102,6 +104,8 @@ signals:
 
 	void account_saved(fundos::db::outcome status);
 	void fund_saved(fundos::db::outcome status);
+
+	void transaction_saved(fundos::db::outcome status);
 
 	void account_history_received(fundos::db::result<fundos::db::transaction_history> history);
 	void fund_history_received(fundos::db::result<fundos::db::allocation_history> history);

@@ -31,6 +31,7 @@ public:
 private slots:
 	void rename(QString name);
 	void new_transaction();
+	void open_transaction(const fundos::db::transaction_history::allocated_transaction& opening);
 	void on_toggle_open();
 	void fetch_history();
 

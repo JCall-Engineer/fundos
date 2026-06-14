@@ -195,6 +195,16 @@ void AppDatabase::save_fund(fundos::fund fund) {
 	update_status(saved);
 }
 
+void AppDatabase::save_transaction(fundos::transaction transaction, std::vector<fundos::allocation> allocations) {
+	if (!database) { return; }
+	emit operation_started(tr("saving transaction..."));
+	auto saved = database->save_transaction(transaction, allocations);
+	emit transaction_saved(saved);
+	emit operation_finished();
+	update_status(saved);
+
+}
+
 void AppDatabase::request_account_history(int64_t account_id, fundos::datetime after, fundos::datetime before) {
 	if (!database) { return; }
 	emit operation_started(tr("fetching account history..."));
