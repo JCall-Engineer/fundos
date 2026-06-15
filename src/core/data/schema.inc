@@ -339,7 +339,7 @@ struct statements {
 		WHERE
 			(is_pending = 0 AND effective_date BETWEEN (SELECT range_start FROM params) AND (SELECT range_end FROM params)) OR
 			(is_pending = 1 AND date_recorded BETWEEN (SELECT range_start FROM params) AND (SELECT range_end FROM params))
-		ORDER BY effective_date, is_pending
+		ORDER BY effective_date DESC, is_pending
 	)sql" };
 
 	statement_slot filter_allocations { .sql = R"sql(
@@ -366,7 +366,7 @@ struct statements {
 		)
 		SELECT * FROM all_allocations
 		WHERE date_recorded BETWEEN ? AND ?
-		ORDER BY date_recorded
+		ORDER BY date_recorded DESC
 	)sql" };
 
 	statement_slot filter_ledger_balances { .sql = R"sql(
