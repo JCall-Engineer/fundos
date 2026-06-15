@@ -290,6 +290,7 @@ struct statements {
 			WHERE transactions.account_id = params.account_id
 				AND COALESCE(date_reconciled, date_cleared) IS NOT NULL
 				AND superseded_by IS NULL
+				AND correct_action IS NOT 'delete'
 		),
 		all_transactions AS (
 			SELECT
@@ -312,6 +313,7 @@ struct statements {
 			FROM transactions, params
 			WHERE transactions.account_id = params.account_id
 				AND superseded_by IS NULL
+				AND correct_action IS NOT 'delete'
 		),
 		with_balance AS (
 			SELECT
@@ -360,7 +362,7 @@ struct statements {
 				SUM(allocations.amount) OVER (ORDER BY transactions.date_recorded ROWS UNBOUNDED PRECEDING) AS fund_balance
 			FROM allocations
 			JOIN transactions ON transactions.id = allocations.transaction_id
-			WHERE allocations.fund_id = ? AND transactions.superseded_by IS NULL
+			WHERE allocations.fund_id = ? AND transactions.superseded_by IS NULL AND transactions.correct_action IS NOT 'delete'
 		)
 		SELECT * FROM all_allocations
 		WHERE date_recorded BETWEEN ? AND ?
