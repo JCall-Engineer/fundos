@@ -1,5 +1,5 @@
 #pragma once
-#include <QDate>
+#include <QDateTime>
 #include <QFocusEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -15,7 +15,7 @@ class DatePicker : public QWidget {
 	friend class DateSectionWidget;
 	Q_OBJECT
 
-	QDate              picked_date;
+	QDateTime          picked;
 	DateSectionWidget* section_widget;
 	DatePickerPopup*   popup;
 	QToolButton*       calendar_button;
@@ -32,12 +32,14 @@ class DatePicker : public QWidget {
 	void open_popup();
 
 public:
-	explicit DatePicker(QDate value, QWidget* parent = nullptr);
+	explicit DatePicker(QDateTime value, QWidget* parent = nullptr);
 
-	QDate date() const;
+	QDate get_date() const;
+	QDateTime get_value() const;
 	void set_date(QDate value);
+	void set_value(QDateTime value);
 	void set_enabled(bool value);
 
 signals:
-	void updated(QDate value);
+	void updated(QDateTime value);
 };

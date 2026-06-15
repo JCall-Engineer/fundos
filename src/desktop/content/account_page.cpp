@@ -69,7 +69,7 @@ AccountPage::AccountPage(
 		filter_layout->setContentsMargins(8, 8, 8, 8);
 		filter_layout->setSpacing(8);
 
-		auto today = QDate::currentDate();
+		auto today = QDateTime::currentDateTime();
 		auto* after_label = new QLabel(tr("From"), this);
 		after_picker = new DatePicker(today.addMonths(-1), this);
 		connect(after_picker, &DatePicker::updated, this, [this](){
@@ -259,8 +259,8 @@ void AccountPage::fetch_history() {
 	auto* spinner = new LoadingSpinner(this);
 	info_layout->addWidget(spinner);
 
-	fundos::datetime after  = {after_picker->date().startOfDay().toMSecsSinceEpoch()};
-	fundos::datetime before = {before_picker->date().endOfDay().toMSecsSinceEpoch()};
+	fundos::datetime after  = {after_picker->get_date().startOfDay().toMSecsSinceEpoch()};
+	fundos::datetime before = {before_picker->get_date().endOfDay().toMSecsSinceEpoch()};
 	emit history_requested(record.id(), after, before);
 }
 

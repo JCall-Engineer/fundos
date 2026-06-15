@@ -371,7 +371,7 @@ class DatePickerPopup : public QWidget {
 				button->setText(QString::number(cell_date.day()));
 
 				bool is_today    = cell_date == today;
-				bool is_selected = cell_date == owner->date();
+				bool is_selected = cell_date == owner->get_date();
 				bool is_current  = cell_date.month() == current_date.month();
 
 				QString text_color =
@@ -456,7 +456,7 @@ class DatePickerPopup : public QWidget {
 	}
 
 	void commit_spinner() {
-		int safe_day = qMin(owner->date().day(), QDate(spinner_year, spinner_month, 1).daysInMonth());
+		int safe_day = qMin(owner->get_date().day(), QDate(spinner_year, spinner_month, 1).daysInMonth());
 		current_date = QDate(spinner_year, spinner_month, safe_day);
 		refresh_calendar();
 		switch_view(View::calendar);
@@ -660,9 +660,9 @@ public:
 
 // ─── DatePicker ──────────────────────────────────────────────────────────────
 
-DatePicker::DatePicker(QDate value, QWidget* parent)
+DatePicker::DatePicker(QDateTime value, QWidget* parent)
 	: QWidget(parent)
-	, picked_date(value)
+	, picked(value)
 {
 	setAttribute(Qt::WA_Hover);
 	setFocusPolicy(Qt::StrongFocus);
@@ -672,7 +672,7 @@ DatePicker::DatePicker(QDate value, QWidget* parent)
 	layout->setContentsMargins(4, 2, 4, 2);
 	layout->setSpacing(4);
 
-	section_widget = new DateSectionWidget(value, this, this);
+	section_widget = new DateSectionWidget(value.date(), this, this);
 	layout->addWidget(section_widget, 1);
 
 	calendar_button = new QToolButton(this);
@@ -683,7 +683,7 @@ DatePicker::DatePicker(QDate value, QWidget* parent)
 	calendar_button->setAttribute(Qt::WA_Hover);
 	layout->addWidget(calendar_button);
 
-	popup = new DatePickerPopup(value, this, this);
+	popup = new DatePickerPopup(value.date(), this, this);
 	popup->installEventFilter(this);
 	popup->hide();
 
@@ -697,13 +697,24 @@ void DatePicker::set_active(bool value) {
 	update();
 }
 
-QDate DatePicker::date() const {
-	return picked_date;
+QDate DatePicker::get_date() const {
+	return picked.date();
+}
+
+QDateTime DatePicker::get_value() const {
+	return picked;
 }
 
 void DatePicker::set_date(QDate value) {
-	picked_date = value;
+	picked.setDate(value);
 	section_widget->update_date(value);
+	update();
+	emit updated(picked);
+}
+
+void DatePicker::set_value(QDateTime value) {
+	picked = value;
+	section_widget->update_date(value.date());
 	update();
 	emit updated(value);
 }
@@ -719,7 +730,7 @@ void DatePicker::set_enabled(bool value) {
 }
 
 void DatePicker::open_popup() {
-	popup->show_for_date(picked_date);
+	popup->show_for_date(picked.date());
 	popup->move(mapToGlobal(rect().bottomLeft()));
 	popup->show();
 	is_active = true;

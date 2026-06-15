@@ -33,7 +33,7 @@ TransactionDialog::TransactionDialog(
 
 	int row = 0;
 
-	date_recorded_picker = new DatePicker(QDateTime::fromMSecsSinceEpoch(transaction.record.date_recorded.milliseconds_since_epoch).date(), this);
+	date_recorded_picker = new DatePicker(QDateTime::fromMSecsSinceEpoch(transaction.record.date_recorded.milliseconds_since_epoch), this);
 
 	const QString amount_text = QString::fromStdString(transaction.record.amount.to_string(locale));
 	amount_field = new QLineEdit(amount_text, this);
@@ -57,7 +57,7 @@ TransactionDialog::TransactionDialog(
 	reconciled_layout->setContentsMargins(0, 0, 0, 0);
 
 	reconciled_checkbox = new QCheckBox(this);
-	date_reconciled_picker = new DatePicker(QDate::currentDate(), this);
+	date_reconciled_picker = new DatePicker(QDateTime::currentDateTime(), this);
 
 	reconciled_layout->addWidget(reconciled_checkbox);
 	reconciled_layout->addWidget(date_reconciled_picker);
@@ -401,7 +401,7 @@ void TransactionDialog::on_save_clicked() {
 	saving = transaction.record;
 	saving.memo = memo_field->text().toStdString();
 	saving.date_recorded = fundos::datetime{
-		date_recorded_picker->date().startOfDay().toMSecsSinceEpoch()
+		date_recorded_picker->get_value().toMSecsSinceEpoch()
 	};
 
 	if (!transaction.record.is_persisted()) {
@@ -412,7 +412,7 @@ void TransactionDialog::on_save_clicked() {
 
 	if (reconciled_checkbox->isChecked()) {
 		saving.date_reconciled = fundos::datetime{
-			date_reconciled_picker->date().startOfDay().toMSecsSinceEpoch()
+			date_reconciled_picker->get_value().toMSecsSinceEpoch()
 		};
 	} else {
 		saving.date_reconciled = std::nullopt;
