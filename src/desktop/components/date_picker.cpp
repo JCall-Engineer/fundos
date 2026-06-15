@@ -464,7 +464,7 @@ class DatePickerPopup : public QWidget {
 
 	static QToolButton* make_chevron_button(const QString& icon_path, QWidget* parent) {
 		QToolButton* button = new QToolButton(parent);
-		button->setIcon(theme::colored_svg_icon(icon_path, theme::text_muted, QSize(16, 16)));
+		button->setIcon(theme::colored_svg_icon(icon_path, theme::text_muted, theme::toolbar_icon_size));
 		button->setStyleSheet(QStringLiteral(
 			"QToolButton { border: none; background: transparent; }"
 		));
@@ -676,7 +676,7 @@ DatePicker::DatePicker(QDate value, QWidget* parent)
 	layout->addWidget(section_widget, 1);
 
 	calendar_button = new QToolButton(this);
-	calendar_button->setIcon(theme::colored_svg_icon(QStringLiteral(":/icons/calendar.svg"), theme::text_muted, QSize(20, 20)));
+	calendar_button->setIcon(theme::colored_svg_icon(QStringLiteral(":/icons/calendar.svg"), theme::text_muted, theme::toolbar_icon_size));
 	calendar_button->setStyleSheet(QStringLiteral(
 		"QToolButton { border: none; background: transparent; }"
 	));

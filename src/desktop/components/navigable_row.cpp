@@ -18,7 +18,7 @@ NavigableRow::NavigableRow(
 		name_label->setPalette(palette);
 	}
 	auto* open_button = new QToolButton(this);
-	open_button->setIcon(theme::colored_svg_icon(":/icons/chevron-right.svg", theme::text, QSize(12, 12)));
+	open_button->setIcon(theme::colored_svg_icon(":/icons/chevron-right.svg", theme::text, theme::toolbar_icon_size));
 	open_button->setAutoRaise(true); // Hides border until hover
 
 	connect(open_button, &QToolButton::clicked, this, [this]() {

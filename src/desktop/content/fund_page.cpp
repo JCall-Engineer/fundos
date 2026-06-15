@@ -4,7 +4,6 @@
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QScrollArea>
-#include <QSize>
 
 FundPage::FundPage(
 	AppCoordinator* coordinator,
@@ -30,11 +29,10 @@ FundPage::FundPage(
 
 		name_label = new EditableLabel(QString::fromStdString(record.name), this);
 		connect(name_label, &EditableLabel::value_changed, this, &FundPage::rename);
-		QSize button_size = QSize(name_label->sizeHint().height(), name_label->sizeHint().height());
 
 		auto* home_button = new QPushButton(this);
-		home_button->setIcon(theme::colored_svg_icon(":/icons/home.svg", theme::text, button_size));
-		home_button->setIconSize(button_size);
+		home_button->setIcon(theme::colored_svg_icon(":/icons/home.svg", theme::text, theme::toolbar_icon_size));
+		home_button->setIconSize(theme::label_icon_size(name_label));
 		home_button->setToolTip(tr("Home"));
 		connect(home_button, &QPushButton::clicked, this, &FundPage::go_home);
 
@@ -63,8 +61,6 @@ FundPage::FundPage(
 
 		auto* before_label = new QLabel(tr("Until"), this);
 		before_picker = new DatePicker(today, this);
-
-		QSize button_size = QSize(after_label->sizeHint().height(), after_label->sizeHint().height());
 
 		auto* month_button = new QPushButton(tr("Last Month"), this);
 		connect(month_button, &QPushButton::clicked, this, [this]() {
@@ -133,10 +129,9 @@ void FundPage::rename(QString name) {
 }
 
 void FundPage::update_open_close_button() {
-	QSize button_size = QSize(name_label->sizeHint().height(), name_label->sizeHint().height());
 	if (record.closed_at.has_value()) {
 		open_close_button->setText(tr("Open Fund"));
-		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock-open.svg", theme::success_foreground, button_size));
+		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock-open.svg", theme::success_foreground, theme::toolbar_icon_size));
 		open_close_button->setStyleSheet(QString(
 			"QPushButton {"
 			"  color: %1;"
@@ -154,7 +149,7 @@ void FundPage::update_open_close_button() {
 		));
 	} else {
 		open_close_button->setText(tr("Close Fund"));
-		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock.svg", theme::error_foreground, button_size));
+		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock.svg", theme::error_foreground, theme::toolbar_icon_size));
 		open_close_button->setStyleSheet(QString(
 			"QPushButton {"
 			"  color: %1;"

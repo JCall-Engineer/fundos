@@ -275,7 +275,7 @@ void TransactionDialog::add_allocation_row(allocation_row row, bool editable, in
 	allocation_amount_field->setEnabled(editable);
 
 	auto* remove_button = new QPushButton(allocation_table->body_container());
-	remove_button->setIcon(theme::colored_svg_icon(":/icons/trash.svg", theme::text, QSize(24, 24)));
+	remove_button->setIcon(theme::colored_svg_icon(":/icons/trash.svg", theme::text, theme::toolbar_icon_size));
 	remove_button->setVisible(editable);
 	remove_button->setFixedWidth(28);
 

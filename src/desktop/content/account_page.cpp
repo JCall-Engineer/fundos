@@ -2,11 +2,10 @@
 #include "theme.hpp"
 #include "content/transaction_dialog.hpp"
 #include "components/loading_spinner.hpp"
+#include "components/table_view.hpp"
 #include <QDateTime>
 #include <QDialog>
 #include <QHBoxLayout>
-#include <QScrollArea>
-#include <QSize>
 
 AccountPage::AccountPage(
 	AppCoordinator* coordinator,
@@ -32,20 +31,19 @@ AccountPage::AccountPage(
 
 		name_label = new EditableLabel(QString::fromStdString(record.name), this);
 		connect(name_label, &EditableLabel::value_changed, this, &AccountPage::rename);
-		QSize button_size = QSize(name_label->sizeHint().height(), name_label->sizeHint().height());
 
 		auto* home_button = new QPushButton(this);
-		home_button->setIcon(theme::colored_svg_icon(":/icons/home.svg", theme::text, button_size));
-		home_button->setIconSize(button_size);
+		home_button->setIcon(theme::colored_svg_icon(":/icons/home.svg", theme::text, theme::toolbar_icon_size));
+		home_button->setIconSize(theme::label_icon_size(name_label));
 		home_button->setToolTip(tr("Home"));
 		connect(home_button, &QPushButton::clicked, this, &AccountPage::go_home);
 
 		auto* import_button = new QPushButton(tr("Import OFX"), this);
-		import_button->setIcon(theme::colored_svg_icon(":/icons/upload.svg", theme::text, button_size));
+		import_button->setIcon(theme::colored_svg_icon(":/icons/upload.svg", theme::text, theme::toolbar_icon_size));
 		connect(import_button, &QPushButton::clicked, this, &AccountPage::import_ofx);
 
 		auto* new_transaction_button = new QPushButton(tr("New Transaction"), this);
-		new_transaction_button->setIcon(theme::colored_svg_icon(":/icons/plus.svg", theme::text, button_size));
+		new_transaction_button->setIcon(theme::colored_svg_icon(":/icons/plus.svg", theme::text, theme::toolbar_icon_size));
 		connect(new_transaction_button, &QPushButton::clicked, this, &AccountPage::new_transaction);
 
 		open_close_button = new QPushButton(this);
@@ -75,8 +73,6 @@ AccountPage::AccountPage(
 
 		auto* before_label = new QLabel(tr("Until"), this);
 		before_picker = new DatePicker(today, this);
-
-		QSize button_size = QSize(after_label->sizeHint().height(), after_label->sizeHint().height());
 
 		auto* month_button = new QPushButton(tr("Last Month"), this);
 		connect(month_button, &QPushButton::clicked, this, [this]() {
@@ -122,18 +118,13 @@ AccountPage::AccountPage(
 		layout->addWidget(filter_row);
 	}
 	{
-		auto* history_scroll = new QScrollArea(this);
-		history_scroll->setWidgetResizable(true);
-
 		history_panel = new QWidget();
-		history_scroll->setWidget(history_panel);
-
 		history_layout = new QVBoxLayout(history_panel);
 		history_layout->setContentsMargins(0, 0, 0, 0);
 		history_layout->setSpacing(0);
-		fetch_history();
+		layout->addWidget(history_panel, 1);
 
-		layout->addWidget(history_scroll, 1);
+		fetch_history();
 	}
 }
 
@@ -160,10 +151,9 @@ void AccountPage::open_transaction(const fundos::db::transaction_history::alloca
 }
 
 void AccountPage::update_open_close_button() {
-	QSize button_size = QSize(name_label->sizeHint().height(), name_label->sizeHint().height());
 	if (record.closed_at.has_value()) {
 		open_close_button->setText(tr("Open Account"));
-		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock-open.svg", theme::success_foreground, button_size));
+		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock-open.svg", theme::success_foreground, theme::toolbar_icon_size));
 		open_close_button->setStyleSheet(QString(
 			"QPushButton {"
 			"  color: %1;"
@@ -181,7 +171,7 @@ void AccountPage::update_open_close_button() {
 		));
 	} else {
 		open_close_button->setText(tr("Close Account"));
-		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock.svg", theme::error_foreground, button_size));
+		open_close_button->setIcon(theme::colored_svg_icon(":/icons/lock.svg", theme::error_foreground, theme::toolbar_icon_size));
 		open_close_button->setStyleSheet(QString(
 			"QPushButton {"
 			"  color: %1;"
@@ -264,13 +254,53 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		info_layout->addWidget(theme::header_label(tr("No transactions recorded during the selected period."), history_panel), 0, Qt::AlignCenter);
 		return;
 	}
+
+	auto* table = new TableView(true, this);
+	table->add_header_label(0, QStringLiteral(""));
+	table->add_header_label(1, tr("Date"));
+	table->add_header_label(2, tr("Memo"));
+	table->add_header_label(3, tr("Amount"));
+	table->add_header_label(4, tr("Balance"));
+	table->add_header_label(5, QStringLiteral(""));
+	history_layout->addWidget(table);
+
+	auto* footer = new QWidget(this);
+	auto* footer_layout = new QHBoxLayout(footer);
+	footer_layout->setContentsMargins(0, 0, 0, 0);
+
+	auto add_legend_item = [&](const QString& icon_path, const QString& label_text) {
+		auto* icon_label = new QLabel(footer);
+		icon_label->setPixmap(theme::colored_svg(icon_path, theme::text, theme::default_icon_size()));
+
+		auto* text_label = new QLabel(label_text, footer);
+
+		footer_layout->addWidget(icon_label);
+		footer_layout->addWidget(text_label);
+		footer_layout->addSpacing(12);
+	};
+
+	add_legend_item(":/icons/building-bank.svg", tr("Cleared via OFX"));
+	add_legend_item(":/icons/writing.svg",       tr("Reconciled"));
+	add_legend_item(":/icons/clock.svg",         tr("Pending"));
+
+	footer_layout->addStretch();
+	table->set_footer(footer);
+
 	std::optional<fundos::currency> balance_checker;
 	size_t tx_index = 0;
 	size_t lb_index = 0;
-	auto add_transaction = [this, &balance_checker](fundos::db::transaction_history::allocated_transaction& transaction) -> void {
-		// todo
+	int row = 1;
+	auto add_transaction = [&](fundos::db::transaction_history::allocated_transaction& transaction) -> void {
+		QString icon_path = ":/icons/clock.svg";
+		if (transaction.record.date_reconciled) {
+			icon_path = ":/icons/writing.svg";
+		}
+		if (transaction.record.date_cleared) {
+			icon_path = ":/icons/building-bank.svg";
+		}
+		//QLabel*
 	};
-	auto add_ledger_balance = [this, &balance_checker](fundos::import_ledger_balance& ledger_balance) -> void {
+	auto add_ledger_balance = [&](fundos::import_ledger_balance& ledger_balance) -> void {
 		// todo
 	};
 
@@ -293,5 +323,4 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 			add_transaction(history.transactions[tx_index++]);
 		}
 	}
-	history_layout->addStretch();
 }

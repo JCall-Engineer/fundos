@@ -2,6 +2,7 @@
 #include "types/currency.hpp"
 #include <QColor>
 #include <QLabel>
+#include <QFontMetrics>
 #include <QIcon>
 #include <QPainter>
 #include <QPalette>
@@ -24,6 +25,20 @@ static constexpr QColor warning_background = QColor(0x33, 0x28, 0x0d);
 static constexpr QColor warning_foreground = QColor(0xff, 0xc1, 0x07);
 static constexpr QColor error_background   = QColor(0x33, 0x11, 0x11);
 static constexpr QColor error_foreground   = QColor(0xf4, 0x43, 0x36);
+
+static constexpr QSize toolbar_icon_size = QSize(32, 32);
+
+static inline QSize default_icon_size() {
+	QFont font;
+	QFontMetrics metrics(font);
+	int side = metrics.height();
+	return QSize(side, side);
+}
+
+static inline QSize label_icon_size(const QWidget* label) {
+	int side = label->sizeHint().height();
+	return QSize(side, side);
+}
 
 static inline QPixmap colored_svg(const QString& path, QColor color, QSize size) {
 	QPixmap pixmap(size);

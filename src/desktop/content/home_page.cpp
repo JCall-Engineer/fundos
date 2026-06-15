@@ -136,7 +136,6 @@ QWidget* HomePage::make_panel(QWidget* list, const QString& title, std::vector<b
 
 	auto* header = new QHBoxLayout();
 	auto* label = theme::header_label(title, panel);
-	const QSize button_size(label->sizeHint().height(), label->sizeHint().height());
 
 	header->addWidget(label);
 	header->addStretch();
@@ -144,17 +143,17 @@ QWidget* HomePage::make_panel(QWidget* list, const QString& title, std::vector<b
 	for (auto& spec : buttons) {
 		auto* button = new QToolButton(panel);
 		button->setToolTip(spec.tooltip);
-		button->setIcon(theme::colored_svg_icon(spec.icon_path, theme::text, button_size));
-		button->setIconSize(button_size);
+		button->setIcon(theme::colored_svg_icon(spec.icon_path, theme::text, theme::toolbar_icon_size));
+		button->setIconSize(theme::label_icon_size(label));
 		button->setAutoRaise(true);
 		if (spec.toggle_signal && !spec.checked_icon_path.isEmpty()) {
 			button->setStyleSheet("QToolButton:checked { background: transparent; border: none; }");
 			button->setCheckable(true);
 			button->setChecked(false);
 			connect(button, &QToolButton::toggled, this, spec.toggle_signal);
-			connect(button, &QToolButton::toggled, this, [button, spec, button_size](bool checked) {
+			connect(button, &QToolButton::toggled, this, [button, spec](bool checked) {
 				const auto& path = checked ? spec.checked_icon_path : spec.icon_path;
-				button->setIcon(theme::colored_svg_icon(path, theme::text, button_size));
+				button->setIcon(theme::colored_svg_icon(path, theme::text, theme::toolbar_icon_size));
 			});
 		}
 		if (spec.action) {
