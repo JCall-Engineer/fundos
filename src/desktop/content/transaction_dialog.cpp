@@ -64,10 +64,10 @@ TransactionDialog::TransactionDialog(
 
 	if (transaction.record.date_reconciled.has_value()) {
 		reconciled_checkbox->setChecked(true);
-		date_reconciled_picker->set_date(
+		date_reconciled_picker->set_value(
 			QDateTime::fromMSecsSinceEpoch(
 				transaction.record.date_reconciled->milliseconds_since_epoch
-			).date()
+			)
 		);
 	}
 
