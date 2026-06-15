@@ -11,7 +11,12 @@ TransactionDialog::TransactionDialog(
 	allocated_transaction opening,
 	QWidget*              parent
 ) : QDialog(parent), app_coordinator(coordinator), transaction(std::move(opening)) {
-	setWindowTitle(tr("Edit transaction"));
+	setWindowTitle(transaction.record.is_persisted()
+		? tr("Edit transaction")
+		: transaction.record.corrects_id
+			? tr("Correct transaction")
+			: tr("Create transaction")
+	);
 
 	const auto& locale = app_coordinator->context()->currency_locale().info();
 
