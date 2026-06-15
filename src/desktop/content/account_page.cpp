@@ -276,6 +276,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 	transaction_widgets.reserve(history.transactions.size()); // Make sure references are stable while constructing the transaction list
 
 	auto* table = new TableView(true, this);
+	table->set_header_vertical_padding(8);
 	table->add_header_label(0, QStringLiteral(""));
 	table->add_header_label(1, tr("Date"));
 	table->add_header_label(2, tr("Memo"));
@@ -332,8 +333,15 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		widget->icon_path = ":/icons/clock.svg";
 		if (transaction.record.date_reconciled) { widget->icon_path = ":/icons/writing.svg"; }
 		if (transaction.record.date_cleared)    { widget->icon_path = ":/icons/building-bank.svg"; }
-		widget->icon = new QLabel(table);
+
+		auto* icon_container = new QWidget(table);
+		auto* icon_container_layout = new QHBoxLayout(icon_container);
+		icon_container_layout->setContentsMargins(8, 8, 8, 8);
+		icon_container_layout->setAlignment(Qt::AlignCenter);
+
+		widget->icon = new QLabel(icon_container);
 		widget->icon->setPixmap(theme::colored_svg(widget->icon_path, theme::text, theme::default_icon_size()));
+		icon_container_layout->addWidget(widget->icon);
 
 		widget->date = new QLabel(
 			QLocale::system().toString(
@@ -390,7 +398,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		details_layout->addWidget(details_actions);
 
 		table->body_layout()->addWidget(widget->background_widget, row, 0, 1, 6);
-		table->body_layout()->addWidget(widget->icon,              row, 0, 1, 1);
+		table->body_layout()->addWidget(icon_container,            row, 0, 1, 1);
 		table->body_layout()->addWidget(widget->date,              row, 1, 1, 1);
 		table->body_layout()->addWidget(widget->memo,              row, 2, 1, 1);
 		table->body_layout()->addWidget(widget->amount,            row, 3, 1, 1);

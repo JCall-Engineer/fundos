@@ -20,6 +20,11 @@ public:
 	void add_header_label(int column, const QString &text);
 	void set_footer(QWidget* widget);
 
+	void set_column_padding(int horizontal);
+	void set_header_vertical_padding(int vertical);
+	void set_body_vertical_padding(int vertical);
+	void set_row_spacing(int spacing);
+
 	void sync_header();
 
 protected:

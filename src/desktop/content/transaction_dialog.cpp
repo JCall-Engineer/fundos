@@ -92,6 +92,10 @@ TransactionDialog::TransactionDialog(
 	++row;
 
 	allocation_table = new TableView(false, this);
+	allocation_table->set_column_padding(8);
+	allocation_table->set_header_vertical_padding(6);
+	allocation_table->set_body_vertical_padding(8);
+	allocation_table->set_row_spacing(6);
 	allocation_table->add_header_label(0, tr("Fund"));
 	allocation_table->add_header_label(1, tr("Amount"));
 	allocation_table->add_header_label(2, QStringLiteral(""));

@@ -20,7 +20,7 @@ TableView::TableView(bool scrollable, QWidget* parent) : QWidget(parent) {
 		"background-color: %1; border-radius: 4px 4px 0 0;"
 	).arg(theme::surface.lighter(110).name()));
 	header_layout = new QGridLayout(header);
-	header_layout->setContentsMargins(8, 8, 8, 8);
+	header_layout->setContentsMargins(0, 0, 0, 0);
 
 	auto* header_separator = new QWidget(this);
 	header_separator->setFixedHeight(1);
@@ -35,7 +35,8 @@ TableView::TableView(bool scrollable, QWidget* parent) : QWidget(parent) {
 	body_widget->installEventFilter(this);
 	body_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	body_grid = new QGridLayout(body_widget);
-	body_grid->setContentsMargins(8, 8, 8, 8);
+	body_grid->setContentsMargins(0, 0, 0, 0);
+	body_grid->setSpacing(0);
 	body_grid->setAlignment(Qt::AlignTop);
 
 	if (scrollable) {
@@ -100,6 +101,28 @@ void TableView::set_footer(QWidget *widget) {
 	footer_layout->addWidget(widget);
 	footer->setVisible(true);
 	footer_separator->setVisible(true);
+}
+
+void TableView::set_column_padding(int horizontal) {
+	auto header_margins = header_layout->contentsMargins();
+	header_layout->setContentsMargins(horizontal, header_margins.top(), horizontal, header_margins.bottom());
+
+	auto body_margins = body_grid->contentsMargins();
+	body_grid->setContentsMargins(horizontal, body_margins.top(), horizontal, body_margins.bottom());
+}
+
+void TableView::set_header_vertical_padding(int vertical) {
+	auto margins = header_layout->contentsMargins();
+	header_layout->setContentsMargins(margins.left(), vertical, margins.right(), vertical);
+}
+
+void TableView::set_body_vertical_padding(int vertical) {
+	auto margins = body_grid->contentsMargins();
+	body_grid->setContentsMargins(margins.left(), vertical, margins.right(), vertical);
+}
+
+void TableView::set_row_spacing(int spacing) {
+	body_grid->setSpacing(spacing);
 }
 
 void TableView::sync_header() {
