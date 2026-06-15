@@ -322,14 +322,14 @@ struct statements {
 					WHEN is_pending = 0 THEN
 						SUM(amount) OVER (
 							PARTITION BY is_pending
-							ORDER BY effective_date
+							ORDER BY effective_date, id
 							ROWS UNBOUNDED PRECEDING
 						)
 					ELSE
 						(SELECT total FROM cleared_total) +
 						SUM(amount) OVER (
 							PARTITION BY is_pending
-							ORDER BY date_recorded
+							ORDER BY date_recorded, id
 							ROWS UNBOUNDED PRECEDING
 						)
 				END AS account_balance
@@ -339,7 +339,7 @@ struct statements {
 		WHERE
 			(is_pending = 0 AND effective_date BETWEEN (SELECT range_start FROM params) AND (SELECT range_end FROM params)) OR
 			(is_pending = 1 AND date_recorded BETWEEN (SELECT range_start FROM params) AND (SELECT range_end FROM params))
-		ORDER BY effective_date DESC, is_pending DESC
+		ORDER BY effective_date DESC, is_pending DESC, id DESC
 	)sql" };
 
 	statement_slot filter_allocations { .sql = R"sql(
@@ -366,7 +366,7 @@ struct statements {
 		)
 		SELECT * FROM all_allocations
 		WHERE date_recorded BETWEEN ? AND ?
-		ORDER BY date_recorded DESC
+		ORDER BY date_recorded DESC, id DESC
 	)sql" };
 
 	statement_slot filter_ledger_balances { .sql = R"sql(
