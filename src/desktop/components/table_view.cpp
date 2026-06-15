@@ -36,11 +36,14 @@ TableView::TableView(bool scrollable, QWidget* parent) : QWidget(parent) {
 	body_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	body_grid = new QGridLayout(body_widget);
 	body_grid->setContentsMargins(8, 8, 8, 8);
+	body_grid->setAlignment(Qt::AlignTop);
 
 	if (scrollable) {
 		auto* body_scroll = new QScrollArea(this);
 		body_scroll->setWidget(body_widget);
 		body_scroll->setWidgetResizable(true);
+		body_scroll->setFrameShape(QFrame::NoFrame);
+		body_scroll->viewport()->setContentsMargins(0, 0, 0, 0);
 		body_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 		body_scroll->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
 		body_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);

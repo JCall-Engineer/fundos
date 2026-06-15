@@ -3,6 +3,7 @@
 #include "content/transaction_dialog.hpp"
 #include "components/loading_spinner.hpp"
 #include "components/table_view.hpp"
+#include <QLatin1StringView>
 #include <QDateTime>
 #include <QDialog>
 #include <QHBoxLayout>
@@ -155,6 +156,7 @@ void AccountPage::open_transaction(const fundos::db::transaction_history::alloca
 	auto* dialog = new TransactionDialog(app_coordinator, opening, this);
 	dialog->setAttribute(Qt::WA_DeleteOnClose);
 	connect(dialog, &QDialog::accepted, this, &AccountPage::fetch_history);
+	connect(dialog, &QDialog::rejected, this, &AccountPage::update_backgrounds);
 	dialog->exec();
 }
 
@@ -220,9 +222,18 @@ void AccountPage::on_account_saved(fundos::db::outcome saved) {
 }
 
 void AccountPage::clear_history() {
+	transaction_widgets.clear();
 	while (QLayoutItem* item = history_layout->takeAt(0)) {
 		delete item->widget();
 		delete item;
+	}
+}
+
+void AccountPage::update_backgrounds() {
+	for (auto& widget : transaction_widgets) {
+		widget.background_widget->setStyleSheet(QStringLiteral(
+			"background-color: %1; border: 1px solid %2"
+		).arg(widget.background_color.name(), theme::separator.name()));
 	}
 }
 
@@ -262,6 +273,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		info_layout->addWidget(theme::header_label(tr("No transactions recorded during the selected period."), history_panel), 0, Qt::AlignCenter);
 		return;
 	}
+	transaction_widgets.reserve(history.transactions.size()); // Make sure references are stable while constructing the transaction list
 
 	auto* table = new TableView(true, this);
 	table->add_header_label(0, QStringLiteral(""));
@@ -270,6 +282,14 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 	table->add_header_label(3, tr("Amount"));
 	table->add_header_label(4, tr("Balance"));
 	table->add_header_label(5, QStringLiteral(""));
+
+	table->body_layout()->setColumnStretch(0, 0);
+	table->body_layout()->setColumnStretch(1, 1);
+	table->body_layout()->setColumnStretch(2, 5);
+	table->body_layout()->setColumnStretch(3, 1);
+	table->body_layout()->setColumnStretch(4, 1);
+	table->body_layout()->setColumnStretch(5, 0);
+
 	history_layout->addWidget(table);
 
 	auto* footer = new QWidget(this);
@@ -299,14 +319,86 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 	size_t lb_index = 0;
 	int row = 1;
 	auto add_transaction = [&](fundos::db::transaction_history::allocated_transaction& transaction) -> void {
-		QString icon_path = ":/icons/clock.svg";
-		if (transaction.record.date_reconciled) {
-			icon_path = ":/icons/writing.svg";
-		}
-		if (transaction.record.date_cleared) {
-			icon_path = ":/icons/building-bank.svg";
-		}
-		//QLabel*
+		transaction_widgets.push_back(Transaction{});
+		auto* widget = &transaction_widgets.back();
+		widget->record = transaction;
+
+		widget->background_color = transaction.allocations.empty() ? theme::warning_background : theme::success_background;
+		widget->background_widget = new QWidget(table);
+		widget->background_widget->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+		widget->background_widget->setMinimumSize(0, 0);
+		widget->background_widget->lower();
+
+		widget->icon_path = ":/icons/clock.svg";
+		if (transaction.record.date_reconciled) { widget->icon_path = ":/icons/writing.svg"; }
+		if (transaction.record.date_cleared)    { widget->icon_path = ":/icons/building-bank.svg"; }
+		widget->icon = new QLabel(table);
+		widget->icon->setPixmap(theme::colored_svg(widget->icon_path, theme::text, theme::default_icon_size()));
+
+		widget->date = new QLabel(
+			QLocale::system().toString(
+				QDateTime::fromMSecsSinceEpoch(transaction.effective_date.milliseconds_since_epoch).date(),
+				QLocale::ShortFormat
+			),
+			table
+		);
+
+		widget->memo = new QLabel(QString::fromStdString(transaction.record.memo), table);
+
+		widget->amount = theme::currency_label(transaction.record.amount, app_coordinator->context()->currency_locale().info(), table);
+
+		widget->balance = theme::currency_label(transaction.account_balance, app_coordinator->context()->currency_locale().info(), table);
+
+		constexpr QLatin1StringView unchecked_icon_path{":/icons/chevron-down.svg"};
+		constexpr QLatin1StringView checked_icon_path{":/icons/chevron-up.svg"};
+
+		widget->details_button = new QToolButton(table);
+		widget->details_button->setStyleSheet("QToolButton:checked { background: transparent; border: none; }");
+		widget->details_button->setCheckable(true);
+		widget->details_button->setChecked(false);
+		widget->details_button->setIcon(theme::colored_svg_icon(unchecked_icon_path, theme::text, theme::toolbar_icon_size));
+		widget->details_button->setIconSize(theme::label_icon_size(widget->memo));
+		widget->details_button->setAutoRaise(true);
+		widget->details_button->setFixedSize(widget->details_button->sizeHint());
+
+		widget->details_widget = new QWidget(table);
+		widget->details_widget->setVisible(false);
+
+		connect(widget->details_button, &QToolButton::toggled, this, [this, widget](bool checked) {
+			const auto& path = checked ? checked_icon_path : unchecked_icon_path;
+			widget->details_button->setIcon(theme::colored_svg_icon(path, theme::text, theme::toolbar_icon_size));
+			widget->details_widget->setVisible(checked);
+		});
+
+		auto* details_layout = new QVBoxLayout(widget->details_widget);
+
+		auto* details_actions = new QWidget(widget->details_widget);
+		auto* details_actions_layout = new QHBoxLayout(details_actions);
+		details_actions_layout->setAlignment(Qt::AlignLeft);
+
+		auto* edit_action = new QPushButton(tr("Edit"), details_actions);
+		edit_action->setIcon(theme::colored_svg_icon(":/icons/edit.svg", theme::text, theme::toolbar_icon_size));
+		details_actions_layout->addWidget(edit_action);
+		connect(edit_action, &QPushButton::clicked, this, [this, widget]() {
+			widget->background_widget->setStyleSheet(QStringLiteral(
+				"background-color: %1; border: 1px solid %2"
+			).arg(theme::info_background.name(), theme::separator.name()));
+			open_transaction(widget->record);
+		});
+
+		details_layout->addWidget(details_actions);
+		details_layout->addWidget(details_actions);
+
+		table->body_layout()->addWidget(widget->background_widget, row, 0, 1, 6);
+		table->body_layout()->addWidget(widget->icon,              row, 0, 1, 1);
+		table->body_layout()->addWidget(widget->date,              row, 1, 1, 1);
+		table->body_layout()->addWidget(widget->memo,              row, 2, 1, 1);
+		table->body_layout()->addWidget(widget->amount,            row, 3, 1, 1);
+		table->body_layout()->addWidget(widget->balance,           row, 4, 1, 1);
+		table->body_layout()->addWidget(widget->details_button,    row, 5, 1, 1);
+		table->body_layout()->addWidget(widget->details_widget,  ++row, 0, 1, 6);
+		++row;
+
 	};
 	auto add_ledger_balance = [&](fundos::import_ledger_balance& ledger_balance) -> void {
 		// todo
@@ -331,4 +423,5 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 			add_transaction(history.transactions[tx_index++]);
 		}
 	}
+	update_backgrounds();
 }
