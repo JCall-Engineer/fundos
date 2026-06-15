@@ -903,12 +903,12 @@ TEST(DbQuery, AccountHistory_ClearedAndPending) {
 
 	ASSERT_EQ(history.value().ledger_balances.size(), 0);
 	ASSERT_EQ(history.value().transactions.size(), 2);
-
-	ASSERT_EQ(history.value().transactions[0].record.id(), 3);
-	ASSERT_EQ(history.value().transactions[0].account_balance, currency{122});
 	
-	ASSERT_EQ(history.value().transactions[1].record.id(), 4);
-	ASSERT_EQ(history.value().transactions[1].account_balance, currency{210});
+	ASSERT_EQ(history.value().transactions[0].record.id(), 4);
+	ASSERT_EQ(history.value().transactions[0].account_balance, currency{210});
+
+	ASSERT_EQ(history.value().transactions[1].record.id(), 3);
+	ASSERT_EQ(history.value().transactions[1].account_balance, currency{122});
 }
 
 TEST(DbQuery, FundHistory_Basic) {
@@ -945,19 +945,19 @@ TEST(DbQuery, FundHistory_Basic) {
 	ASSERT_TRUE(static_cast<bool>(history));
 	ASSERT_EQ(history.value().transactions.size(), 3);
 
-	// transaction 1 outside date range but contributes to fund_balance
-	ASSERT_EQ(history.value().transactions[0].record.id(), 2);
-	ASSERT_EQ(history.value().transactions[0].allocated.amount, currency{50});
-	ASSERT_EQ(history.value().transactions[0].fund_balance, currency{150});
+	// transaction 4 superseded, transaction 5 replaces it
+	ASSERT_EQ(history.value().transactions[0].record.id(), 5);
+	ASSERT_EQ(history.value().transactions[0].allocated.amount, currency{99});
+	ASSERT_EQ(history.value().transactions[0].fund_balance, currency{274});
 
 	ASSERT_EQ(history.value().transactions[1].record.id(), 3);
 	ASSERT_EQ(history.value().transactions[1].allocated.amount, currency{25});
 	ASSERT_EQ(history.value().transactions[1].fund_balance, currency{175});
 
-	// transaction 4 superseded, transaction 5 replaces it
-	ASSERT_EQ(history.value().transactions[2].record.id(), 5);
-	ASSERT_EQ(history.value().transactions[2].allocated.amount, currency{99});
-	ASSERT_EQ(history.value().transactions[2].fund_balance, currency{274});
+	// transaction 1 outside date range but contributes to fund_balance
+	ASSERT_EQ(history.value().transactions[2].record.id(), 2);
+	ASSERT_EQ(history.value().transactions[2].allocated.amount, currency{50});
+	ASSERT_EQ(history.value().transactions[2].fund_balance, currency{150});
 }
 
 /// Previous iterations used a helper function instead of a macro but that loses the ability to assert in a test
