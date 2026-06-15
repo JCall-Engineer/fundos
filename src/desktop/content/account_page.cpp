@@ -4,6 +4,7 @@
 #include "components/loading_spinner.hpp"
 #include "components/table_view.hpp"
 #include <QLatin1StringView>
+#include <QMessageBox>
 #include <QDateTime>
 #include <QDialog>
 #include <QHBoxLayout>
@@ -430,6 +431,20 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 				widget->background_widget->setStyleSheet(QStringLiteral(
 					"background-color: %1; border: 1px solid %2"
 				).arg(theme::info_background.name(), theme::separator.name()));
+
+				QMessageBox dialog(this);
+				dialog.setWindowTitle(tr("Delete Transaction"));
+				dialog.setText(tr("Delete \"%1\"?").arg(widget->record.record.memo));
+				dialog.setInformativeText(tr("This transaction will be permanently removed from your register."));
+				dialog.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
+				dialog.setDefaultButton(QMessageBox::Cancel);
+				dialog.button(QMessageBox::Ok)->setText(tr("Delete"));
+
+				if (dialog.exec() != QMessageBox::Ok) {
+					update_backgrounds();
+					return;
+				}
+
 				fundos::transaction correction;
 				correction.corrects_id = widget->record.record.id();
 				correction.correct_action = fundos::transaction::correction_type::deletes;
