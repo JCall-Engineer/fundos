@@ -15,6 +15,7 @@ AccountPage::AccountPage(
 ) : QWidget(parent), app_coordinator(std::move(coordinator)), record(std::move(opening)) {
 	auto* database = app_coordinator->database();
 	connect(this,     &AccountPage::save_account_requested,   database, &AppDatabase::save_account);
+	connect(this,     &AccountPage::delete_requested,         database, &AppDatabase::save_transaction);
 	connect(this,     &AccountPage::history_requested,        database, &AppDatabase::request_account_history);
 	connect(database, &AppDatabase::account_saved,            this,     &AccountPage::on_account_saved);
 	connect(database, &AppDatabase::account_history_received, this,     &AccountPage::on_history);
@@ -221,6 +222,15 @@ void AccountPage::on_account_saved(fundos::db::outcome saved) {
 	update_open_close_button();
 }
 
+void AccountPage::on_transaction_deleted(fundos::db::outcome saved) {
+	disconnect(app_coordinator->database(), &AppDatabase::transaction_saved, this, &AccountPage::on_transaction_deleted);
+	if (saved) {
+		fetch_history();
+	} else {
+		update_backgrounds();
+	}
+}
+
 void AccountPage::clear_history() {
 	transaction_widgets.clear();
 	while (QLayoutItem* item = history_layout->takeAt(0)) {
@@ -324,7 +334,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		auto* widget = &transaction_widgets.back();
 		widget->record = transaction;
 
-		widget->background_color = transaction.allocations.empty() ? theme::warning_background : theme::success_background;
+		widget->background_color = transaction.allocations.empty() ? theme::warning_background : theme::surface;
 		widget->background_widget = new QWidget(table);
 		widget->background_widget->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
 		widget->background_widget->setMinimumSize(0, 0);
@@ -393,6 +403,45 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 			).arg(theme::info_background.name(), theme::separator.name()));
 			open_transaction(widget->record);
 		});
+
+		if (!transaction.record.fitid) {
+			auto* correct_action = new QPushButton(tr("Make Correction"), details_actions);
+			correct_action->setIcon(theme::colored_svg_icon(":/icons/replace.svg", theme::text, theme::toolbar_icon_size));
+			details_actions_layout->addWidget(correct_action);
+			connect(correct_action, &QPushButton::clicked, this, [this, widget]() {
+				widget->background_widget->setStyleSheet(QStringLiteral(
+					"background-color: %1; border: 1px solid %2"
+				).arg(theme::info_background.name(), theme::separator.name()));
+				fundos::db::transaction_history::allocated_transaction correction;
+				correction.record.corrects_id = widget->record.record.id();
+				correction.record.correct_action = fundos::transaction::correction_type::replaces;
+				correction.record.account_id = widget->record.record.account_id;
+				correction.record.date_recorded = widget->record.record.date_recorded;
+				correction.record.memo = widget->record.record.memo;
+				correction.record.amount = widget->record.record.amount;
+
+				open_transaction(correction);
+			});
+
+			auto* delete_action = new QPushButton(tr("Delete Transaction"), details_actions);
+			delete_action->setIcon(theme::colored_svg_icon(":/icons/trash.svg", theme::text, theme::toolbar_icon_size));
+			details_actions_layout->addWidget(delete_action);
+			connect(delete_action, &QPushButton::clicked, this, [this, widget]() {
+				widget->background_widget->setStyleSheet(QStringLiteral(
+					"background-color: %1; border: 1px solid %2"
+				).arg(theme::info_background.name(), theme::separator.name()));
+				fundos::transaction correction;
+				correction.corrects_id = widget->record.record.id();
+				correction.correct_action = fundos::transaction::correction_type::deletes;
+				correction.account_id = widget->record.record.account_id;
+				correction.date_recorded = widget->record.record.date_recorded;
+				correction.memo = widget->record.record.memo;
+				std::vector<fundos::allocation> allocations;
+
+				connect(app_coordinator->database(), &AppDatabase::transaction_saved, this, &AccountPage::on_transaction_deleted);
+				emit delete_requested(correction, allocations);
+			});
+		}
 
 		details_layout->addWidget(details_actions);
 		details_layout->addWidget(details_actions);

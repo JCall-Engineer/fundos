@@ -55,9 +55,11 @@ private slots:
 	void fetch_history();
 
 	void on_account_saved(fundos::db::outcome saved);
+	void on_transaction_deleted(fundos::db::outcome saved);
 	void on_history(fundos::db::result<fundos::db::transaction_history> received);
 
 signals:
+	void delete_requested(fundos::transaction transaction, std::vector<fundos::allocation> allocations);
 	void history_requested(int64_t account_id, fundos::datetime after, fundos::datetime before);
 	void save_account_requested(fundos::account saving);
 	void go_home();
