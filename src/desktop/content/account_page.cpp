@@ -327,8 +327,6 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 	table->set_footer(footer);
 
 	std::optional<fundos::currency> balance_checker;
-	size_t tx_index = 0;
-	size_t lb_index = 0;
 	int row = 1;
 	auto add_transaction = [&](fundos::db::transaction_history::allocated_transaction& transaction) -> void {
 		transaction_widgets.push_back(Transaction{});
@@ -364,6 +362,9 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 
 		widget->memo = new QLabel(QString::fromStdString(transaction.record.memo), table);
 
+		if (transaction.record.date_cleared || transaction.record.date_reconciled) {
+			balance_checker = transaction.record.amount;
+		}
 		widget->amount = theme::currency_label(transaction.record.amount, app_coordinator->context()->currency_locale().info(), table);
 
 		widget->balance = theme::currency_label(transaction.account_balance, app_coordinator->context()->currency_locale().info(), table);
@@ -470,12 +471,55 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		table->body_layout()->addWidget(widget->details_button,    row, 5, 1, 1);
 		table->body_layout()->addWidget(widget->details_widget,  ++row, 0, 1, 6);
 		++row;
-
 	};
 	auto add_ledger_balance = [&](fundos::import_ledger_balance& ledger_balance) -> void {
-		// todo
+		const bool ledger_contradicted = balance_checker && *balance_checker != ledger_balance.amount;
+		
+		const auto background_color = ledger_contradicted ? theme::error_background : theme::success_background;
+		auto* background_widget = new QWidget(table);
+		background_widget->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+		background_widget->setMinimumSize(0, 0);
+		background_widget->lower();
+		background_widget->setStyleSheet(QStringLiteral(
+			"background-color: %1; border: 1px solid %2"
+		).arg(background_color.name(), theme::separator.name()));
+
+		auto* date = new QLabel(
+			QLocale::system().toString(
+				QDateTime::fromMSecsSinceEpoch(ledger_balance.date_as_of.milliseconds_since_epoch).date(),
+				QLocale::ShortFormat
+			),
+			table
+		);
+
+		auto* memo = new QLabel(tr("OFX Balance"), table);
+
+		auto* amount = ledger_contradicted
+			? theme::currency_label(ledger_balance.amount - *balance_checker, app_coordinator->context()->currency_locale().info(), table)
+			: new QLabel("", table);
+
+		if (ledger_contradicted) {
+			memo->setText(tr("OFX Balance — Discrepancy"));
+			amount->setToolTip(tr(
+				"Discrepancy between your last reconciled balance and the OFX balance reported by your bank.\n"
+				"A negative value means the bank's figure is lower than your register.\n"
+				"Reconcile transactions to resolve this discrepancy."
+			));
+		}
+
+		auto* balance = theme::currency_label(ledger_balance.amount, app_coordinator->context()->currency_locale().info(), table);
+		balance->setToolTip(tr("Balance reported by your bank at the time of this OFX import."));
+
+		table->body_layout()->addWidget(background_widget, row, 0, 1, 6);
+		table->body_layout()->addWidget(date,              row, 1, 1, 1);
+		table->body_layout()->addWidget(memo,              row, 2, 1, 1);
+		table->body_layout()->addWidget(amount,            row, 3, 1, 1);
+		table->body_layout()->addWidget(balance,           row, 4, 1, 1);
+		++row;
 	};
 
+	size_t tx_index = 0;
+	size_t lb_index = 0;
 	while (tx_index < history.transactions.size() || lb_index < history.ledger_balances.size()) {
 		if (tx_index >= history.transactions.size()) {
 			add_ledger_balance(history.ledger_balances[lb_index++]);
