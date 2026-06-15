@@ -58,9 +58,17 @@ FundPage::FundPage(
 		auto today = QDate::currentDate();
 		auto* after_label = new QLabel(tr("From"), this);
 		after_picker = new DatePicker(today.addMonths(-1), this);
+		connect(after_picker, &DatePicker::updated, this, [this](){
+			if (loading_preset_date_range) { return; }
+			fetch_history();
+		});
 
 		auto* before_label = new QLabel(tr("Until"), this);
 		before_picker = new DatePicker(today, this);
+		connect(before_picker, &DatePicker::updated, this, [this](){
+			if (loading_preset_date_range) { return; }
+			fetch_history();
+		});
 
 		auto* month_button = new QPushButton(tr("Last Month"), this);
 		connect(month_button, &QPushButton::clicked, this, [this]() {
