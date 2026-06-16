@@ -407,6 +407,52 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 
 		auto* details_layout = new QVBoxLayout(widget->details_widget);
 
+		auto* allocations_widget = new QWidget(widget->details_widget);
+		auto* allocations_grid = new QGridLayout(allocations_widget);
+		allocations_grid->setContentsMargins(0, 0, 0, 0);
+		allocations_grid->setSpacing(0);
+		allocations_grid->setColumnStretch(0, 0);
+		allocations_grid->setColumnMinimumWidth(0, 25);
+		allocations_grid->setColumnStretch(1, 0);
+		allocations_grid->setColumnStretch(2, 0);
+		allocations_grid->setColumnMinimumWidth(2, 50);
+		allocations_grid->setColumnStretch(3, 0);
+		allocations_grid->setColumnStretch(4, 1);
+
+		int allocation_row = 0;
+		for (auto& allocation : transaction.allocations) {
+			auto* background = new QWidget(allocations_widget);
+			background->setStyleSheet(QStringLiteral(
+				"background-color: %1; border: 1px solid %2"
+			).arg(allocation_row % 2 ? theme::background.name() : theme::background.lighter(110).name(), theme::separator.name()));
+			background->lower();
+
+			auto* fund = app_coordinator->context()->fund(allocation.fund_id);
+			QString fund_name = tr("Fund id: \"%1\"").arg(QString::number(allocation.fund_id));
+			if (fund != nullptr) { fund_name = QString::fromStdString(fund->name); }
+
+			auto* fund_label = new QLabel(fund_name, allocations_widget);
+			auto* fund_amount = theme::currency_label(allocation.amount, app_coordinator->context()->currency_locale().info(), allocations_widget);
+
+			fund_amount->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+			fund_label->setContentsMargins(8, 4, 0, 4);
+			fund_amount->setContentsMargins(0, 4, 8, 4);
+
+			allocations_grid->addWidget(background,  allocation_row, 1, 1, 3);
+			allocations_grid->addWidget(fund_label,  allocation_row, 1, 1, 1);
+			allocations_grid->addWidget(fund_amount, allocation_row, 3, 1, 1);
+			++allocation_row;
+		}
+		if (allocation_row == 0) {
+			auto* empty_label = new QLabel(tr("No allocations yet"), allocations_widget);
+			auto empty_label_font = empty_label->font();
+			empty_label_font.setItalic(true);
+			empty_label->setFont(empty_label_font);
+			allocations_grid->addWidget(empty_label, allocation_row, 1, 1, 1);
+		}
+
+		details_layout->addWidget(allocations_widget);
+
 		auto* details_actions = new QWidget(widget->details_widget);
 		auto* details_actions_layout = new QHBoxLayout(details_actions);
 		details_actions_layout->setAlignment(Qt::AlignLeft);
