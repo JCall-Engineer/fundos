@@ -37,6 +37,7 @@ private slots:
 	void on_history(fundos::db::result<fundos::db::allocation_history> received);
 
 signals:
+	void account_requested(fundos::account account, std::optional<fundos::transaction> transaction);
 	void history_requested(int64_t fund_id, fundos::datetime after, fundos::datetime before);
 	void save_fund_requested(fundos::fund saving);
 	void go_home();

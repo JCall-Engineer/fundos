@@ -1,9 +1,11 @@
 #include "fund_page.hpp"
 #include "theme.hpp"
 #include "components/loading_spinner.hpp"
+#include "components/table_view.hpp"
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QScrollArea>
+#include <QMessageBox>
 
 FundPage::FundPage(
 	AppCoordinator* coordinator,
@@ -114,18 +116,13 @@ FundPage::FundPage(
 		layout->addWidget(filter_row);
 	}
 	{
-		auto* history_scroll = new QScrollArea(this);
-		history_scroll->setWidgetResizable(true);
-
 		history_panel = new QWidget();
-		history_scroll->setWidget(history_panel);
-
 		history_layout = new QVBoxLayout(history_panel);
 		history_layout->setContentsMargins(0, 0, 0, 0);
 		history_layout->setSpacing(0);
-		fetch_history();
+		layout->addWidget(history_panel, 1);
 
-		layout->addWidget(history_scroll, 1);
+		fetch_history();
 	}
 }
 
@@ -240,8 +237,65 @@ void FundPage::on_history(fundos::db::result<fundos::db::allocation_history> rec
 		info_layout->addWidget(theme::header_label(tr("No transactions recorded during the selected period."), history_panel), 0, Qt::AlignCenter);
 		return;
 	}
-	for (auto& transaction : history.transactions) {
+	
+	auto* table = new TableView(true, this);
+	table->set_header_vertical_padding(8);
+	table->add_header_label(0, QStringLiteral(""));
+	table->add_header_label(1, tr("Date"));
+	table->add_header_label(2, tr("Memo"));
+	table->add_header_label(3, tr("Amount"));
+	table->add_header_label(4, tr("Balance"));
 
+	table->body_layout()->setColumnStretch(0, 0);
+	table->body_layout()->setColumnStretch(1, 1);
+	table->body_layout()->setColumnStretch(2, 5);
+	table->body_layout()->setColumnStretch(3, 1);
+	table->body_layout()->setColumnStretch(4, 1);
+
+	history_layout->addWidget(table);
+
+	int row = 1;
+	for (auto& transaction : history.transactions) {
+		auto* background_widget = new QWidget(table);
+		background_widget->setStyleSheet(QStringLiteral(
+			"background-color: %1; border: 1px solid %2"
+		).arg(theme::surface.name(), theme::separator.name()));
+
+		auto* date = new QLabel(
+			QLocale::system().toString(
+				QDateTime::fromMSecsSinceEpoch(transaction.record.date_recorded.milliseconds_since_epoch).date(),
+				QLocale::ShortFormat
+			),
+			table
+		);
+		auto* memo = new QLabel(QString::fromStdString(transaction.record.memo), table);
+		auto* amount = theme::currency_label(transaction.record.amount, app_coordinator->context()->currency_locale().info(), table);
+		auto* balance = theme::currency_label(transaction.fund_balance, app_coordinator->context()->currency_locale().info(), table);
+
+		auto* button_container = new QWidget(table);
+		auto* button_layout = new QHBoxLayout(button_container);
+		button_layout->setContentsMargins(8, 8, 8, 8);
+		button_layout->setAlignment(Qt::AlignCenter);
+
+		auto* button = new QToolButton(button_container);
+		button_layout->addWidget(button);
+		button->setIcon(theme::colored_svg_icon(":/icons/external-link.svg", theme::text, theme::toolbar_icon_size));
+		button->setIconSize(theme::label_icon_size(memo));
+		button->setAutoRaise(true);
+		connect(button, &QToolButton::clicked, this, [this, transaction]() {
+			auto* account = app_coordinator->context()->account(transaction.record.account_id);
+			if (account == nullptr) {
+				QMessageBox::critical(this, tr("Invalid Account"), tr("The transaction references an account which doesn't exist."));
+				return;
+			}
+			emit account_requested(*account, transaction.record);
+		});
+
+		table->body_layout()->addWidget(background_widget, row,   0, 1, 5);
+		table->body_layout()->addWidget(button_container,  row,   0, 1, 1);
+		table->body_layout()->addWidget(date,              row,   1, 1, 1);
+		table->body_layout()->addWidget(memo,              row,   2, 1, 1);
+		table->body_layout()->addWidget(amount,            row,   3, 1, 1);
+		table->body_layout()->addWidget(balance,           row++, 4, 1, 1);
 	}
-	history_layout->addStretch();
 }
