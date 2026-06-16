@@ -10,19 +10,19 @@ TransactionDialog::TransactionDialog(
 	AppCoordinator*       coordinator,
 	allocated_transaction opening,
 	QWidget*              parent
-) : QDialog(parent), app_coordinator(coordinator), transaction(std::move(opening)) {
-	setWindowTitle(transaction.record.is_persisted()
+) : QDialog(parent), app_coordinator(coordinator), current_allocated_transaction(std::move(opening)) {
+	setWindowTitle(current_allocated_transaction.record.is_persisted()
 		? tr("Edit transaction")
-		: transaction.record.corrects_id
+		: current_allocated_transaction.record.corrects_id
 			? tr("Correct transaction")
 			: tr("Create transaction")
 	);
 
 	const auto& locale = app_coordinator->context()->currency_locale().info();
 
-	for (const auto& existing : transaction.allocations) {
+	for (const auto& existing : current_allocated_transaction.allocations) {
 		adjusted_balances[existing.fund_id] = fundos::currency{0};
-		current_allocations.push_back({ existing.fund_id, existing.amount });
+		current_allocations.push_back(existing);
 	}
 
 	auto* outer = new QGridLayout(this);
@@ -33,12 +33,12 @@ TransactionDialog::TransactionDialog(
 
 	int row = 0;
 
-	date_recorded_picker = new DatePicker(QDateTime::fromMSecsSinceEpoch(transaction.record.date_recorded.milliseconds_since_epoch), this);
+	date_recorded_picker = new DatePicker(QDateTime::fromMSecsSinceEpoch(current_allocated_transaction.record.date_recorded.milliseconds_since_epoch), this);
 
-	const QString amount_text = QString::fromStdString(transaction.record.amount.to_string(locale));
+	const QString amount_text = QString::fromStdString(current_allocated_transaction.record.amount.to_string(locale));
 	amount_field = new QLineEdit(amount_text, this);
 	amount_field->installEventFilter(this);
-	amount_field->setEnabled(!transaction.record.is_persisted());
+	amount_field->setEnabled(!current_allocated_transaction.record.is_persisted());
 
 	outer->addWidget(new QLabel(tr("Date recorded"), this), row, 0);
 	outer->addWidget(new QLabel(tr("Amount"),        this), row, 1);
@@ -47,7 +47,7 @@ TransactionDialog::TransactionDialog(
 	outer->addWidget(amount_field,         row, 1);
 	++row;
 
-	memo_field = new QLineEdit(QString::fromStdString(transaction.record.memo), this);
+	memo_field = new QLineEdit(QString::fromStdString(current_allocated_transaction.record.memo), this);
 	outer->addWidget(new QLabel(tr("Memo"), this), row, 0, 1, 2);
 	++row;
 	outer->addWidget(memo_field, row, 0, 1, 2);
@@ -63,18 +63,18 @@ TransactionDialog::TransactionDialog(
 	reconciled_layout->addWidget(reconciled_checkbox);
 	reconciled_layout->addWidget(date_reconciled_picker);
 
-	if (transaction.record.date_reconciled.has_value()) {
+	if (current_allocated_transaction.record.date_reconciled.has_value()) {
 		reconciled_checkbox->setChecked(true);
 		date_reconciled_picker->set_value(
 			QDateTime::fromMSecsSinceEpoch(
-				transaction.record.date_reconciled->milliseconds_since_epoch
+				current_allocated_transaction.record.date_reconciled->milliseconds_since_epoch
 			)
 		);
 	}
 
-	const QString cleared_text = transaction.record.date_cleared.has_value()
+	const QString cleared_text = current_allocated_transaction.record.date_cleared.has_value()
 		? QLocale::system().toString(
-			QDateTime::fromMSecsSinceEpoch(transaction.record.date_cleared->milliseconds_since_epoch).date(),
+			QDateTime::fromMSecsSinceEpoch(current_allocated_transaction.record.date_cleared->milliseconds_since_epoch).date(),
 			QLocale::ShortFormat
 		)
 		: tr("Not imported");
@@ -160,11 +160,11 @@ TransactionDialog::TransactionDialog(
 		);
 		if (!parsed.has_value()) {
 			amount_field->setText(QString::fromStdString(
-				transaction.record.amount.to_string(locale)
+				current_allocated_transaction.record.amount.to_string(locale)
 			));
 			return;
 		}
-		transaction.record.amount = *parsed;
+		current_allocated_transaction.record.amount = *parsed;
 		amount_field->setText(QString::fromStdString(parsed->to_string(locale)));
 		apply_justification(justified_by_combo->currentIndex());
 		update_allocation_total();
@@ -239,7 +239,7 @@ void TransactionDialog::populate_add_fund_combo() {
 		const bool already_added = std::any_of(
 			current_allocations.begin(),
 			current_allocations.end(),
-			[&](const allocation_row& row) { return row.fund_id == fund.id(); }
+			[&](const fundos::allocation row) { return row.fund_id == fund.id(); }
 		);
 		if (already_added) {
 			continue;
@@ -287,7 +287,7 @@ void TransactionDialog::update_allocation_total() {
 		total += row.amount;
 	}
 
-	const fundos::currency remaining = transaction.record.amount - total;
+	const fundos::currency remaining = current_allocated_transaction.record.amount - total;
 	const QString color = remaining.minor_units == 0
 		? theme::success_foreground.name()
 		: theme::error_foreground.name();
@@ -296,14 +296,14 @@ void TransactionDialog::update_allocation_total() {
 		"<span>%1 / %2</span> <i style='color: %3'>(%4 remaining)</i>"
 	).arg(
 		QString::fromStdString(total.to_string(locale)),
-		QString::fromStdString(transaction.record.amount.to_string(locale)),
+		QString::fromStdString(current_allocated_transaction.record.amount.to_string(locale)),
 		color,
 		QString::fromStdString(remaining.to_string(locale))
 	));
 	allocation_total_label->setTextFormat(Qt::RichText);
 }
 
-void TransactionDialog::add_allocation_row(allocation_row row, bool editable, int grid_row) {
+void TransactionDialog::add_allocation_row(const fundos::allocation& row, bool editable, int grid_row) {
 	const auto& locale = app_coordinator->context()->currency_locale().info();
 
 	const auto found = app_coordinator->context()->fund(row.fund_id);
@@ -365,7 +365,7 @@ void TransactionDialog::add_allocation_row(allocation_row row, bool editable, in
 			std::remove_if(
 				current_allocations.begin(),
 				current_allocations.end(),
-				[fund_id](const allocation_row& r) { return r.fund_id == fund_id; }
+				[fund_id](const fundos::allocation& record) { return record.fund_id == fund_id; }
 			),
 			current_allocations.end()
 		);
@@ -409,7 +409,10 @@ void TransactionDialog::apply_justification(int combo_index) {
 	if (const auto* fund_item = dynamic_cast<const FundComboItem*>(standard_item)) {
 		current_justification = justification::by_fund;
 		current_allocations.clear();
-		current_allocations.push_back({ fund_item->fund_id, transaction.record.amount });
+		fundos::allocation allocation;
+		allocation.fund_id = fund_item->fund_id;
+		allocation.amount  = current_allocated_transaction.record.amount;
+		current_allocations.push_back(allocation);
 		rebuild_allocation_table();
 		add_fund_combo->setVisible(false);
 		add_fund_button->setVisible(false);
@@ -421,11 +424,7 @@ void TransactionDialog::apply_justification(int combo_index) {
 	if (!budget) { return; }
 
 	current_justification = justification::by_budget;
-	const auto raw_allocations = budget->apply(transaction.record, adjusted_balances);
-	current_allocations.clear();
-	for (const auto& allocation : raw_allocations) {
-		current_allocations.push_back({ allocation.fund_id, allocation.amount });
-	}
+	current_allocations = budget->apply(current_allocated_transaction.record, adjusted_balances);
 	rebuild_allocation_table();
 	add_fund_combo->setVisible(false);
 	add_fund_button->setVisible(false);
@@ -439,7 +438,10 @@ void TransactionDialog::on_add_fund_clicked() {
 		return;
 	}
 
-	current_allocations.push_back({ fund_item->fund_id, fundos::currency{0} });
+	fundos::allocation allocation;
+	allocation.fund_id = fund_item->fund_id;
+	allocation.amount  = fundos::currency{0};
+	current_allocations.push_back(allocation);
 	rebuild_allocation_table();
 	populate_add_fund_combo();
 }
@@ -448,7 +450,7 @@ void TransactionDialog::on_balance_received(int64_t fund_id, fundos::db::result<
 	if (!result) { return; }
 	auto balance = result.value();
 	fundos::currency adjusted = balance;
-	for (const auto& existing : transaction.allocations) {
+	for (const auto& existing : current_allocated_transaction.allocations) {
 		if (existing.fund_id == fund_id) {
 			adjusted += existing.amount;
 			break;
@@ -465,13 +467,13 @@ void TransactionDialog::on_save_clicked() {
 	const auto& locale = app_coordinator->context()->currency_locale().info();
 
 	fundos::transaction saving;
-	saving = transaction.record;
+	saving = current_allocated_transaction.record;
 	saving.memo = memo_field->text().toStdString();
 	saving.date_recorded = fundos::datetime{
 		date_recorded_picker->get_value().toMSecsSinceEpoch()
 	};
 
-	if (!transaction.record.is_persisted()) {
+	if (!current_allocated_transaction.record.is_persisted()) {
 		const auto parsed_amount = fundos::currency::from_string(amount_field->text().toStdString(), locale);
 		if (!parsed_amount.has_value()) { return; }
 		saving.amount = *parsed_amount;
@@ -485,16 +487,8 @@ void TransactionDialog::on_save_clicked() {
 		saving.date_reconciled = std::nullopt;
 	}
 
-	std::vector<fundos::allocation> allocations;
-	for (const auto& row : current_allocations) {
-		fundos::allocation allocation;
-		allocation.fund_id = row.fund_id;
-		allocation.amount  = row.amount;
-		allocations.push_back(allocation);
-	}
-
 	fundos::currency allocated_total{0};
-	for (const auto& allocation : allocations) {
+	for (const auto& allocation : current_allocations) {
 		allocated_total += allocation.amount;
 	}
 
@@ -508,7 +502,7 @@ void TransactionDialog::on_save_clicked() {
 	}
 
 	save_button->setEnabled(false);
-	emit save_requested(saving, allocations);
+	emit save_requested(saving, current_allocations);
 }
 
 void TransactionDialog::on_save_completed(fundos::db::outcome outcome) {

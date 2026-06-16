@@ -27,17 +27,13 @@ class TransactionDialog : public QDialog {
 		by_budget,
 	};
 
-	struct allocation_row {
-		int64_t          fund_id;
-		fundos::currency amount;
-	};
-
 	AppCoordinator*    app_coordinator;
-	allocated_transaction transaction;
-	std::unordered_map<int64_t, fundos::currency> adjusted_balances;
 
-	justification                current_justification = justification::custom;
-	std::vector<allocation_row>  current_allocations;
+	allocated_transaction current_allocated_transaction;
+	std::vector<fundos::allocation> current_allocations;
+
+	std::unordered_map<int64_t, fundos::currency> adjusted_balances;
+	justification current_justification = justification::custom;
 
 	QLineEdit*   amount_field;
 	QLineEdit*   memo_field;
@@ -57,7 +53,7 @@ class TransactionDialog : public QDialog {
 	void rebuild_allocation_table();
 	void update_allocation_total();
 	void apply_justification(int combo_index);
-	void add_allocation_row(allocation_row row, bool editable, int grid_row);
+	void add_allocation_row(const fundos::allocation& row, bool editable, int grid_row);
 	void on_add_fund_clicked();
 	void on_save_clicked();
 
