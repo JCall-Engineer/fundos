@@ -263,14 +263,18 @@ void MainWindow::import_ofx() {
 }
 
 void MainWindow::open_account(const fundos::account& opening) {
-	auto account_page = new AccountPage(coordinator, opening, this);
+	open_account_with_transaction(opening, std::nullopt);
+}
+void MainWindow::open_account_with_transaction(const fundos::account& opening, std::optional<fundos::transaction> requested) {
+	auto account_page = new AccountPage(coordinator, opening, requested, this);
 	connect(account_page, &AccountPage::go_home,    this, &MainWindow::go_home);
 	connect(account_page, &AccountPage::import_ofx, this, &MainWindow::import_ofx);
 	setCentralWidget(account_page);
 }
 void MainWindow::open_fund(const fundos::fund& opening) {
 	auto fund_page = new FundPage(coordinator, opening, this);
-	connect(fund_page, &FundPage::go_home,    this, &MainWindow::go_home);
+	connect(fund_page, &FundPage::go_home,           this, &MainWindow::go_home);
+	connect(fund_page, &FundPage::account_requested, this, &MainWindow::open_account_with_transaction);
 	setCentralWidget(fund_page);
 }
 void MainWindow::open_budget(const fundos::budget& opening) {

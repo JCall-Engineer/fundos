@@ -28,6 +28,7 @@ class AccountPage : public QWidget {
 
 	AppCoordinator* app_coordinator;
 	fundos::account record;
+	std::optional<fundos::transaction> requested_transaction;
 	EditableLabel* name_label;
 	QPushButton* open_close_button;
 	QWidget* history_panel;
@@ -45,7 +46,7 @@ class AccountPage : public QWidget {
 	void update_backgrounds();
 
 public:
-	explicit AccountPage(AppCoordinator* coordinator, fundos::account opening, QWidget* parent = nullptr);
+	explicit AccountPage(AppCoordinator* coordinator, fundos::account opening, std::optional<fundos::transaction> requested = std::nullopt, QWidget* parent = nullptr);
 
 private slots:
 	void rename(QString name);

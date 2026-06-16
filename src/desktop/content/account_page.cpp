@@ -12,8 +12,9 @@
 AccountPage::AccountPage(
 	AppCoordinator* coordinator,
 	fundos::account opening,
+	std::optional<fundos::transaction> requested,
 	QWidget *parent
-) : QWidget(parent), app_coordinator(std::move(coordinator)), record(std::move(opening)) {
+) : QWidget(parent), app_coordinator(std::move(coordinator)), record(std::move(opening)), requested_transaction(std::move(requested)) {
 	auto* database = app_coordinator->database();
 	connect(this,     &AccountPage::save_account_requested,   database, &AppDatabase::save_account);
 	connect(this,     &AccountPage::delete_requested,         database, &AppDatabase::save_transaction);
@@ -71,6 +72,17 @@ AccountPage::AccountPage(
 		filter_layout->setSpacing(8);
 
 		auto today = QDateTime::currentDateTime();
+		if (requested_transaction) {
+			auto effective_date = requested_transaction->date_recorded;
+			if (requested_transaction->date_reconciled) {
+				effective_date = *requested_transaction->date_reconciled;
+			}
+			if (requested_transaction->date_cleared) {
+				effective_date = *requested_transaction->date_cleared;
+			}
+			today = QDateTime::fromMSecsSinceEpoch(effective_date.milliseconds_since_epoch);
+		}
+
 		auto* after_label = new QLabel(tr("From"), this);
 		after_picker = new DatePicker(today.addMonths(-1), this);
 		connect(after_picker, &DatePicker::updated, this, [this](){
@@ -334,6 +346,9 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		widget->record = transaction;
 
 		widget->background_color = transaction.allocations.empty() ? theme::warning_background : theme::surface;
+		if (requested_transaction && transaction.record.id() == requested_transaction->id()) {
+			widget->background_color = theme::info_background;
+		}
 		widget->background_widget = new QWidget(table);
 		widget->background_widget->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
 		widget->background_widget->setMinimumSize(0, 0);
