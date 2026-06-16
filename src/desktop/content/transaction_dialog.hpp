@@ -50,10 +50,12 @@ class TransactionDialog : public QDialog {
 	QPushButton* add_fund_button;
 	QPushButton* save_button;
 	TableView*   allocation_table;
+	QLabel*      allocation_total_label;
 
 	void populate_justified_by_combo();
 	void populate_add_fund_combo();
 	void rebuild_allocation_table();
+	void update_allocation_total();
 	void apply_justification(int combo_index);
 	void add_allocation_row(allocation_row row, bool editable, int grid_row);
 	void on_add_fund_clicked();

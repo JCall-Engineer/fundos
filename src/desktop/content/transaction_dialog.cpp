@@ -4,6 +4,7 @@
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QLocale>
+#include <QMessageBox>
 
 TransactionDialog::TransactionDialog(
 	AppCoordinator*       coordinator,
@@ -106,6 +107,13 @@ TransactionDialog::TransactionDialog(
 	allocation_table->add_header_label(2, QStringLiteral(""));
 	allocation_table->body_layout()->setColumnStretch(0, 1);
 
+	allocation_total_label = new QLabel(this);
+	allocation_total_label->setAlignment(Qt::AlignRight);
+	QFont total_font = allocation_total_label->font();
+	total_font.setBold(true);
+	allocation_total_label->setFont(total_font);
+	allocation_table->set_footer(allocation_total_label);
+
 	outer->addWidget(allocation_table, row, 0, 1, 2);
 	++row;
 	rebuild_allocation_table();
@@ -159,6 +167,7 @@ TransactionDialog::TransactionDialog(
 		transaction.record.amount = *parsed;
 		amount_field->setText(QString::fromStdString(parsed->to_string(locale)));
 		apply_justification(justified_by_combo->currentIndex());
+		update_allocation_total();
 	});
 
 	connect(justified_by_combo, &QComboBox::currentIndexChanged, this, &TransactionDialog::apply_justification);
@@ -266,7 +275,32 @@ void TransactionDialog::rebuild_allocation_table() {
 		add_allocation_row(row, editable, grid_row);
 		++grid_row;
 	}
+	update_allocation_total();
 	adjustSize();
+}
+
+void TransactionDialog::update_allocation_total() {
+	const auto& locale = app_coordinator->context()->currency_locale().info();
+
+	fundos::currency total{0};
+	for (const auto& row : current_allocations) {
+		total += row.amount;
+	}
+
+	const fundos::currency remaining = transaction.record.amount - total;
+	const QString color = remaining.minor_units == 0
+		? theme::success_foreground.name()
+		: theme::error_foreground.name();
+
+	allocation_total_label->setText(QStringLiteral(
+		"<span>%1 / %2</span> <i style='color: %3'>(%4 remaining)</i>"
+	).arg(
+		QString::fromStdString(total.to_string(locale)),
+		QString::fromStdString(transaction.record.amount.to_string(locale)),
+		color,
+		QString::fromStdString(remaining.to_string(locale))
+	));
+	allocation_total_label->setTextFormat(Qt::RichText);
 }
 
 void TransactionDialog::add_allocation_row(allocation_row row, bool editable, int grid_row) {
@@ -304,11 +338,16 @@ void TransactionDialog::add_allocation_row(allocation_row row, bool editable, in
 			allocation_amount_field->text().toStdString(),
 			locale
 		);
-		if (!parsed.has_value()) {
-			allocation_amount_field->setText(QString::fromStdString(row.amount.to_string(locale)));
-			return;
+		auto amount = row.amount;
+		if (parsed.has_value()) { amount = *parsed; }
+		allocation_amount_field->setText(QString::fromStdString(amount.to_string(locale)));
+		for (auto& allocation : current_allocations) {
+			if (allocation.fund_id == row.fund_id) {
+				allocation.amount = amount;
+				break;
+			}
 		}
-		allocation_amount_field->setText(QString::fromStdString(parsed->to_string(locale)));
+		update_allocation_total();
 	});
 
 	auto* remove_button = new QPushButton(allocation_table->body_container());
@@ -452,6 +491,20 @@ void TransactionDialog::on_save_clicked() {
 		allocation.fund_id = row.fund_id;
 		allocation.amount  = row.amount;
 		allocations.push_back(allocation);
+	}
+
+	fundos::currency allocated_total{0};
+	for (const auto& allocation : allocations) {
+		allocated_total += allocation.amount;
+	}
+
+	if (allocated_total != saving.amount) {
+		QMessageBox::warning(
+			this,
+			tr("Allocation mismatch"),
+			tr("The allocated amount must equal the transaction amount before saving.")
+		);
+		return;
 	}
 
 	save_button->setEnabled(false);
