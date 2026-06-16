@@ -4,7 +4,6 @@
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QLocale>
-#include <QMessageBox>
 
 TransactionDialog::TransactionDialog(
 	AppCoordinator*       coordinator,
@@ -37,6 +36,7 @@ TransactionDialog::TransactionDialog(
 
 	const QString amount_text = QString::fromStdString(transaction.record.amount.to_string(locale));
 	amount_field = new QLineEdit(amount_text, this);
+	amount_field->installEventFilter(this);
 	amount_field->setEnabled(!transaction.record.is_persisted());
 
 	outer->addWidget(new QLabel(tr("Date recorded"), this), row, 0);
@@ -151,6 +151,9 @@ TransactionDialog::TransactionDialog(
 			locale
 		);
 		if (!parsed.has_value()) {
+			amount_field->setText(QString::fromStdString(
+				transaction.record.amount.to_string(locale)
+			));
 			return;
 		}
 		transaction.record.amount = *parsed;
@@ -174,6 +177,17 @@ TransactionDialog::TransactionDialog(
 	for (const auto& fund : app_coordinator->context()->funds()) {
 		emit request_fund_balance(fund.id());
 	}
+}
+
+bool TransactionDialog::eventFilter(QObject* object, QEvent* event) {
+	if (event->type() != QEvent::FocusIn) {
+		return QDialog::eventFilter(object, event);
+	}
+	auto* field = qobject_cast<QLineEdit*>(object);
+	if (field != nullptr && field != memo_field) {
+		QMetaObject::invokeMethod(field, "selectAll", Qt::QueuedConnection);
+	}
+	return false;
 }
 
 void TransactionDialog::populate_justified_by_combo() {
@@ -282,6 +296,20 @@ void TransactionDialog::add_allocation_row(allocation_row row, bool editable, in
 		allocation_table->body_container()
 	);
 	allocation_amount_field->setEnabled(editable);
+	allocation_amount_field->installEventFilter(this);
+
+	connect(allocation_amount_field, &QLineEdit::editingFinished, this, [this, allocation_amount_field, row]() mutable {
+		const auto& locale = app_coordinator->context()->currency_locale().info();
+		const auto parsed = fundos::currency::from_string(
+			allocation_amount_field->text().toStdString(),
+			locale
+		);
+		if (!parsed.has_value()) {
+			allocation_amount_field->setText(QString::fromStdString(row.amount.to_string(locale)));
+			return;
+		}
+		allocation_amount_field->setText(QString::fromStdString(parsed->to_string(locale)));
+	});
 
 	auto* remove_button = new QPushButton(allocation_table->body_container());
 	remove_button->setIcon(theme::colored_svg_icon(":/icons/trash.svg", theme::text, theme::toolbar_icon_size));

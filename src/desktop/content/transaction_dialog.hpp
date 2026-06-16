@@ -59,6 +59,8 @@ class TransactionDialog : public QDialog {
 	void on_add_fund_clicked();
 	void on_save_clicked();
 
+	bool eventFilter(QObject* object, QEvent* event) override;
+
 signals:
 	void request_fund_balance(int64_t fund_id);
 	void save_requested(fundos::transaction transaction, std::vector<fundos::allocation> allocations);
