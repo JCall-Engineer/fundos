@@ -377,7 +377,11 @@ struct statements {
 	)sql" };
 
 	statement_slot get_transaction_allocations { .sql = R"sql(
-		SELECT id, fund_id, amount FROM allocations WHERE transaction_id = ?
+		SELECT allocations.id, allocations.fund_id, allocations.amount
+		FROM allocations
+		JOIN funds ON funds.id = allocations.fund_id
+		WHERE allocations.transaction_id = ?
+		ORDER BY funds.name COLLATE NOCASE
 	)sql" };
 
 	/// Used to validate allocations
