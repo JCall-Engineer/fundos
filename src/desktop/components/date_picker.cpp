@@ -744,8 +744,9 @@ bool DatePicker::eventFilter(QObject* object, QEvent* event) {
 	}
 	if (event->type() == QEvent::MouseButtonPress) {
 		QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
-		bool outside_self  = !geometry().contains(mapFromGlobal(mouse_event->globalPos()));
-		bool outside_popup = !popup->geometry().contains(mouse_event->globalPos());
+		QPoint global_position = mouse_event->globalPosition().toPoint();
+		bool outside_self  = !geometry().contains(mapFromGlobal(global_position));
+		bool outside_popup = !popup->geometry().contains(global_position);
 		if (outside_self && outside_popup && section_widget->hasFocus()) {
 			section_widget->clearFocus();
 		}
