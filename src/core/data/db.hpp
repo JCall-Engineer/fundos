@@ -344,9 +344,7 @@ public:
 	///   - fitid, corrects_fitid, correct_action, cleared, amount — taken from importing
 	///   - date, memo — taken from saving
 	/// Runs resolve_corrections after all transactions are committed.
-	/// @note Callers must not modify fitid, corrects_fitid, correct_action, cleared, or amount on saving.
-	/// @note Callers must not bypass set_match() to alter definitive matches.
-	/// @return bad_request if any imported transaction's import state is corrupt.
+	/// @return bad_request if a match was set without going through prepare_import and valid_candidates_for.
 	outcome                      perform_import(import::pending_import& pending);
 
 private:
