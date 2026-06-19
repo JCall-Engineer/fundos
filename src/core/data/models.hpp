@@ -104,20 +104,23 @@ struct bank_account {
 	std::vector<imported_transaction> transactions;
 	std::vector<transaction> candidates;
 
-	/// Returns pointers to candidates not currently matched by any imported transaction.
+	/// Returns pointers to candidates valid for matching with the given imported transaction.
+	/// A valid candidate is unclaimed, has the same amount, and is not a corrects_id record if the importing transaction has a correct_action.
 	/// Pointers are valid for the lifetime of this bank_account.
-	inline std::vector<const transaction*> unclaimed_candidates() const {
+	std::vector<const transaction*> valid_candidates_for(const imported_transaction& subject) const {
 		std::unordered_set<const transaction*> claimed;
 		for (const auto& imported : transactions) {
-			if (imported.get_match() != nullptr) {
+			if (imported.get_match() != nullptr && imported.get_match() != subject.get_match()) {
 				claimed.insert(imported.get_match());
 			}
 		}
 		std::vector<const transaction*> view;
 		for (const auto& candidate : candidates) {
-			if (!claimed.contains(&candidate)) {
-				view.push_back(&candidate);
-			}
+			if (claimed.contains(&candidate)) { continue; }
+			if (candidate.fitid) { continue; } // Should be redundant with the previous statement but for safety
+			if (candidate.amount != subject.importing.amount) { continue; }
+			if (subject.importing.correct_action.has_value() && candidate.corrects_id.has_value()) { continue; }
+			view.push_back(&candidate);
 		}
 		return view;
 	}

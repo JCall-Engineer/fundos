@@ -225,10 +225,10 @@ struct statements {
 		FROM transactions
 		WHERE
 			account_id = ?
-			AND date_reconciled IS NULL -- Reconciliation transactions are user assertions and should be corrected rather than matched to an OFX import
-			AND fitid IS NULL           -- Excludes previously imported transactions; also excludes bank corrections via schema constraint (corrects_fitid IS NULL implied, corrects_id for bank corrections handled)
-			AND correct_action IS NULL  -- Excludes all corrections; manual corrections with corrects_id set are caught here since fitid IS NULL only handles the bank correction case
-			AND superseded_by IS NULL   -- Excludes voided manual transactions
+			AND date_reconciled IS NULL         -- Reconciliation transactions are user assertions and should be corrected rather than matched to an OFX import
+			AND fitid IS NULL                   -- Users should not be manually matching fitid, that's handled by find_transaction_by_fitid
+			AND correct_action IS NOT 'delete'  -- Delete correction transactions aren't meaningful merge targets
+			AND superseded_by IS NULL           -- Voided transactions aren't meaningful merge targets
 	)sql" };
 
 	/// Used to find records of previously imported transactions.
