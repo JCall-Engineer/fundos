@@ -1,14 +1,20 @@
+#include "data/import.hpp"
 #include "main_window.hpp"
-#include "content/home_page.hpp"
 #include "content/locale_page.hpp"
+#include "content/home_page.hpp"
 #include "content/account_page.hpp"
 #include "content/fund_page.hpp"
 #include "content/budget_page.hpp"
+#include "content/import_accounts_page.hpp"
+#include "content/import_transactions_page.hpp"
 #include <QApplication>
+#include <QtConcurrent>
 #include <QDate>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QFuture>
+#include <QFutureWatcher>
 #include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
@@ -258,8 +264,102 @@ void MainWindow::db_manage_locale() {
 	open_locale_page(context->optional_currency_locale(), context->optional_percentage_locale());
 }
 
-void MainWindow::import_ofx() {
+static inline QString warning_message(fundos::import::warning type, int32_t count) {
+	using warning = fundos::import::warning;
+	switch (type) {
+		case warning::missing_acctid:
+			return QObject::tr("%n transaction(s) were missing an account ID and could not be matched to an account.", "", count);
+		case warning::skipped_transaction:
+			return QObject::tr("%n transaction(s) could not be parsed and were skipped.", "", count);
+		case warning::missing_fitid:
+			return QObject::tr("%n transaction(s) were missing a unique identifier and may be imported as duplicates.", "", count);
+		case warning::missing_date:
+			return QObject::tr("%n transaction(s) were missing a date.", "", count);
+		case warning::missing_amount:
+			return QObject::tr("%n transaction(s) were missing an amount.", "", count);
+		case warning::bad_date:
+			return QObject::tr("%n transaction(s) had a date that could not be parsed.", "", count);
+		case warning::bad_amount:
+			return QObject::tr("%n transaction(s) had an amount that could not be parsed.", "", count);
+		case warning::bad_correction:
+			return QObject::tr("%n transaction(s) referenced a correction that could not be resolved.", "", count);
+		case warning::NUM_WARNINGS:
+			return QString();
+	}
+	FUNDOS_UNREACHABLE();
+}
 
+void MainWindow::import_ofx() {
+	QString source = QFileDialog::getOpenFileName(
+		this,
+		tr("Import from Bank"),
+		QDir::homePath(),
+		tr("OFX File (*.ofx)")
+	);
+	if (source.isEmpty()) { return; }
+	std::string filepath = source.toStdString();
+	fundos::currency_locale::spec locale = coordinator->context()->currency_locale().info();
+
+	QFutureWatcher<fundos::import::result>* watcher = new QFutureWatcher<fundos::import::result>(this);
+	connect(watcher, &QFutureWatcher<fundos::import::result>::finished, this, [this, watcher]() {
+		fundos::import::result imported = watcher->result();
+		watcher->deleteLater();
+		using error = fundos::import::error;
+		if (!imported.ok()) {
+			switch (imported.err) {
+				case error::bad_format:
+					QMessageBox::critical(this, tr("Import Error"), tr("The selected file is not a recognized OFX format."));
+					return;
+				case error::io_error:
+					QMessageBox::critical(this, tr("Import Error"), tr("There was an error reading the selected file."));
+					return;
+				case error::malformed:
+					QMessageBox::critical(this, tr("Import Error"), tr("The selected file is damaged or incomplete and could not be read."));
+					return;
+				case error::none:
+					FUNDOS_UNREACHABLE();
+					return;
+			}
+		}
+		bool has_warnings = false;
+		QString warnings = tr("Importing generated the following warnings:");
+		using warning = fundos::import::warning;
+		for (int32_t index = 0; index < (int32_t)warning::NUM_WARNINGS; ++index) {
+			int32_t count = imported.warning_counts[index];
+			if (count > 0) {
+				warnings += "\n" + warning_message((warning)index, count);
+				has_warnings = true;
+			}
+		}
+		warnings += "\n" + tr("Continue?");
+		if (has_warnings) {
+			if (QMessageBox::Cancel == QMessageBox::question(
+				this,
+				tr("Import Warnings"),
+				warnings,
+				QMessageBox::Ok | QMessageBox::Cancel,
+				QMessageBox::Cancel)
+			) { return; }
+		}
+		auto import_data = std::make_shared<fundos::import::pending_import>(std::move(imported.data));
+		auto iterator = std::make_shared<ImportAccountsPage::Iterator>(import_data);
+		if (iterator->advance_to_unmatched(coordinator->context()->accounts()) != nullptr) {
+			auto* page = new ImportAccountsPage(coordinator, iterator, this);
+			connect(page, &ImportAccountsPage::ready_for_merge, this, &MainWindow::import_handle_merge);
+			setCentralWidget(page);
+		} else {
+			import_handle_merge(import_data);
+		}
+	});
+	QFuture<fundos::import::result> future = QtConcurrent::run([filepath, locale]() {
+		return fundos::import::import_ofx(filepath, locale);
+	});
+	watcher->setFuture(future);
+}
+
+void MainWindow::import_handle_merge(std::shared_ptr<fundos::import::pending_import> import_data) {
+	auto* page = new ImportTransactionsPage(coordinator, import_data, this);
+	setCentralWidget(page);
 }
 
 void MainWindow::open_account(const fundos::account& opening) {

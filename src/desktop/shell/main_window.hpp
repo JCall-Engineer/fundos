@@ -54,6 +54,7 @@ private slots:
 	void db_manage_locale();
 
 	void import_ofx();
+	void import_handle_merge(std::shared_ptr<fundos::import::pending_import> import_data);
 
 	void open_account(const fundos::account& opening);
 	void open_account_with_transaction(const fundos::account& opening, std::optional<fundos::transaction> requested);
