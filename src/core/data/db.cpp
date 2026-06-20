@@ -320,39 +320,39 @@ db::result<currency_locale::selection> db::get_currency_locale() {
 		auto scale_result = get_meta(locale_meta.currency_locale_scale_key);
 		if (!scale_result) { return scale_result.status(); }
 		auto scale_it = valid_scales.find(scale_result.value());
-		if (scale_it == valid_scales.end()) { return outcome(error::not_found, "Recorded currency scale is invalid"); }
+		if (scale_it == valid_scales.end()) { return outcome(error::rejected, "Recorded currency scale is invalid"); }
 		int16_t scale = scale_it->second;
 
 		// Extract symbol from meta
 		auto symbol_result = get_meta(locale_meta.currency_locale_symbol_key);
 		if (!symbol_result) { return symbol_result.status(); }
 		std::string& symbol = symbol_result.value();
-		if (symbol.length() > 4) { return outcome(error::not_found, "Recorded currency symbol is too long"); } // This is an implicit assumption for currency::to_string
+		if (symbol.length() > 4) { return outcome(error::rejected, "Recorded currency symbol is too long"); } // This is an implicit assumption for currency::to_string
 
 		// Extract thousands_separator from meta
 		auto thousands_result = get_meta(locale_meta.currency_locale_thousands_separator_key);
 		if (!thousands_result) { return thousands_result.status(); }
-		if (thousands_result.value().empty()) { return outcome(error::not_found, "Recorded thousands separator is empty"); }
+		if (thousands_result.value().empty()) { return outcome(error::rejected, "Recorded thousands separator is empty"); }
 		char thousands_separator = thousands_result.value()[0];
 
 		// Extract decimal_separator from meta
 		auto decimal_result = get_meta(locale_meta.currency_locale_decimal_separator_key);
 		if (!decimal_result) { return decimal_result.status(); }
-		if (decimal_result.value().empty()) { return outcome(error::not_found, "Recorded decimal separator is empty"); }
+		if (decimal_result.value().empty()) { return outcome(error::rejected, "Recorded decimal separator is empty"); }
 		char decimal_separator = decimal_result.value()[0];
 
 		// Extract symbol position from meta
 		auto position_result = get_meta(locale_meta.currency_locale_symbol_position_key);
 		if (!position_result) { return position_result.status(); }
 		auto position_enum = string_to_enum(currency_symbol_placement_map, position_result.value());
-		if (!position_enum.has_value()) { return outcome(error::not_found, "Recorded symbol position is not a recognized string"); }
+		if (!position_enum.has_value()) { return outcome(error::rejected, "Recorded symbol position is not a recognized string"); }
 		currency_locale::spec::symbol_placement symbol_position = position_enum.value();
 
 		// Extract negative format from meta
 		auto negative_result = get_meta(locale_meta.currency_locale_negative_format_key);
 		if (!negative_result) { return negative_result.status(); }
 		auto negative_enum = string_to_enum(currency_negative_notation_map, negative_result.value());
-		if (!negative_enum.has_value()) { return outcome(error::not_found, "Recorded negative format is not a recognized string"); }
+		if (!negative_enum.has_value()) { return outcome(error::rejected, "Recorded negative format is not a recognized string"); }
 		currency_locale::spec::negative_notation negative_format = negative_enum.value();
 
 		return currency_locale::selection(currency_locale::spec{
@@ -368,7 +368,7 @@ db::result<currency_locale::selection> db::get_currency_locale() {
 	if (locale) {
 		return currency_locale::selection(locale);
 	}
-	return outcome(error::not_found, "Recorded currency locale preset is not a recognized string");
+	return outcome(error::rejected, "Recorded currency locale preset is not a recognized string");
 }
 db::outcome db::set_currency_locale(const currency_locale::selection& locale) {
 	auto set_identifier = [&]() -> outcome {
@@ -429,7 +429,7 @@ db::result<percentage_locale::selection> db::get_percentage_locale() {
 		// Extract decimal_separator from meta
 		auto decimal_result = get_meta(locale_meta.percentage_locale_decimal_separator_key);
 		if (!decimal_result) { return decimal_result.status(); }
-		if (decimal_result.value().empty()) { return outcome(error::not_found, "Recorded decimal separator is empty"); }
+		if (decimal_result.value().empty()) { return outcome(error::rejected, "Recorded decimal separator is empty"); }
 		char decimal_separator = decimal_result.value()[0];
 
 		// Extract has_space from meta
@@ -441,7 +441,7 @@ db::result<percentage_locale::selection> db::get_percentage_locale() {
 		auto position_result = get_meta(locale_meta.percentage_locale_symbol_position_key);
 		if (!position_result) { return position_result.status(); }
 		auto position_enum = string_to_enum(percentage_symbol_placement_map, position_result.value());
-		if (!position_enum.has_value()) { return outcome(error::not_found, "Recorded symbol position is not a recognized string"); }
+		if (!position_enum.has_value()) { return outcome(error::rejected, "Recorded symbol position is not a recognized string"); }
 		percentage_locale::spec::symbol_placement symbol_position = position_enum.value();
 
 		return percentage_locale::selection(percentage_locale::spec{
@@ -454,7 +454,7 @@ db::result<percentage_locale::selection> db::get_percentage_locale() {
 	if (locale) {
 		return percentage_locale::selection(locale);
 	}
-	return outcome(error::not_found, "Recorded percentage locale preset is not a recognized string");
+	return outcome(error::rejected, "Recorded percentage locale preset is not a recognized string");
 }
 db::outcome db::set_percentage_locale(const percentage_locale::selection& locale) {
 	auto set_identifier = [&]() -> outcome {
