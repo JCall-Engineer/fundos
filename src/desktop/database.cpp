@@ -125,9 +125,20 @@ void AppDatabase::request_locales() {
 	auto percentage = database->get_percentage_locale();
 	emit locales_received(currency, percentage);
 	emit operation_finished();
-	if (currency) {
+
+	// MainWindow does not need to notify the user on a not found error
+	// the user will see the locale selection screen instead
+	if (!currency && currency.status().code != fundos::db::error::not_found) {
+		update_status(currency);
+		return;
+	}
+	if (!percentage && percentage.status().code != fundos::db::error::not_found) {
 		update_status(percentage);
-	} else {
+		return;
+	}
+
+	// Still notify of success so status bar can be updated
+	if (currency && percentage) {
 		update_status(currency);
 	}
 }
