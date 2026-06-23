@@ -50,8 +50,8 @@ void ImportAccountsPage::show_current() {
 	int32_t preview_count = 0;
 	for (const auto& imported : bank_account->transactions) {
 		QString line = tr("%1 — %2")
-			.arg(QString::fromStdString(imported.importing.memo))
-			.arg(QString::fromStdString(imported.importing.amount.to_string(app_coordinator->context()->currency_locale().info())));
+			.arg(QString::fromStdString(imported.record.memo))
+			.arg(QString::fromStdString(imported.record.amount.to_string(app_coordinator->context()->currency_locale().info())));
 		preview_list->addItem(line);
 		++preview_count;
 	}
