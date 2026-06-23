@@ -62,20 +62,22 @@ struct import_ledger_balance : db_managed {
 
 namespace import {
 
-/// Represents the 3 way choice a user has when importing a transaction
+/// A transaction parsed from an OFX file, staged for user review before committing.
 struct imported_transaction {
+	enum class memo_choice : uint8_t {
+		prefer_existing,
+		prefer_importing,
+	};
+
+	/// Controls which memo is committed; only meaningful when a match is set.
+	memo_choice memo = memo_choice::prefer_existing;
+
 	/// Populated by the importer
 	/// @note importer must ensure fitid and cleared are populated
-	transaction importing;
-
-	/// The working copy of the transaction to be committed.
-	/// db::prepare_import initializes date and memo from match if found, otherwise from importing.
-	/// The user may freely edit date and memo: choosing from either `match`, `importing`, or a custom override.
-	/// db::perform_import merges immutable fields from `importing` and `match` into this record before saving.
-	transaction saving;
+	transaction record;
 
 	/// Returns true if match was found by fitid — the match is definitive and cannot be changed.
-	bool is_definitive_match() const { return match_ != nullptr && match_->fitid == importing.fitid; }
+	bool is_definitive_match() const { return match_ != nullptr && match_->fitid == record.fitid; }
 
 	/// Match suggestions are initialized by db::prepare_import, can be adjusted by the user if not definitive.
 	bool set_match(const transaction* candidate) {
@@ -118,8 +120,8 @@ struct bank_account {
 		for (const auto& candidate : candidates) {
 			if (claimed.contains(&candidate)) { continue; }
 			if (candidate.fitid) { continue; } // Should be redundant with the previous statement but for safety
-			if (candidate.amount != subject.importing.amount) { continue; }
-			if (subject.importing.correct_action.has_value() && candidate.corrects_id.has_value()) { continue; }
+			if (candidate.amount != subject.record.amount) { continue; }
+			if (subject.record.correct_action.has_value() && candidate.corrects_id.has_value()) { continue; }
 			view.push_back(&candidate);
 		}
 		return view;

@@ -295,7 +295,7 @@ void import_transaction(parse_context& context, std::vector<imported_transaction
 					transaction.amount = *pending_amount;
 				}
 				imported_transaction imported;
-				imported.importing = std::move(transaction);
+				imported.record = std::move(transaction);
 				transactions.push_back(std::move(imported));
 				return;
 		}

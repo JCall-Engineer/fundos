@@ -1162,17 +1162,17 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	int64_t previous_import_id = sqlite3_last_insert_rowid(connection); \
 	(void)previous_import_id; \
 	import::imported_transaction matched_import; \
-	matched_import.importing.fitid         = previous_import.fitid; \
-	matched_import.importing.date_cleared  = previous_import.date_cleared; \
-	matched_import.importing.amount        = previous_import.amount; \
-	matched_import.importing.date_recorded = previous_import.date_recorded + timedelta::days(3); \
-	matched_import.importing.memo    = "New Memo"; \
+	matched_import.record.fitid         = previous_import.fitid; \
+	matched_import.record.date_cleared  = previous_import.date_cleared; \
+	matched_import.record.amount        = previous_import.amount; \
+	matched_import.record.date_recorded = previous_import.date_recorded + timedelta::days(3); \
+	matched_import.record.memo    = "New Memo"; \
 	import::imported_transaction fresh_import; \
-	fresh_import.importing.fitid         = std::string{"fitid-new"}; \
-	fresh_import.importing.date_cleared  = CLOSED_AT + timedelta::days(21); \
-	fresh_import.importing.amount        = currency{2000}; \
-	fresh_import.importing.date_recorded = datetime{0}; \
-	fresh_import.importing.memo          = "Fresh"; \
+	fresh_import.record.fitid         = std::string{"fitid-new"}; \
+	fresh_import.record.date_cleared  = CLOSED_AT + timedelta::days(21); \
+	fresh_import.record.amount        = currency{2000}; \
+	fresh_import.record.date_recorded = datetime{0}; \
+	fresh_import.record.memo          = "Fresh"; \
 	import::pending_import pending; \
 	import::bank_account bank; \
 	bank.acct_id = "checking-123"; \
@@ -1189,8 +1189,6 @@ TEST(DbQuery, PrepareImport_DefinitiveMatch) {
 	auto& matched = pending.accounts[0].transactions[0];
 	EXPECT_TRUE(matched.is_definitive_match());
 	EXPECT_EQ(matched.get_match()->id(), previous_import_id);
-	EXPECT_EQ(matched.saving.date_recorded, previous_import.date_recorded);
-	EXPECT_EQ(matched.saving.memo, previous_import.memo);
 }
 
 TEST(DbQuery, PrepareImport_NoMatch) {
@@ -1199,8 +1197,6 @@ TEST(DbQuery, PrepareImport_NoMatch) {
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	auto& fresh = pending.accounts[0].transactions[1];
 	EXPECT_EQ(fresh.get_match(), nullptr);
-	EXPECT_EQ(fresh.saving.date_recorded, fresh.importing.date_recorded);
-	EXPECT_EQ(fresh.saving.memo, fresh.importing.memo);
 }
 
 TEST(DbQuery, PrepareImport_FuzzyMatch) {
@@ -1211,8 +1207,8 @@ TEST(DbQuery, PrepareImport_FuzzyMatch) {
 		"INSERT INTO transactions (account_id, amount, date_recorded, memo) "
 		"VALUES ({}, {}, {}, 'Fuzzy Candidate')",
 		checking.id(),
-		fresh_import.importing.amount.minor_units,
-		fresh_import.importing.date_cleared->milliseconds_since_epoch - timedelta::days(3).milliseconds
+		fresh_import.record.amount.minor_units,
+		fresh_import.record.date_cleared->milliseconds_since_epoch - timedelta::days(3).milliseconds
 	);
 	ASSERT_EQ(sqlite3_exec(connection, sql.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
@@ -1224,14 +1220,14 @@ TEST(DbQuery, PrepareImport_FuzzyMatch) {
 TEST(DbQuery, PrepareImport_MissingFitid) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	pending.accounts[0].transactions[0].importing.fitid = std::nullopt;
+	pending.accounts[0].transactions[0].record.fitid = std::nullopt;
 	EXPECT_EQ(database->prepare_import(pending).code, db::error::bad_request);
 }
 
 TEST(DbQuery, PrepareImport_MissingCleared) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	pending.accounts[0].transactions[0].importing.date_cleared = std::nullopt;
+	pending.accounts[0].transactions[0].record.date_cleared = std::nullopt;
 	EXPECT_EQ(database->prepare_import(pending).code, db::error::bad_request);
 }
 
@@ -1280,12 +1276,12 @@ TEST(DbQuery, PerformImport_UpdatesMatchedTransaction) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
-	pending.accounts[0].transactions[0].saving.memo = "Updated Memo";
+	pending.accounts[0].transactions[0].memo = fundos::import::imported_transaction::memo_choice::prefer_importing;
 	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
 	auto memo = fetch_string(connection,
 		std::format("SELECT memo FROM transactions WHERE id = {}", previous_import_id).c_str()
 	);
-	EXPECT_EQ(memo, "Updated Memo");
+	EXPECT_EQ(memo, matched_import.record.memo);
 }
 
 TEST(DbQuery, PerformImport_CreatesCheckpoint) {
@@ -1318,8 +1314,8 @@ TEST(DbQuery, PerformImport_StaleMatch) {
 TEST(DbQuery, PerformImport_ResolvesCorrections) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	pending.accounts[0].transactions[1].importing.corrects_fitid = std::string{"fitid-existing"};
-	pending.accounts[0].transactions[1].importing.correct_action = transaction::correction_type::replaces;
+	pending.accounts[0].transactions[1].record.corrects_fitid = std::string{"fitid-existing"};
+	pending.accounts[0].transactions[1].record.correct_action = transaction::correction_type::replaces;
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
 	auto corrects_id = fetch_optional_int64(connection,

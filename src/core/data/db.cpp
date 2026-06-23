@@ -959,18 +959,16 @@ db::outcome db::prepare_import(import::pending_import& pending) {
 
 		// Search for matching records for each imported transaction
 		for (auto &txn : account.transactions) {
-			if (!txn.importing.fitid || !txn.importing.date_cleared) {
+			if (!txn.record.fitid || !txn.record.date_cleared) {
 				return outcome(error::bad_request, "Importer must set both fitid and date_cleared");
 			}
 			auto match = [&txn](const transaction* candidate) {
 				txn.set_match(candidate);
-				txn.saving.date_recorded = candidate->date_recorded;
-				txn.saving.memo = candidate->memo;
 			};
 			auto fitid_query = sql_fetch_one<transaction>(
 				prepared->named.find_transaction_by_fitid.statement,
 				[&](sqlite3_stmt* stmt) {
-					bind_text         (stmt, 1, *txn.importing.fitid);
+					bind_text         (stmt, 1, *txn.record.fitid);
 					sqlite3_bind_int64(stmt, 2, account.account_id);
 				},
 				[&](sqlite3_stmt* stmt) -> transaction {
@@ -990,12 +988,10 @@ db::outcome db::prepare_import(import::pending_import& pending) {
 				}
 			);
 			if (!fitid_query && fitid_query.status().code != error::not_found) { return fitid_query.status(); }
-			txn.saving.date_recorded = txn.importing.date_recorded;
-			txn.saving.memo = txn.importing.memo;
 			if (!fitid_query && fitid_query.status().code == error::not_found) {
 				auto view = account.valid_candidates_for(txn);
 				for (auto* candidate : view) {
-					if ((candidate->date_recorded - *txn.importing.date_cleared).magnitude() < timedelta::days(7)) {
+					if ((candidate->date_recorded - *txn.record.date_cleared).magnitude() < timedelta::days(7)) {
 						match(candidate);
 						break;
 					}
@@ -1028,53 +1024,6 @@ db::outcome db::perform_import(import::pending_import& pending) {
 			return account_query.status();
 		}
 		if (account_query.value() != account.account_id) { return outcome(error::bad_request, "Imported account_id does not match database"); }
-
-		for (auto &transaction : account.transactions) {
-			if (!transaction.importing.date_cleared) {
-				return outcome(error::bad_request, "Imported transaction does not report a date_cleared date");
-			}
-			if (transaction.importing.correct_action.has_value() != transaction.importing.corrects_fitid.has_value()) {
-				return outcome(error::bad_request, "Correct action and corrects fitid do not have expected parity");
-			}
-			transaction.saving.id_ = 0;
-			transaction.saving.account_id = account.account_id;
-			transaction.saving.amount = transaction.importing.amount;
-			transaction.saving.date_cleared = transaction.importing.date_cleared;
-			transaction.saving.fitid = transaction.importing.fitid;
-			transaction.saving.corrects_fitid = transaction.importing.corrects_fitid;
-			transaction.saving.correct_action = transaction.importing.correct_action;
-
-			if (transaction.get_match() != nullptr) {
-				auto match = fetch_transaction(transaction.get_match()->id_);
-				if (!match) {
-					if (match.status().code == error::not_found) {
-						return outcome(error::bad_request, "Matched transaction does not exist");
-					}
-					return match.status();
-				}
-				auto& matched = match.value();
-				if (!safe_match(*transaction.get_match(), matched)) { return outcome(error::bad_request, "Matched transaction has deviated from the database"); }
-
-				transaction.saving.id_ = matched.id_;
-				if (matched.account_id != account.account_id)           { return outcome(error::bad_request, "Matched transaction belongs to a different account"); }
-				if (matched.amount     != transaction.importing.amount) { return outcome(error::bad_request, "Matched transaction has a different amount"); }
-				if (matched.fitid) {
-					if (matched.fitid          != transaction.importing.fitid)          { return outcome(error::bad_request, "Matched transaction has a different fitid"); }
-					if (matched.correct_action != transaction.importing.correct_action) { return outcome(error::bad_request, "Matched transaction has a different correct action"); }
-					if (matched.corrects_fitid != transaction.importing.corrects_fitid) { return outcome(error::bad_request, "Matched transaction corrects a different fitid"); }
-				} else {
-					if (transaction.importing.corrects_fitid.has_value() && matched.corrects_id.has_value()) {
-						return outcome(error::bad_request, "Matched transaction is a correction and imported transaction is also a correction");
-					}
-					if (matched.correct_action.has_value() && matched.correct_action.value() == fundos::transaction::correction_type::deletes) {
-						return outcome(error::bad_request, "Matched transaction is a deletion correction");
-					}
-					if (matched.superseded_by.has_value()) {
-						return outcome(error::bad_request, "Matched transaction has been superseded");
-					}
-				}
-			}
-		}
 	}
 
 	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
@@ -1090,7 +1039,58 @@ db::outcome db::perform_import(import::pending_import& pending) {
 			if (!insert_ledgerbal) { return insert_ledgerbal; }
 
 			for (auto &importing : account.transactions) {
-				transaction& saving = importing.saving;
+				if (!importing.record.date_cleared) {
+					return outcome(error::bad_request, "Imported transaction does not report a date_cleared date");
+				}
+				if (importing.record.correct_action.has_value() != importing.record.corrects_fitid.has_value()) {
+					return outcome(error::bad_request, "Correct action and corrects fitid do not have expected parity");
+				}
+				auto saving = transaction{
+					.account_id = account.account_id,
+					.amount = importing.record.amount,
+					.date_recorded = *importing.record.date_cleared,
+					.memo = importing.record.memo,
+					.fitid = importing.record.fitid,
+					.date_cleared = importing.record.date_cleared,
+					.corrects_fitid = importing.record.corrects_fitid,
+					.correct_action = importing.record.correct_action,
+				};
+
+				if (importing.get_match() != nullptr) {
+					auto match = fetch_transaction(importing.get_match()->id_);
+					if (!match) {
+						if (match.status().code == error::not_found) {
+							return outcome(error::bad_request, "Matched transaction does not exist");
+						}
+						return match.status();
+					}
+					auto& matched = match.value();
+					if (!safe_match(*importing.get_match(), matched)) { return outcome(error::bad_request, "Matched transaction has deviated from the database"); }
+
+					saving.id_ = matched.id_;
+					saving.date_recorded = matched.date_recorded;
+					if (importing.memo == import::imported_transaction::memo_choice::prefer_existing) {
+						saving.memo = matched.memo;
+					}
+
+					if (matched.account_id != account.account_id)      { return outcome(error::bad_request, "Matched transaction belongs to a different account"); }
+					if (matched.amount     != importing.record.amount) { return outcome(error::bad_request, "Matched transaction has a different amount"); }
+					if (matched.fitid) {
+						if (matched.fitid          != importing.record.fitid)          { return outcome(error::bad_request, "Matched transaction has a different fitid"); }
+						if (matched.correct_action != importing.record.correct_action) { return outcome(error::bad_request, "Matched transaction has a different correct action"); }
+						if (matched.corrects_fitid != importing.record.corrects_fitid) { return outcome(error::bad_request, "Matched transaction corrects a different fitid"); }
+					} else {
+						if (importing.record.corrects_fitid.has_value() && matched.corrects_id.has_value()) {
+							return outcome(error::bad_request, "Matched transaction is a correction and imported transaction is also a correction");
+						}
+						if (matched.correct_action.has_value() && matched.correct_action.value() == fundos::transaction::correction_type::deletes) {
+							return outcome(error::bad_request, "Matched transaction is a deletion correction");
+						}
+						if (matched.superseded_by.has_value()) {
+							return outcome(error::bad_request, "Matched transaction has been superseded");
+						}
+					}
+				}
 				if (!saving.is_persisted()) {
 					outcome insert_transaction = sql_execute(
 						prepared->named.insert_transaction_import.statement,
