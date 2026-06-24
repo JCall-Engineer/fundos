@@ -1107,7 +1107,6 @@ db::outcome db::perform_import(import::pending_import& pending) {
 					);
 					if (!insert_transaction) { return insert_transaction; }
 					saving.id_= sqlite3_last_insert_rowid(connection);
-					rollback.push_back([&saving]() { saving.id_ = 0; });
 				} else {
 					outcome update_transaction = sql_execute(
 						prepared->named.update_transaction_import.statement,
