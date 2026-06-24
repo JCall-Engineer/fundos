@@ -255,6 +255,7 @@ void FundPage::on_history(fundos::db::result<fundos::db::allocation_history> rec
 	history_layout->addWidget(table);
 
 	int row = 1;
+	table->setUpdatesEnabled(false);
 	for (auto& transaction : history.transactions) {
 		auto* background_widget = new QWidget(table);
 		background_widget->setStyleSheet(QStringLiteral(
@@ -298,4 +299,5 @@ void FundPage::on_history(fundos::db::result<fundos::db::allocation_history> rec
 		table->body_layout()->addWidget(amount,            row,   3, 1, 1);
 		table->body_layout()->addWidget(balance,           row++, 4, 1, 1);
 	}
+	table->setUpdatesEnabled(true);
 }

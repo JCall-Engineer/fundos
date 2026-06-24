@@ -331,6 +331,7 @@ void ImportDialog::show_transaction_page() {
 	size_t count_matchable = 0;
 	size_t count_new = 0;
 
+	page->setUpdatesEnabled(false);
 	for (auto& bank_account : importing->accounts) {
 		count_transactions += bank_account.transactions.size();
 		for (auto& txn : bank_account.transactions) {
@@ -522,6 +523,7 @@ void ImportDialog::show_transaction_page() {
 	vbox->addWidget(scroll);
 	vbox->addWidget(summary);
 	vbox->addLayout(button_row);
+	page->setUpdatesEnabled(true);
 
 	connect(use_existing, &QPushButton::clicked, this, [this, all_cards]() {
 		for (auto& bank_account : importing->accounts) {

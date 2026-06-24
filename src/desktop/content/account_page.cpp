@@ -591,6 +591,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 
 	size_t tx_index = 0;
 	size_t lb_index = 0;
+	table->setUpdatesEnabled(false);
 	while (tx_index < history.transactions.size() || lb_index < history.ledger_balances.size()) {
 		if (tx_index >= history.transactions.size()) {
 			add_ledger_balance(history.ledger_balances[lb_index++], std::nullopt);
@@ -620,5 +621,6 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 			add_transaction(history.transactions[tx_index++]);
 		}
 	}
+	table->setUpdatesEnabled(true);
 	update_backgrounds();
 }
