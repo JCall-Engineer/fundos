@@ -16,6 +16,7 @@
 #include <QRadioButton>
 #include <QScrollArea>
 #include <QSettings>
+#include <QTimer>
 
 QString ImportDialog::warning_message(fundos::import::warning type, int32_t count) {
 	using warning = fundos::import::warning;
@@ -97,10 +98,12 @@ void ImportDialog::show_file_selection_page() {
 		fundos::currency_locale::spec locale = app_coordinator->context()->currency_locale().info();
 		parse_watcher = new QFutureWatcher<fundos::import::result>(this);
 		connect(parse_watcher, &QFutureWatcher<fundos::import::result>::finished, this, &ImportDialog::on_parse_finished);
-		parse_watcher->setFuture(QtConcurrent::run([filepath, locale]() {
-			return fundos::import::import_ofx(filepath, locale);
-		}));
 		show_spinner_page(tr("Reading file...")); // path is an invalid pointer at this point
+		QTimer::singleShot(0, this, [this, filepath, locale]() {
+			parse_watcher->setFuture(QtConcurrent::run([filepath, locale]() {
+				return fundos::import::import_ofx(filepath, locale);
+			}));
+		});
 	});
 
 	while (QLayoutItem* item = layout->takeAt(0)) {
@@ -523,7 +526,9 @@ void ImportDialog::show_transaction_page() {
 
 	connect(finish, &QPushButton::clicked, this, [this]() {
 		show_spinner_page(tr("Importing transactions..."));
-		emit perform_import_requested(importing);
+		QTimer::singleShot(0, this, [this]() {
+			emit perform_import_requested(importing);
+		});
 	});
 
 	connect(cancel, &QPushButton::clicked, this, &ImportDialog::reject);
@@ -601,7 +606,9 @@ void ImportDialog::on_accounts_updated() {
 		show_account_page(bank_account);
 	} else {
 		show_spinner_page(tr("Preparing import..."));
-		emit prepare_import_requested(importing);
+		QTimer::singleShot(0, this, [this]() {
+			emit prepare_import_requested(importing);
+		});
 	}
 }
 
