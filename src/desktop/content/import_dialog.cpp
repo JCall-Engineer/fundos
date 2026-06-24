@@ -312,11 +312,6 @@ void ImportDialog::show_transaction_page() {
 	button_row->addWidget(cancel);
 	button_row->addWidget(finish);
 
-	vbox->addLayout(bulk_row);
-	vbox->addWidget(list_header);
-	vbox->addWidget(scroll);
-	vbox->addLayout(button_row);
-
 	using memo_choice = fundos::import::imported_transaction::memo_choice;
 
 	struct CardWidgets {
@@ -331,73 +326,22 @@ void ImportDialog::show_transaction_page() {
 	};
 
 	auto all_cards = std::make_shared<std::vector<CardWidgets>>();
+	size_t count_transactions = 0;
+	size_t count_definitive = 0;
+	size_t count_matchable = 0;
+	size_t count_new = 0;
 
 	for (auto& bank_account : importing->accounts) {
+		count_transactions += bank_account.transactions.size();
 		for (auto& txn : bank_account.transactions) {
 			const bool has_match      = txn.get_match() != nullptr;
+			const bool is_definitive  = txn.is_definitive_match();
+			const bool can_match      = bank_account.has_any_candidates(txn);
+			const bool has_decision   = is_definitive || can_match;
 
 			auto* card        = new QFrame(scroll_widget);
 			auto* card_vbox   = new QVBoxLayout(card);
 			card->setFrameShape(QFrame::StyledPanel);
-
-			// Header row
-			auto* header_row  = new QHBoxLayout();
-			if (txn.is_definitive_match()) {
-				auto* definitive = new QLabel(tr("Definitive match"), card);
-				header_row->addWidget(definitive);
-			} else {
-				auto* match_button = new QPushButton(has_match ? tr("Change Match") : tr("Assign Match"), card);
-				header_row->addWidget(match_button);
-
-				connect(match_button, &QPushButton::clicked, this, [this, &txn, &bank_account, match_button]() {
-					auto* picker        = new QDialog(this);
-					auto* picker_vbox   = new QVBoxLayout(picker);
-					auto* picker_list   = new QListWidget(picker);
-					auto* picker_buttons = new QHBoxLayout();
-					auto* clear         = new QPushButton(tr("Clear Match"), picker);
-					auto* select        = new QPushButton(tr("Select"), picker);
-
-					picker->setWindowTitle(tr("Assign Match"));
-					select->setEnabled(false);
-
-					auto candidates = bank_account.valid_candidates_for(txn);
-					for (const auto* candidate : candidates) {
-						QString label = tr("%1  %2")
-							.arg(QDateTime::fromMSecsSinceEpoch(candidate->date_recorded.milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat)))
-							.arg(QString::fromStdString(candidate->memo));
-						auto* item = new QListWidgetItem(label, picker_list);
-						item->setData(Qt::UserRole, QVariant::fromValue(reinterpret_cast<quintptr>(candidate)));
-					}
-
-					connect(picker_list, &QListWidget::itemSelectionChanged, this, [picker_list, select]() {
-						select->setEnabled(!picker_list->selectedItems().isEmpty());
-					});
-					connect(clear, &QPushButton::clicked, picker, [picker, &txn, match_button]() {
-						txn.set_match(nullptr);
-						match_button->setText(tr("Assign Match"));
-						picker->accept();
-					});
-					connect(select, &QPushButton::clicked, picker, [picker, picker_list, &txn, match_button]() {
-						auto* item = picker_list->currentItem();
-						if (!item) { return; }
-						const auto* candidate = reinterpret_cast<const fundos::transaction*>(item->data(Qt::UserRole).value<quintptr>());
-						txn.set_match(candidate);
-						match_button->setText(tr("Change Match"));
-						picker->accept();
-					});
-
-					picker_buttons->addWidget(clear);
-					picker_buttons->addStretch();
-					picker_buttons->addWidget(select);
-					picker_vbox->addWidget(picker_list);
-					picker_vbox->addLayout(picker_buttons);
-
-					picker->setAttribute(Qt::WA_DeleteOnClose);
-					picker->exec();
-				});
-			}
-			header_row->addStretch();
-			card_vbox->addLayout(header_row);
 
 			// Middle section
 			auto* middle      = new QWidget(card);
@@ -441,7 +385,6 @@ void ImportDialog::show_transaction_page() {
 
 			middle_vbox->addWidget(existing_row);
 			middle_vbox->addLayout(importing_hbox);
-			card_vbox->addWidget(middle);
 
 			// Footer row
 			auto* footer_row    = new QHBoxLayout();
@@ -474,15 +417,80 @@ void ImportDialog::show_transaction_page() {
 			footer_row->addWidget(amount_label);
 			footer_row->addStretch();
 			footer_row->addWidget(memo_widget);
-			card_vbox->addLayout(footer_row);
 
-			const bool always_show = txn.is_definitive_match() || std::any_of(
-				bank_account.candidates.begin(),
-				bank_account.candidates.end(),
-				[&txn](const fundos::transaction& candidate) {
-					return candidate.amount == txn.record.amount;
-				}
-			);
+			// Header row (saved for last so that the match button can reference other objects)
+			auto* header_row  = new QHBoxLayout();
+			if (is_definitive) {
+				++count_definitive;
+				auto* definitive = new QLabel(tr("Already Imported"), card);
+				header_row->addWidget(definitive);
+			} else if (!can_match) {
+				++count_new;
+				auto* creating = new QLabel(tr("Importing as New Transaction"), card);
+				header_row->addWidget(creating);
+			} else {
+				++count_matchable;
+				auto* match_button = new QPushButton(has_match ? tr("Change Match") : tr("Assign Match"), card);
+				header_row->addWidget(match_button);
+
+				connect(match_button, &QPushButton::clicked, this, [this, &txn, &bank_account, match_button, existing_row, existing_date, existing_memo, memo_widget]() {
+					auto* picker        = new QDialog(this);
+					auto* picker_vbox   = new QVBoxLayout(picker);
+					auto* picker_list   = new QListWidget(picker);
+					auto* picker_buttons = new QHBoxLayout();
+					auto* clear         = new QPushButton(tr("Clear Match"), picker);
+					auto* select        = new QPushButton(tr("Select"), picker);
+
+					picker->setWindowTitle(tr("Assign Match"));
+					select->setEnabled(false);
+
+					auto candidates = bank_account.valid_candidates_for(txn);
+					for (const auto* candidate : candidates) {
+						QString label = tr("%1  %2")
+							.arg(QDateTime::fromMSecsSinceEpoch(candidate->date_recorded.milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat)))
+							.arg(QString::fromStdString(candidate->memo));
+						auto* item = new QListWidgetItem(label, picker_list);
+						item->setData(Qt::UserRole, QVariant::fromValue(reinterpret_cast<quintptr>(candidate)));
+					}
+
+					connect(picker_list, &QListWidget::itemSelectionChanged, this, [picker_list, select]() {
+						select->setEnabled(!picker_list->selectedItems().isEmpty());
+					});
+					connect(clear, &QPushButton::clicked, picker, [picker, &txn, match_button, existing_row, memo_widget]() {
+						txn.set_match(nullptr);
+						match_button->setText(tr("Assign Match"));
+						existing_row->setVisible(false);
+						memo_widget->setVisible(false);
+						picker->accept();
+					});
+					connect(select, &QPushButton::clicked, picker, [picker, picker_list, &txn, match_button, existing_row, existing_date, existing_memo, memo_widget]() {
+						auto* item = picker_list->currentItem();
+						if (!item) { return; }
+						const auto* candidate = reinterpret_cast<const fundos::transaction*>(item->data(Qt::UserRole).value<quintptr>());
+						txn.set_match(candidate);
+						match_button->setText(tr("Change Match"));
+						existing_date->setText(QDateTime::fromMSecsSinceEpoch(candidate->date_recorded.milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat)));
+						existing_memo->setText(QString::fromStdString(candidate->memo));
+						existing_row->setVisible(true);
+						memo_widget->setVisible(true);
+						picker->accept();
+					});
+
+					picker_buttons->addWidget(clear);
+					picker_buttons->addStretch();
+					picker_buttons->addWidget(select);
+					picker_vbox->addWidget(picker_list);
+					picker_vbox->addLayout(picker_buttons);
+
+					picker->setAttribute(Qt::WA_DeleteOnClose);
+					picker->exec();
+				});
+			}
+			header_row->addStretch();
+
+			card_vbox->addLayout(header_row);
+			card_vbox->addWidget(middle);
+			card_vbox->addLayout(footer_row);
 
 			all_cards->push_back(CardWidgets{
 				.card            = card,
@@ -492,13 +500,28 @@ void ImportDialog::show_transaction_page() {
 				.radio_existing  = radio_existing,
 				.radio_importing = radio_importing,
 				.memo_row        = memo_widget,
-				.has_decision    = always_show,
+				.has_decision    = has_decision,
 			});
 
-			card->setVisible(always_show);
+			card->setVisible(has_decision);
 			card_layout->addWidget(card);
 		}
 	}
+
+	auto* summary = new QWidget(page);
+	auto* summary_layout = new QHBoxLayout(summary);
+	summary_layout->setContentsMargins(0, 8, 0, 8);
+	summary_layout->addWidget(new QLabel(tr("%1 transactions").arg(count_transactions), summary));
+	summary_layout->addWidget(new QLabel(tr("%1 already imported").arg(count_definitive), summary));
+	summary_layout->addWidget(new QLabel(tr("%1 potential merges").arg(count_matchable), summary));
+	summary_layout->addWidget(new QLabel(tr("%1 importing as new").arg(count_new), summary));
+	summary_layout->addStretch();
+
+	vbox->addLayout(bulk_row);
+	vbox->addWidget(list_header);
+	vbox->addWidget(scroll);
+	vbox->addWidget(summary);
+	vbox->addLayout(button_row);
 
 	connect(use_existing, &QPushButton::clicked, this, [this, all_cards]() {
 		for (auto& bank_account : importing->accounts) {
