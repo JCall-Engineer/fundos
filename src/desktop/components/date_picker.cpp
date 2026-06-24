@@ -56,6 +56,8 @@ class DateSectionWidget : public QWidget {
 	int day_width   = 0;
 	int sep_width   = 0;
 
+	QString digit_buffer;
+
 	void compute_widths() {
 		QFontMetrics metrics(font());
 		year_width  = metrics.horizontalAdvance(QStringLiteral("0000")) + section_padding * 2;
@@ -99,6 +101,7 @@ class DateSectionWidget : public QWidget {
 
 	void advance_section() {
 		if (!focused_section.has_value()) { return; }
+		digit_buffer.clear();
 		switch (*focused_section) {
 		case Section::year:
 			focused_section = Section::month;
@@ -114,6 +117,7 @@ class DateSectionWidget : public QWidget {
 
 	void retreat_section() {
 		if (!focused_section.has_value()) { return; }
+		digit_buffer.clear();
 		switch (*focused_section) {
 		case Section::year:
 			break;
@@ -127,68 +131,103 @@ class DateSectionWidget : public QWidget {
 		update();
 	}
 
-	QString digit_buffer;
-
 	void handle_digit(const QString& digit) {
 		if (!focused_section.has_value()) { return; }
 		digit_buffer += digit;
 		switch (*focused_section) {
-		case Section::year: {
-			if (digit_buffer.length() == 4) {
-				int year = digit_buffer.toInt();
-				picked_date = QDate(year, picked_date.month(), picked_date.day());
-				owner->set_date(picked_date);
-				advance_section();
-				digit_buffer.clear();
-			}
-			break;
-		}
-		case Section::month: {
-			if (digit_buffer.length() == 2) {
-				int month = digit_buffer.toInt();
-				if (month >= 1 && month <= 12) {
-					picked_date = QDate(picked_date.year(), month, picked_date.day());
+			case Section::year: {
+				if (digit_buffer.length() == 4) {
+					int year = digit_buffer.toInt();
+					int safe_day = qMin(picked_date.day(), QDate(year, picked_date.month(), 1).daysInMonth());
+					picked_date = QDate(year, picked_date.month(), safe_day);
 					owner->set_date(picked_date);
 					advance_section();
+					digit_buffer.clear();
+				} else if (digit_buffer.length() == 2) {
+					int two_digit = digit_buffer.toInt();
+					int current_year = QDate::currentDate().year();
+					int cutoff = (current_year + 50) % 100;
+					int century = two_digit <= cutoff
+						? (current_year / 100) * 100
+						: (current_year / 100 - 1) * 100;
+					int year = century + two_digit;
+					int safe_day = qMin(picked_date.day(), QDate(year, picked_date.month(), 1).daysInMonth());
+					picked_date = QDate(year, picked_date.month(), safe_day);
+					owner->set_date(picked_date);
+					advance_section();
+					digit_buffer.clear();
 				}
-				digit_buffer.clear();
-			} else {
+				break;
+			}
+			case Section::month: {
 				int first = digit_buffer[0].digitValue();
-				if (first > 1) {
+				if (digit_buffer.length() == 1) {
+					if (first >= 1 && first <= 9) {
+						int safe_day = qMin(picked_date.day(), QDate(picked_date.year(), first, 1).daysInMonth());
+						picked_date = QDate(picked_date.year(), first, safe_day);
+						owner->set_date(picked_date);
+						if (first > 1) {
+							advance_section();
+							digit_buffer.clear();
+						}
+					} else {
+						digit_buffer.clear();
+					}
+				} else {
 					int month = digit_buffer.toInt();
 					if (month >= 1 && month <= 12) {
-						picked_date = QDate(picked_date.year(), month, picked_date.day());
+						int safe_day = qMin(picked_date.day(), QDate(picked_date.year(), month, 1).daysInMonth());
+						picked_date = QDate(picked_date.year(), month, safe_day);
 						owner->set_date(picked_date);
 						advance_section();
+						digit_buffer.clear();
+					} else {
+						int second = digit_buffer[1].digitValue();
+						digit_buffer = digit_buffer[1];
+						if (second >= 1 && second <= 9) {
+							int safe_day = qMin(picked_date.day(), QDate(picked_date.year(), second, 1).daysInMonth());
+							picked_date = QDate(picked_date.year(), second, safe_day);
+							owner->set_date(picked_date);
+						} else {
+							digit_buffer.clear();
+						}
 					}
-					digit_buffer.clear();
 				}
+				break;
 			}
-			break;
-		}
-		case Section::day: {
-			if (digit_buffer.length() == 2) {
-				int day = digit_buffer.toInt();
-				int days_in_month = picked_date.daysInMonth();
-				if (day >= 1 && day <= days_in_month) {
-					picked_date = QDate(picked_date.year(), picked_date.month(), day);
-					owner->set_date(picked_date);
-				}
-				digit_buffer.clear();
-			} else {
+			case Section::day: {
 				int first = digit_buffer[0].digitValue();
-				if (first > 3) {
+				if (digit_buffer.length() == 1) {
+					if (first >= 1 && first <= 9) {
+						int safe_day = qMin(first, picked_date.daysInMonth());
+						picked_date = QDate(picked_date.year(), picked_date.month(), safe_day);
+						owner->set_date(picked_date);
+						if (first > 3) {
+							digit_buffer.clear();
+						}
+					} else {
+						digit_buffer.clear();
+					}
+				} else {
 					int day = digit_buffer.toInt();
-					int days_in_month = picked_date.daysInMonth();
-					if (day >= 1 && day <= days_in_month) {
+					if (day >= 1 && day <= picked_date.daysInMonth()) {
 						picked_date = QDate(picked_date.year(), picked_date.month(), day);
 						owner->set_date(picked_date);
+						digit_buffer.clear();
+					} else {
+						int second = digit_buffer[1].digitValue();
+						digit_buffer = digit_buffer[1];
+						if (second >= 1 && second <= 9) {
+							int safe_day = qMin(second, picked_date.daysInMonth());
+							picked_date = QDate(picked_date.year(), picked_date.month(), safe_day);
+							owner->set_date(picked_date);
+						} else {
+							digit_buffer.clear();
+						}
 					}
-					digit_buffer.clear();
 				}
+				break;
 			}
-			break;
-		}
 		}
 		update();
 	}
@@ -211,10 +250,16 @@ protected:
 		QPainter painter(this);
 		painter.setRenderHint(QPainter::Antialiasing);
 
+		auto section_text = [&](Section section, const QString& committed, int width) -> QString {
+			return (focused_section == section && !digit_buffer.isEmpty())
+				? digit_buffer.leftJustified(width, u'_')
+				: committed;
+		};
+
 		draw_section(
 			painter,
 			year_rect(),
-			QString::number(picked_date.year()).rightJustified(4, u'0'),
+			section_text(Section::year,  QString::number(picked_date.year()).rightJustified(4, u'0'),  4),
 			focused_section == Section::year
 		);
 
@@ -228,7 +273,7 @@ protected:
 		draw_section(
 			painter,
 			month_rect(),
-			QString::number(picked_date.month()).rightJustified(2, u'0'),
+			section_text(Section::month, QString::number(picked_date.month()).rightJustified(2, u'0'), 2),
 			focused_section == Section::month
 		);
 
@@ -242,7 +287,7 @@ protected:
 		draw_section(
 			painter,
 			day_rect(),
-			QString::number(picked_date.day()).rightJustified(2, u'0'),
+			section_text(Section::day,   QString::number(picked_date.day()).rightJustified(2, u'0'),   2),
 			focused_section == Section::day
 		);
 	}
@@ -271,6 +316,7 @@ protected:
 	void focusInEvent(QFocusEvent*) override {
 		focused_section = Section::year;
 		owner->set_active(true);
+		digit_buffer.clear();
 		update();
 	}
 
