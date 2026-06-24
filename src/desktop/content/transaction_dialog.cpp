@@ -492,7 +492,7 @@ void TransactionDialog::on_save_clicked() {
 		allocated_total += allocation.amount;
 	}
 
-	if (allocated_total != saving.amount) {
+	if (!current_allocations.empty() && allocated_total != saving.amount) {
 		QMessageBox::warning(
 			this,
 			tr("Allocation mismatch"),
