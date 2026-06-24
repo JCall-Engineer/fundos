@@ -386,8 +386,8 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 
 		widget->balance = theme::currency_label(transaction.account_balance, app_coordinator->context()->currency_locale().info(), table);
 
-		constexpr QLatin1StringView unchecked_icon_path{":/icons/chevron-down.svg"};
-		constexpr QLatin1StringView checked_icon_path{":/icons/chevron-up.svg"};
+		static constexpr QLatin1StringView unchecked_icon_path{":/icons/chevron-down.svg"};
+		static constexpr QLatin1StringView checked_icon_path{":/icons/chevron-up.svg"};
 
 		widget->details_button = new QToolButton(table);
 		widget->details_button->setStyleSheet("QToolButton:checked { background: transparent; border: none; }");
