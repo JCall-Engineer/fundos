@@ -111,6 +111,7 @@ void ImportDialog::show_file_selection_page() {
 		delete item;
 	}
 	layout->addWidget(page);
+	adjustSize();
 }
 
 void ImportDialog::show_spinner_page(const QString& description) {
@@ -133,6 +134,7 @@ void ImportDialog::show_spinner_page(const QString& description) {
 		delete item;
 	}
 	layout->addWidget(page);
+	adjustSize();
 }
 
 void ImportDialog::show_parse_error_page(fundos::import::error error) {
@@ -169,6 +171,7 @@ void ImportDialog::show_parse_error_page(fundos::import::error error) {
 		delete item;
 	}
 	layout->addWidget(page);
+	adjustSize();
 }
 
 void ImportDialog::show_warnings_page(const fundos::import::result& result) {
@@ -204,6 +207,7 @@ void ImportDialog::show_warnings_page(const fundos::import::result& result) {
 		delete item;
 	}
 	layout->addWidget(page);
+	adjustSize();
 }
 
 void ImportDialog::show_account_page(fundos::import::bank_account* bank_account) {
@@ -215,8 +219,7 @@ void ImportDialog::show_account_page(fundos::import::bank_account* bank_account)
 		page);
 
 	auto* preview = new QListWidget(page);
-	preview->setMaximumHeight(150);
-	preview->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+	preview->setFixedHeight(150);
 	for (const auto& imported : bank_account->transactions) {
 		preview->addItem(tr("%1 — %2")
 			.arg(QString::fromStdString(imported.record.memo))
@@ -277,6 +280,7 @@ void ImportDialog::show_account_page(fundos::import::bank_account* bank_account)
 		delete item;
 	}
 	layout->addWidget(page);
+	adjustSize();
 }
 
 void ImportDialog::show_transaction_page() {
@@ -286,6 +290,7 @@ void ImportDialog::show_transaction_page() {
 	auto* use_existing  = new QPushButton(tr("Use All Existing Memos"), page);
 	auto* use_imported  = new QPushButton(tr("Use All Imported Memos"), page);
 	auto* show_all      = new QCheckBox(tr("Show all transactions"), page);
+	auto* list_header   = theme::header_label(tr("Transactions with potential matches in your register:"), page);
 	auto* scroll        = new QScrollArea(page);
 	auto* scroll_widget = new QWidget(scroll);
 	auto* card_layout   = new QVBoxLayout(scroll_widget);
@@ -298,6 +303,7 @@ void ImportDialog::show_transaction_page() {
 	bulk_row->addStretch();
 	bulk_row->addWidget(show_all);
 
+	scroll->setMinimumHeight(400);
 	scroll->setWidget(scroll_widget);
 	scroll->setWidgetResizable(true);
 	card_layout->setAlignment(Qt::AlignTop);
@@ -307,6 +313,7 @@ void ImportDialog::show_transaction_page() {
 	button_row->addWidget(finish);
 
 	vbox->addLayout(bulk_row);
+	vbox->addWidget(list_header);
 	vbox->addWidget(scroll);
 	vbox->addLayout(button_row);
 
@@ -417,7 +424,8 @@ void ImportDialog::show_transaction_page() {
 				card
 			);
 			auto* importing_memo  = new QLabel(QString::fromStdString(txn.record.memo), card);
-			importing_memo->setWordWrap(true);
+			importing_memo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+			importing_memo->setWordWrap(false);
 			importing_hbox->addWidget(importing_label);
 			importing_hbox->addWidget(importing_date);
 			importing_hbox->addWidget(importing_memo);
@@ -538,6 +546,7 @@ void ImportDialog::show_transaction_page() {
 		delete item;
 	}
 	layout->addWidget(page);
+	adjustSize();
 }
 
 void ImportDialog::show_success_page(int32_t imported, int32_t merged) {
@@ -564,6 +573,7 @@ void ImportDialog::show_success_page(int32_t imported, int32_t merged) {
 		delete item;
 	}
 	layout->addWidget(page);
+	adjustSize();
 }
 
 void ImportDialog::on_parse_finished() {
@@ -638,6 +648,7 @@ void ImportDialog::on_import_prepared(fundos::db::outcome result) {
 			delete item;
 		}
 		layout->addWidget(page);
+		adjustSize();
 		return;
 	}
 	show_transaction_page();
@@ -669,6 +680,7 @@ void ImportDialog::on_import_performed(fundos::db::outcome result) {
 			delete item;
 		}
 		layout->addWidget(page);
+		adjustSize();
 		return;
 	}
 
