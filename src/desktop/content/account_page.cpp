@@ -344,7 +344,6 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 	footer_layout->addStretch();
 	table->set_footer(footer);
 
-	std::optional<fundos::currency> balance_checker;
 	int row = 1;
 	auto add_transaction = [&](fundos::db::transaction_history::allocated_transaction& transaction) -> void {
 		transaction_widgets.push_back(Transaction{});
@@ -383,9 +382,6 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 
 		widget->memo = new QLabel(QString::fromStdString(transaction.record.memo), table);
 
-		if (transaction.record.date_cleared || transaction.record.date_reconciled) {
-			balance_checker = transaction.record.amount;
-		}
 		widget->amount = theme::currency_label(transaction.record.amount, app_coordinator->context()->currency_locale().info(), table);
 
 		widget->balance = theme::currency_label(transaction.account_balance, app_coordinator->context()->currency_locale().info(), table);
@@ -539,7 +535,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		table->body_layout()->addWidget(widget->details_widget,  ++row, 0, 1, 6);
 		++row;
 	};
-	auto add_ledger_balance = [&](fundos::import_ledger_balance& ledger_balance) -> void {
+	auto add_ledger_balance = [&](fundos::import_ledger_balance& ledger_balance, std::optional<fundos::currency> balance_checker) -> void {
 		const bool ledger_contradicted = balance_checker && *balance_checker != ledger_balance.amount;
 		
 		const auto background_color = ledger_contradicted ? theme::error_background : theme::success_background;
@@ -550,6 +546,14 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		background_widget->setStyleSheet(QStringLiteral(
 			"background-color: %1; border: 1px solid %2"
 		).arg(background_color.name(), theme::separator.name()));
+
+		auto* icon_container = new QWidget(table);
+		auto* icon_container_layout = new QHBoxLayout(icon_container);
+		icon_container_layout->setContentsMargins(8, 8, 8, 8);
+		icon_container_layout->setAlignment(Qt::AlignCenter);
+
+		auto* icon = new QLabel(icon_container);
+		icon_container_layout->addWidget(icon);
 
 		auto* date = new QLabel(
 			QLocale::system().toString(
@@ -578,6 +582,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		balance->setToolTip(tr("Balance reported by your bank at the time of this OFX import."));
 
 		table->body_layout()->addWidget(background_widget, row, 0, 1, 6);
+		table->body_layout()->addWidget(icon_container,    row, 0, 1, 1);
 		table->body_layout()->addWidget(date,              row, 1, 1, 1);
 		table->body_layout()->addWidget(memo,              row, 2, 1, 1);
 		table->body_layout()->addWidget(amount,            row, 3, 1, 1);
@@ -589,7 +594,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 	size_t lb_index = 0;
 	while (tx_index < history.transactions.size() || lb_index < history.ledger_balances.size()) {
 		if (tx_index >= history.transactions.size()) {
-			add_ledger_balance(history.ledger_balances[lb_index++]);
+			add_ledger_balance(history.ledger_balances[lb_index++], std::nullopt);
 			continue;
 		}
 		if (lb_index >= history.ledger_balances.size()) {
@@ -600,8 +605,18 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		auto& ledger_balance = history.ledger_balances[lb_index];
 
 		// TODO: decide tie-breaking order when ledger_balance.date_as_of == transaction.effective_date
-		if (ledger_balance.date_as_of < transaction.effective_date) {
-			add_ledger_balance(history.ledger_balances[lb_index++]);
+		if (ledger_balance.date_as_of > transaction.effective_date) {
+			std::optional<fundos::currency> next_balance = std::nullopt;
+			size_t search = tx_index;
+			while (search < history.transactions.size()) {
+				auto& found = history.transactions[search];
+				if (found.record.date_cleared || found.record.date_reconciled) {
+					next_balance = found.account_balance;
+					break;
+				}
+				++search;
+			}
+			add_ledger_balance(history.ledger_balances[lb_index++], next_balance);
 		} else {
 			add_transaction(history.transactions[tx_index++]);
 		}
