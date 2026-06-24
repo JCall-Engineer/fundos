@@ -55,6 +55,9 @@ HomePage::HomePage(AppCoordinator* coordinator, QWidget* parent) : QWidget(paren
 			.action    = [this]() {
 				auto* dialog = new ImportDialog(app_coordinator, this);
 				dialog->setAttribute(Qt::WA_DeleteOnClose);
+				connect(dialog, &QDialog::accepted, this, [this]() {
+					make_accounts(app_coordinator->context()->accounts());
+				});
 				dialog->show();
 			},
 		},
