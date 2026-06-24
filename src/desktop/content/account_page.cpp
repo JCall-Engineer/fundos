@@ -523,7 +523,6 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		}
 
 		details_layout->addWidget(details_actions);
-		details_layout->addWidget(details_actions);
 
 		table->body_layout()->addWidget(widget->background_widget, row, 0, 1, 6);
 		table->body_layout()->addWidget(icon_container,            row, 0, 1, 1);
