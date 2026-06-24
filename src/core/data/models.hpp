@@ -126,6 +126,18 @@ struct bank_account {
 		}
 		return view;
 	}
+
+	/// Surfaces if manual matching is possible
+	bool has_any_candidates(const fundos::import::imported_transaction& txn) const {
+		if (txn.is_definitive_match()) { return false; }
+		return std::any_of(
+			candidates.begin(),
+			candidates.end(),
+			[&txn](const fundos::transaction& candidate) {
+				return !candidate.fitid && candidate.amount == txn.record.amount;
+			}
+		);
+	}
 };
 
 /// The result of parsing an OFX file or using a bank API, staged for user review before committing.
