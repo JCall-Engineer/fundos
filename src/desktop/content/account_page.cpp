@@ -1,5 +1,6 @@
 #include "account_page.hpp"
 #include "theme.hpp"
+#include "content/import_dialog.hpp"
 #include "content/transaction_dialog.hpp"
 #include "components/loading_spinner.hpp"
 #include "components/table_view.hpp"
@@ -44,7 +45,12 @@ AccountPage::AccountPage(
 
 		auto* import_button = new QPushButton(tr("Import OFX"), this);
 		import_button->setIcon(theme::colored_svg_icon(":/icons/upload.svg", theme::text, theme::toolbar_icon_size));
-		connect(import_button, &QPushButton::clicked, this, &AccountPage::import_ofx);
+		connect(import_button, &QPushButton::clicked, this, [this]() {
+			auto* dialog = new ImportDialog(app_coordinator, this);
+			dialog->setAttribute(Qt::WA_DeleteOnClose);
+			connect(dialog, &QDialog::accepted, this, &AccountPage::fetch_history);
+			dialog->show();
+		});
 
 		auto* new_transaction_button = new QPushButton(tr("New Transaction"), this);
 		new_transaction_button->setIcon(theme::colored_svg_icon(":/icons/plus.svg", theme::text, theme::toolbar_icon_size));

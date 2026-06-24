@@ -1,6 +1,7 @@
 #include "home_page.hpp"
 #include "theme.hpp"
 #include "components/navigable_row.hpp"
+#include "content/import_dialog.hpp"
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -51,7 +52,11 @@ HomePage::HomePage(AppCoordinator* coordinator, QWidget* parent) : QWidget(paren
 		{
 			.tooltip   = QString("Import OFX File"),
 			.icon_path = QString(":/icons/upload.svg"),
-			.action    = [this]() { emit import_ofx(); },
+			.action    = [this]() {
+				auto* dialog = new ImportDialog(app_coordinator, this);
+				dialog->setAttribute(Qt::WA_DeleteOnClose);
+				dialog->show();
+			},
 		},
 		{
 			.tooltip           = QString("Toggle Closed Accounts"),

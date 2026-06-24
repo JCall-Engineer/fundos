@@ -233,3 +233,21 @@ void AppDatabase::request_fund_history(int64_t fund_id, fundos::datetime after, 
 	emit operation_finished();
 	update_status(history);
 }
+
+void AppDatabase::prepare_import(std::shared_ptr<fundos::import::pending_import> pending) {
+	if (!database) { return; }
+	emit operation_started(tr("preparing import..."));
+	auto result = database->prepare_import(*pending);
+	emit import_prepared(result);
+	emit operation_finished();
+	update_status(result);
+}
+
+void AppDatabase::perform_import(std::shared_ptr<fundos::import::pending_import> pending) {
+	if (!database) { return; }
+	emit operation_started(tr("performing import..."));
+	auto result = database->perform_import(*pending);
+	emit import_performed(result);
+	emit operation_finished();
+	update_status(result);
+}

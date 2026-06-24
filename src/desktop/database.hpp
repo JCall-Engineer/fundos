@@ -76,6 +76,9 @@ public slots:
 	void request_account_history(int64_t account_id, fundos::datetime after, fundos::datetime before);
 	void request_fund_history(int64_t fund_id, fundos::datetime after, fundos::datetime before);
 
+	void prepare_import(std::shared_ptr<fundos::import::pending_import> pending);
+	void perform_import(std::shared_ptr<fundos::import::pending_import> pending);
+
 signals:
 	void operation_started(QString description);
 	void operation_finished();
@@ -109,4 +112,7 @@ signals:
 
 	void account_history_received(fundos::db::result<fundos::db::transaction_history> history);
 	void fund_history_received(fundos::db::result<fundos::db::allocation_history> history);
+
+	void import_prepared(fundos::db::outcome result);
+	void import_performed(fundos::db::outcome result);
 };

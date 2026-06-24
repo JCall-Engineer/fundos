@@ -66,5 +66,4 @@ signals:
 	void open_account(const fundos::account& opening);
 	void open_fund(const fundos::fund& opening);
 	void open_budget(const fundos::budget& opening);
-	void import_ofx();
 };

@@ -64,5 +64,4 @@ signals:
 	void history_requested(int64_t account_id, fundos::datetime after, fundos::datetime before);
 	void save_account_requested(fundos::account saving);
 	void go_home();
-	void import_ofx();
 };
