@@ -1026,7 +1026,7 @@ db::outcome db::perform_import(import::pending_import& pending) {
 		if (account_query.value() != account.account_id) { return outcome(error::bad_request, "Imported account_id does not match database"); }
 	}
 
-	return sql_transaction([&](std::vector<std::function<void()>>& rollback) -> outcome {
+	return sql_transaction([&](std::vector<std::function<void()>>&) -> outcome {
 		for (auto &account : pending.accounts) {
 			outcome insert_ledgerbal = sql_execute(
 				prepared->named.insert_import_ledger_balance.statement,
