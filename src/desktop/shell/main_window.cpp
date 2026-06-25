@@ -195,13 +195,16 @@ void MainWindow::db_backup() {
 	QString defaultName = QString("FundOS Backup %1.sqlite")
 		.arg(QDate::currentDate().toString("yyyy-MM-dd"));
 
+	QSettings settings;
+	QString last_directory = settings.value("backup/last_directory", QDir::homePath()).toString();
 	QString destination = QFileDialog::getSaveFileName(
 		this,
 		tr("Backup Database"),
-		QDir::homePath() + "/" + defaultName,
+		last_directory + "/" + defaultName,
 		tr("SQLite Database (*.sqlite)")
 	);
 	if (destination.isEmpty()) { return; }
+	settings.setValue("backup/last_directory", QFileInfo(destination).absolutePath());
 	emit db_backup_requested(destination);
 }
 
@@ -230,13 +233,16 @@ void MainWindow::on_create_new(bool succeeded) {
 void MainWindow::db_restore() {
 	if (QMessageBox::Ok != confirm_destruction(this)) { return; }
 
+	QSettings settings;
+	QString last_directory = settings.value("backup/last_directory", QDir::homePath()).toString();
 	QString source = QFileDialog::getOpenFileName(
 		this,
 		tr("Restore Database"),
-		QDir::homePath(),
+		last_directory,
 		tr("SQLite Database (*.sqlite *.db)")
 	);
 	if (source.isEmpty()) { return; }
+	settings.setValue("backup/last_directory", QFileInfo(source).absolutePath());
 	emit db_restore_requested(source);
 }
 void MainWindow::on_restore(AppDatabase::RestoreResult result) {
