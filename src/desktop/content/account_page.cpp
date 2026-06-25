@@ -350,8 +350,8 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		auto* widget = &transaction_widgets.back();
 		widget->record = transaction;
 
-		widget->background_color = transaction.allocations.empty() ? theme::warning_background : theme::surface;
-		if (requested_transaction && transaction.record.id() == requested_transaction->id()) {
+		widget->background_color = widget->record.allocations.empty() ? theme::warning_background : theme::surface;
+		if (requested_transaction && widget->record.record.id() == requested_transaction->id()) {
 			widget->background_color = theme::info_background;
 		}
 		widget->background_widget = new QWidget(table);
@@ -360,8 +360,8 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		widget->background_widget->lower();
 
 		widget->icon_path = ":/icons/clock.svg";
-		if (transaction.record.date_reconciled) { widget->icon_path = ":/icons/writing.svg"; }
-		if (transaction.record.date_cleared)    { widget->icon_path = ":/icons/building-bank.svg"; }
+		if (widget->record.record.date_reconciled) { widget->icon_path = ":/icons/writing.svg"; }
+		if (widget->record.record.date_cleared)    { widget->icon_path = ":/icons/building-bank.svg"; }
 
 		auto* icon_container = new QWidget(table);
 		auto* icon_container_layout = new QHBoxLayout(icon_container);
@@ -374,17 +374,17 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 
 		widget->date = new QLabel(
 			QLocale::system().toString(
-				QDateTime::fromMSecsSinceEpoch(transaction.effective_date.milliseconds_since_epoch).date(),
+				QDateTime::fromMSecsSinceEpoch(widget->record.effective_date.milliseconds_since_epoch).date(),
 				QLocale::ShortFormat
 			),
 			table
 		);
 
-		widget->memo = new QLabel(QString::fromStdString(transaction.record.memo), table);
+		widget->memo = new QLabel(QString::fromStdString(widget->record.record.memo), table);
 
-		widget->amount = theme::currency_label(transaction.record.amount, app_coordinator->context()->currency_locale().info(), table);
+		widget->amount = theme::currency_label(widget->record.record.amount, app_coordinator->context()->currency_locale().info(), table);
 
-		widget->balance = theme::currency_label(transaction.account_balance, app_coordinator->context()->currency_locale().info(), table);
+		widget->balance = theme::currency_label(widget->record.account_balance, app_coordinator->context()->currency_locale().info(), table);
 
 		static constexpr QLatin1StringView unchecked_icon_path{":/icons/chevron-down.svg"};
 		static constexpr QLatin1StringView checked_icon_path{":/icons/chevron-up.svg"};
@@ -398,131 +398,132 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		widget->details_button->setAutoRaise(true);
 		widget->details_button->setFixedSize(widget->details_button->sizeHint());
 
-		widget->details_widget = new QWidget(table);
-		widget->details_widget->setVisible(false);
-
-		connect(widget->details_button, &QToolButton::toggled, this, [this, widget](bool checked) {
+		connect(widget->details_button, &QToolButton::toggled, this, [this, widget, table](bool checked) {
 			const auto& path = checked ? checked_icon_path : unchecked_icon_path;
 			widget->details_button->setIcon(theme::colored_svg_icon(path, theme::text, theme::toolbar_icon_size));
-			widget->details_widget->setVisible(checked);
-		});
+			if (widget->details_widget) {
+				widget->details_widget->setVisible(checked);
+			} else {
+				widget->details_widget = new QWidget(table);
+				auto* details_layout = new QVBoxLayout(widget->details_widget);
 
-		auto* details_layout = new QVBoxLayout(widget->details_widget);
+				auto* allocations_widget = new QWidget(widget->details_widget);
+				auto* allocations_grid = new QGridLayout(allocations_widget);
+				allocations_grid->setContentsMargins(0, 0, 0, 0);
+				allocations_grid->setSpacing(0);
+				allocations_grid->setColumnStretch(0, 0);
+				allocations_grid->setColumnMinimumWidth(0, 25);
+				allocations_grid->setColumnStretch(1, 0);
+				allocations_grid->setColumnStretch(2, 0);
+				allocations_grid->setColumnMinimumWidth(2, 50);
+				allocations_grid->setColumnStretch(3, 0);
+				allocations_grid->setColumnStretch(4, 1);
 
-		auto* allocations_widget = new QWidget(widget->details_widget);
-		auto* allocations_grid = new QGridLayout(allocations_widget);
-		allocations_grid->setContentsMargins(0, 0, 0, 0);
-		allocations_grid->setSpacing(0);
-		allocations_grid->setColumnStretch(0, 0);
-		allocations_grid->setColumnMinimumWidth(0, 25);
-		allocations_grid->setColumnStretch(1, 0);
-		allocations_grid->setColumnStretch(2, 0);
-		allocations_grid->setColumnMinimumWidth(2, 50);
-		allocations_grid->setColumnStretch(3, 0);
-		allocations_grid->setColumnStretch(4, 1);
+				int allocation_row = 0;
+				for (auto& allocation : widget->record.allocations) {
+					auto* background = new QWidget(allocations_widget);
+					background->setStyleSheet(QStringLiteral(
+						"background-color: %1; border: 1px solid %2"
+					).arg(allocation_row % 2 ? theme::background.name() : theme::background.lighter(110).name(), theme::separator.name()));
+					background->lower();
 
-		int allocation_row = 0;
-		for (auto& allocation : transaction.allocations) {
-			auto* background = new QWidget(allocations_widget);
-			background->setStyleSheet(QStringLiteral(
-				"background-color: %1; border: 1px solid %2"
-			).arg(allocation_row % 2 ? theme::background.name() : theme::background.lighter(110).name(), theme::separator.name()));
-			background->lower();
+					auto* fund = app_coordinator->context()->fund(allocation.fund_id);
+					QString fund_name = tr("Fund id: \"%1\"").arg(QString::number(allocation.fund_id));
+					if (fund != nullptr) { fund_name = QString::fromStdString(fund->name); }
 
-			auto* fund = app_coordinator->context()->fund(allocation.fund_id);
-			QString fund_name = tr("Fund id: \"%1\"").arg(QString::number(allocation.fund_id));
-			if (fund != nullptr) { fund_name = QString::fromStdString(fund->name); }
+					auto* fund_label = new QLabel(fund_name, allocations_widget);
+					auto* fund_amount = theme::currency_label(allocation.amount, app_coordinator->context()->currency_locale().info(), allocations_widget);
 
-			auto* fund_label = new QLabel(fund_name, allocations_widget);
-			auto* fund_amount = theme::currency_label(allocation.amount, app_coordinator->context()->currency_locale().info(), allocations_widget);
+					fund_amount->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+					fund_label->setContentsMargins(8, 4, 0, 4);
+					fund_amount->setContentsMargins(0, 4, 8, 4);
 
-			fund_amount->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-			fund_label->setContentsMargins(8, 4, 0, 4);
-			fund_amount->setContentsMargins(0, 4, 8, 4);
-
-			allocations_grid->addWidget(background,  allocation_row, 1, 1, 3);
-			allocations_grid->addWidget(fund_label,  allocation_row, 1, 1, 1);
-			allocations_grid->addWidget(fund_amount, allocation_row, 3, 1, 1);
-			++allocation_row;
-		}
-		if (allocation_row == 0) {
-			auto* empty_label = new QLabel(tr("No allocations yet"), allocations_widget);
-			auto empty_label_font = empty_label->font();
-			empty_label_font.setItalic(true);
-			empty_label->setFont(empty_label_font);
-			allocations_grid->addWidget(empty_label, allocation_row, 1, 1, 1);
-		}
-
-		details_layout->addWidget(allocations_widget);
-
-		auto* details_actions = new QWidget(widget->details_widget);
-		auto* details_actions_layout = new QHBoxLayout(details_actions);
-		details_actions_layout->setAlignment(Qt::AlignLeft);
-
-		auto* edit_action = new QPushButton(tr("Edit"), details_actions);
-		edit_action->setIcon(theme::colored_svg_icon(":/icons/edit.svg", theme::text, theme::toolbar_icon_size));
-		details_actions_layout->addWidget(edit_action);
-		connect(edit_action, &QPushButton::clicked, this, [this, widget]() {
-			widget->background_widget->setStyleSheet(QStringLiteral(
-				"background-color: %1; border: 1px solid %2"
-			).arg(theme::info_background.name(), theme::separator.name()));
-			open_transaction(widget->record);
-		});
-
-		if (!transaction.record.fitid) {
-			auto* correct_action = new QPushButton(tr("Make Correction"), details_actions);
-			correct_action->setIcon(theme::colored_svg_icon(":/icons/replace.svg", theme::text, theme::toolbar_icon_size));
-			details_actions_layout->addWidget(correct_action);
-			connect(correct_action, &QPushButton::clicked, this, [this, widget]() {
-				widget->background_widget->setStyleSheet(QStringLiteral(
-					"background-color: %1; border: 1px solid %2"
-				).arg(theme::info_background.name(), theme::separator.name()));
-				fundos::db::transaction_history::allocated_transaction correction;
-				correction.record.corrects_id = widget->record.record.id();
-				correction.record.correct_action = fundos::transaction::correction_type::replaces;
-				correction.record.account_id = widget->record.record.account_id;
-				correction.record.date_recorded = widget->record.record.date_recorded;
-				correction.record.memo = widget->record.record.memo;
-				correction.record.amount = widget->record.record.amount;
-
-				open_transaction(correction);
-			});
-
-			auto* delete_action = new QPushButton(tr("Delete Transaction"), details_actions);
-			delete_action->setIcon(theme::colored_svg_icon(":/icons/trash.svg", theme::text, theme::toolbar_icon_size));
-			details_actions_layout->addWidget(delete_action);
-			connect(delete_action, &QPushButton::clicked, this, [this, widget]() {
-				widget->background_widget->setStyleSheet(QStringLiteral(
-					"background-color: %1; border: 1px solid %2"
-				).arg(theme::info_background.name(), theme::separator.name()));
-
-				QMessageBox dialog(this);
-				dialog.setWindowTitle(tr("Delete Transaction"));
-				dialog.setText(tr("Delete \"%1\"?").arg(widget->record.record.memo));
-				dialog.setInformativeText(tr("This transaction will be permanently removed from your register."));
-				dialog.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
-				dialog.setDefaultButton(QMessageBox::Cancel);
-				dialog.button(QMessageBox::Ok)->setText(tr("Delete"));
-
-				if (dialog.exec() != QMessageBox::Ok) {
-					update_backgrounds();
-					return;
+					allocations_grid->addWidget(background,  allocation_row, 1, 1, 3);
+					allocations_grid->addWidget(fund_label,  allocation_row, 1, 1, 1);
+					allocations_grid->addWidget(fund_amount, allocation_row, 3, 1, 1);
+					++allocation_row;
+				}
+				if (allocation_row == 0) {
+					auto* empty_label = new QLabel(tr("No allocations yet"), allocations_widget);
+					auto empty_label_font = empty_label->font();
+					empty_label_font.setItalic(true);
+					empty_label->setFont(empty_label_font);
+					allocations_grid->addWidget(empty_label, allocation_row, 1, 1, 1);
 				}
 
-				fundos::transaction correction;
-				correction.corrects_id = widget->record.record.id();
-				correction.correct_action = fundos::transaction::correction_type::deletes;
-				correction.account_id = widget->record.record.account_id;
-				correction.date_recorded = widget->record.record.date_recorded;
-				correction.memo = widget->record.record.memo;
-				std::vector<fundos::allocation> allocations;
+				details_layout->addWidget(allocations_widget);
 
-				connect(app_coordinator->database(), &AppDatabase::transaction_saved, this, &AccountPage::on_transaction_deleted);
-				emit delete_requested(correction, allocations);
-			});
-		}
+				auto* details_actions = new QWidget(widget->details_widget);
+				auto* details_actions_layout = new QHBoxLayout(details_actions);
+				details_actions_layout->setAlignment(Qt::AlignLeft);
 
-		details_layout->addWidget(details_actions);
+				auto* edit_action = new QPushButton(tr("Edit"), details_actions);
+				edit_action->setIcon(theme::colored_svg_icon(":/icons/edit.svg", theme::text, theme::toolbar_icon_size));
+				details_actions_layout->addWidget(edit_action);
+				connect(edit_action, &QPushButton::clicked, this, [this, widget]() {
+					widget->background_widget->setStyleSheet(QStringLiteral(
+						"background-color: %1; border: 1px solid %2"
+					).arg(theme::info_background.name(), theme::separator.name()));
+					open_transaction(widget->record);
+				});
+
+				if (!widget->record.record.fitid) {
+					auto* correct_action = new QPushButton(tr("Make Correction"), details_actions);
+					correct_action->setIcon(theme::colored_svg_icon(":/icons/replace.svg", theme::text, theme::toolbar_icon_size));
+					details_actions_layout->addWidget(correct_action);
+					connect(correct_action, &QPushButton::clicked, this, [this, widget]() {
+						widget->background_widget->setStyleSheet(QStringLiteral(
+							"background-color: %1; border: 1px solid %2"
+						).arg(theme::info_background.name(), theme::separator.name()));
+						fundos::db::transaction_history::allocated_transaction correction;
+						correction.record.corrects_id = widget->record.record.id();
+						correction.record.correct_action = fundos::transaction::correction_type::replaces;
+						correction.record.account_id = widget->record.record.account_id;
+						correction.record.date_recorded = widget->record.record.date_recorded;
+						correction.record.memo = widget->record.record.memo;
+						correction.record.amount = widget->record.record.amount;
+
+						open_transaction(correction);
+					});
+
+					auto* delete_action = new QPushButton(tr("Delete Transaction"), details_actions);
+					delete_action->setIcon(theme::colored_svg_icon(":/icons/trash.svg", theme::text, theme::toolbar_icon_size));
+					details_actions_layout->addWidget(delete_action);
+					connect(delete_action, &QPushButton::clicked, this, [this, widget]() {
+						widget->background_widget->setStyleSheet(QStringLiteral(
+							"background-color: %1; border: 1px solid %2"
+						).arg(theme::info_background.name(), theme::separator.name()));
+
+						QMessageBox dialog(this);
+						dialog.setWindowTitle(tr("Delete Transaction"));
+						dialog.setText(tr("Delete \"%1\"?").arg(widget->record.record.memo));
+						dialog.setInformativeText(tr("This transaction will be permanently removed from your register."));
+						dialog.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
+						dialog.setDefaultButton(QMessageBox::Cancel);
+						dialog.button(QMessageBox::Ok)->setText(tr("Delete"));
+
+						if (dialog.exec() != QMessageBox::Ok) {
+							update_backgrounds();
+							return;
+						}
+
+						fundos::transaction correction;
+						correction.corrects_id = widget->record.record.id();
+						correction.correct_action = fundos::transaction::correction_type::deletes;
+						correction.account_id = widget->record.record.account_id;
+						correction.date_recorded = widget->record.record.date_recorded;
+						correction.memo = widget->record.record.memo;
+						std::vector<fundos::allocation> allocations;
+
+						connect(app_coordinator->database(), &AppDatabase::transaction_saved, this, &AccountPage::on_transaction_deleted);
+						emit delete_requested(correction, allocations);
+					});
+				}
+
+				details_layout->addWidget(details_actions);
+				table->body_layout()->addWidget(widget->details_widget, widget->details_row, 0, 1, 6);
+			}
+		});
 
 		table->body_layout()->addWidget(widget->background_widget, row, 0, 1, 6);
 		table->body_layout()->addWidget(icon_container,            row, 0, 1, 1);
@@ -531,7 +532,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		table->body_layout()->addWidget(widget->amount,            row, 3, 1, 1);
 		table->body_layout()->addWidget(widget->balance,           row, 4, 1, 1);
 		table->body_layout()->addWidget(widget->details_button,    row, 5, 1, 1);
-		table->body_layout()->addWidget(widget->details_widget,  ++row, 0, 1, 6);
+		widget->details_row = ++row;
 		++row;
 	};
 	auto add_ledger_balance = [&](fundos::import_ledger_balance& ledger_balance, std::optional<fundos::currency> balance_checker) -> void {

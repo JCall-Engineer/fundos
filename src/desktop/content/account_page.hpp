@@ -24,6 +24,7 @@ class AccountPage : public QWidget {
 		QLabel*      balance           = nullptr;
 		QToolButton* details_button    = nullptr;
 		QWidget*     details_widget    = nullptr;
+		int          details_row = 0;
 	};
 
 	AppCoordinator* app_coordinator;
