@@ -1,4 +1,6 @@
 #pragma once
+#include <tuple>
+#include <unordered_map>
 #include "types/currency.hpp"
 #include <QColor>
 #include <QLabel>
@@ -42,6 +44,23 @@ static inline QSize label_icon_size(const QWidget* label) {
 }
 
 static inline QPixmap colored_svg(const QString& path, QColor color, QSize size) {
+	using Key = std::tuple<QString, QRgb, QSize>;
+	struct key_hash {
+		size_t operator()(const Key& key) const {
+			return qHash(std::get<0>(key))
+				^ qHash(std::get<1>(key))
+				^ qHash(std::get<2>(key).width())
+				^ qHash(std::get<2>(key).height());
+		}
+	};
+	static std::unordered_map<Key, QPixmap, key_hash> cache;
+
+	Key key{path, color.rgba(), size};
+	auto it = cache.find(key);
+	if (it != cache.end()) {
+		return it->second;
+	}
+
 	QPixmap pixmap(size);
 	pixmap.fill(Qt::transparent);
 	QPainter painter(&pixmap);
@@ -50,6 +69,8 @@ static inline QPixmap colored_svg(const QString& path, QColor color, QSize size)
 	renderer.render(&painter);
 	painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
 	painter.fillRect(pixmap.rect(), color);
+
+	cache.emplace(key, pixmap);
 	return pixmap;
 }
 
