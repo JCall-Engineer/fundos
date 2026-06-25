@@ -136,6 +136,9 @@ class DateSectionWidget : public QWidget {
 		digit_buffer += digit;
 		switch (*focused_section) {
 			case Section::year: {
+				auto is_plausible_century_prefix = [](int two_digit) {
+					return two_digit == 19 || two_digit == 20;
+				};
 				if (digit_buffer.length() == 4) {
 					int year = digit_buffer.toInt();
 					int safe_day = qMin(picked_date.day(), QDate(year, picked_date.month(), 1).daysInMonth());
@@ -145,17 +148,19 @@ class DateSectionWidget : public QWidget {
 					digit_buffer.clear();
 				} else if (digit_buffer.length() == 2) {
 					int two_digit = digit_buffer.toInt();
-					int current_year = QDate::currentDate().year();
-					int cutoff = (current_year + 50) % 100;
-					int century = two_digit <= cutoff
-						? (current_year / 100) * 100
-						: (current_year / 100 - 1) * 100;
-					int year = century + two_digit;
-					int safe_day = qMin(picked_date.day(), QDate(year, picked_date.month(), 1).daysInMonth());
-					picked_date = QDate(year, picked_date.month(), safe_day);
-					owner->set_date(picked_date);
-					advance_section();
-					digit_buffer.clear();
+					if (!is_plausible_century_prefix(two_digit)) {
+						int current_year = QDate::currentDate().year();
+						int cutoff = (current_year + 50) % 100;
+						int century = two_digit <= cutoff
+							? (current_year / 100) * 100
+							: (current_year / 100 - 1) * 100;
+						int year = century + two_digit;
+						int safe_day = qMin(picked_date.day(), QDate(year, picked_date.month(), 1).daysInMonth());
+						picked_date = QDate(year, picked_date.month(), safe_day);
+						owner->set_date(picked_date);
+						advance_section();
+						digit_buffer.clear();
+					}
 				}
 				break;
 			}
