@@ -28,7 +28,7 @@ QString ImportDialog::warning_message(fundos::import::warning type, int32_t coun
 		case warning::missing_amount:      return tr("%n transaction(s) were missing an amount.", "", count);
 		case warning::bad_date:            return tr("%n transaction(s) had a date that could not be parsed.", "", count);
 		case warning::bad_amount:          return tr("%n transaction(s) had an amount that could not be parsed.", "", count);
-		case warning::bad_correction:      return tr("%n transaction(s) declared an unkown correct action.", "", count);
+		case warning::bad_correction:      return tr("%n transaction(s) declared an unknown correct action.", "", count);
 		case warning::NUM_WARNINGS:        return QString();
 	}
 	FUNDOS_UNREACHABLE();

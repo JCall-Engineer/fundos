@@ -80,7 +80,7 @@ void StatusBar::on_db_open(fundos::db::status open_result) {
 				case schema::app_mismatch:
 					return apply_error(tr("unrecognized database file"));
 				default:
-					return apply_error(tr("schema error code: ") + QString::number(static_cast<int>(open_result.schema_status)));
+					return apply_error(tr("schema error code: %1").arg(QString::number(static_cast<int>(open_result.schema_status))));
 			}
 		}
 		case code::sqlite3_error: {

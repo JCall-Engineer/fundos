@@ -29,7 +29,7 @@ void AppCoordinator::on_database_open() {
 }
 
 bool AppCoordinator::show_retry_dialog(const fundos::db::outcome& outcome) {
-	QString detail = QObject::tr("Error Code:") + " " + QString::number(static_cast<int>(outcome.code));
+	QString detail = QObject::tr("Error Code: $%").arg(QString::number(static_cast<int>(outcome.code)));
 	if (outcome.msg.has_value()) {
 		const auto& view = outcome.msg->view();
 		detail += "\n\n" + QObject::tr("Error Message: \"%1\"").arg(QString::fromUtf8(view.data(), view.size()));
