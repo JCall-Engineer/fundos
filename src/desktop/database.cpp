@@ -215,6 +215,15 @@ void AppDatabase::save_budget(fundos::budget budget) {
 	update_status(saved);
 }
 
+void AppDatabase::delete_budget(int64_t budget_id) {
+	if (!database) { return; }
+	emit operation_started(tr("deleting budget..."));
+	auto result = database->delete_budget(budget_id);
+	emit budget_deleted(result);
+	emit operation_finished();
+	update_status(result);
+}
+
 void AppDatabase::save_transaction(fundos::transaction transaction, std::vector<fundos::allocation> allocations) {
 	if (!database) { return; }
 	emit operation_started(tr("saving transaction..."));

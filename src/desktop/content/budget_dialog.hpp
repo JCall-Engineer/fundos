@@ -30,6 +30,7 @@ public:
 
 signals:
 	void save_budget_requested(fundos::budget budget);
+	void delete_budget_requested(int64_t budget_id);
 
 private slots:
 	void on_add_fixed_phase();

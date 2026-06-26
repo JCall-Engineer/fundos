@@ -11,8 +11,10 @@
 
 BudgetDialog::BudgetDialog(AppCoordinator* coordinator, fundos::budget opening, QWidget* parent) : QDialog(parent), app_coordinator(coordinator), record(std::move(opening)) {
 	auto* database = app_coordinator->database();
-	connect(this,     &BudgetDialog::save_budget_requested, database, &AppDatabase::save_budget);
-	connect(database, &AppDatabase::budget_saved,           this,     &BudgetDialog::on_save);
+	connect(this,     &BudgetDialog::save_budget_requested,   database, &AppDatabase::save_budget);
+	connect(this,     &BudgetDialog::delete_budget_requested, database, &AppDatabase::delete_budget);
+	connect(database, &AppDatabase::budget_saved,             this,     &BudgetDialog::on_save);
+	connect(database, &AppDatabase::budget_deleted,           this,     &BudgetDialog::on_save); // It looks weird but the handling is the same for delete as save
 
 	setWindowTitle(tr("Edit Budget"));
 	setMinimumWidth(700);
@@ -38,6 +40,10 @@ BudgetDialog::BudgetDialog(AppCoordinator* coordinator, fundos::budget opening, 
 
 		auto* delete_button = new QPushButton(tr("Delete budget"), toolbar);
 		delete_button->setIcon(theme::colored_svg_icon(":/icons/trash.svg", theme::text, theme::toolbar_icon_size));
+		connect(delete_button, &QPushButton::clicked, this, [this]() {
+			button_box->setEnabled(false);
+			emit delete_budget_requested(record.id());
+		});
 
 		toolbar_layout->addWidget(name_label);
 		toolbar_layout->addStretch();
