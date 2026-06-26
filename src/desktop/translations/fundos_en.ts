@@ -1004,173 +1004,183 @@ Reconcile transactions to resolve this discrepancy.</translation>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../shell/main_window.cpp" line="111"/>
+        <location filename="../shell/main_window.cpp" line="112"/>
         <source>Error Message: &quot;%1&quot;</source>
         <translation>Error Message: &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="122"/>
+        <location filename="../shell/main_window.cpp" line="123"/>
         <source>Interrupted</source>
         <translation>Interrupted</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="122"/>
+        <location filename="../shell/main_window.cpp" line="123"/>
         <source>A database operation was interrupted.</source>
         <translation>A database operation was interrupted.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="126"/>
+        <location filename="../shell/main_window.cpp" line="127"/>
         <source>Database Corrupted</source>
         <translation>Database Corrupted</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="126"/>
+        <location filename="../shell/main_window.cpp" line="127"/>
         <source>This operation has corrupted the database.</source>
         <translation>This operation has corrupted the database.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="130"/>
+        <location filename="../shell/main_window.cpp" line="131"/>
         <source>Internal Error</source>
         <translation>Internal Error</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="130"/>
+        <location filename="../shell/main_window.cpp" line="131"/>
         <source>This operation resulted in an unexpected error. Please report this issue.</source>
         <translation>This operation resulted in an unexpected error. Please report this issue.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="134"/>
+        <location filename="../shell/main_window.cpp" line="135"/>
         <source>Database Unavailable</source>
         <translation>Database Unavailable</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="134"/>
+        <location filename="../shell/main_window.cpp" line="135"/>
         <source>Something has the database busy. Try again later.</source>
         <translation>Something has the database busy. Try again later.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="138"/>
+        <location filename="../shell/main_window.cpp" line="139"/>
         <source>System out of Memory</source>
         <translation>System out of Memory</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="138"/>
+        <location filename="../shell/main_window.cpp" line="139"/>
         <source>You may need to close some programs or restart.</source>
         <translation>You may need to close some programs or restart.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="142"/>
+        <location filename="../shell/main_window.cpp" line="143"/>
         <source>System out of Storage</source>
         <translation>System out of Storage</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="142"/>
+        <location filename="../shell/main_window.cpp" line="143"/>
         <source>You may need to clear some space on your disk.</source>
         <translation>You may need to clear some space on your disk.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="146"/>
-        <location filename="../shell/main_window.cpp" line="154"/>
+        <location filename="../shell/main_window.cpp" line="147"/>
+        <location filename="../shell/main_window.cpp" line="155"/>
         <source>Unexpected Error</source>
         <translation>Unexpected Error</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="146"/>
+        <location filename="../shell/main_window.cpp" line="147"/>
         <source>An operation violated a database constraint. Please report this issue.</source>
         <translation>An operation violated a database constraint. Please report this issue.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="150"/>
+        <location filename="../shell/main_window.cpp" line="151"/>
         <source>Object not Found</source>
         <translation>Object not Found</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="150"/>
+        <location filename="../shell/main_window.cpp" line="151"/>
         <source>This operation attempted to access an unknown record from the database.</source>
         <translation>This operation attempted to access an unknown record from the database.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="154"/>
+        <location filename="../shell/main_window.cpp" line="155"/>
         <source>An operation was attempted in an unexpected state. Please report this issue.</source>
         <translation>An operation was attempted in an unexpected state. Please report this issue.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="158"/>
+        <location filename="../shell/main_window.cpp" line="159"/>
         <source>Operation Not Allowed</source>
         <translation>Operation Not Allowed</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="158"/>
+        <location filename="../shell/main_window.cpp" line="159"/>
         <source>This operation could not be completed because the data did not meet the required conditions.</source>
         <translation>This operation could not be completed because the data did not meet the required conditions.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="176"/>
-        <location filename="../shell/main_window.cpp" line="213"/>
-        <location filename="../shell/main_window.cpp" line="217"/>
-        <location filename="../shell/main_window.cpp" line="228"/>
+        <location filename="../shell/main_window.cpp" line="177"/>
+        <location filename="../shell/main_window.cpp" line="214"/>
+        <location filename="../shell/main_window.cpp" line="218"/>
+        <location filename="../shell/main_window.cpp" line="229"/>
         <source>Error</source>
         <translation>Error</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="176"/>
+        <location filename="../shell/main_window.cpp" line="177"/>
         <source>Migration failed.</source>
         <translation>Migration failed.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="200"/>
+        <location filename="../shell/main_window.cpp" line="186"/>
+        <source>Destructive Operation</source>
+        <translation>Destructive Operation</translation>
+    </message>
+    <message>
+        <location filename="../shell/main_window.cpp" line="187"/>
+        <source>This operation deletes the old database. You should perform a backup first. Continue?</source>
+        <translation>This operation deletes the old database. You should perform a backup first. Continue?</translation>
+    </message>
+    <message>
+        <location filename="../shell/main_window.cpp" line="201"/>
         <source>Backup Database</source>
         <translation>Backup Database</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="202"/>
+        <location filename="../shell/main_window.cpp" line="203"/>
         <source>SQLite Database (*.sqlite)</source>
         <translation>SQLite Database (*.sqlite)</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="211"/>
-        <location filename="../shell/main_window.cpp" line="226"/>
+        <location filename="../shell/main_window.cpp" line="212"/>
+        <location filename="../shell/main_window.cpp" line="227"/>
         <source>Success</source>
         <translation>Success</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="226"/>
+        <location filename="../shell/main_window.cpp" line="227"/>
         <source>Created new database.</source>
         <translation>Created new database.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="228"/>
+        <location filename="../shell/main_window.cpp" line="229"/>
         <source>Could not delete the database file. Ensure it is not open in another program and that you have write permissions to the file.</source>
         <translation>Could not delete the database file. Ensure it is not open in another program and that you have write permissions to the file.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="238"/>
+        <location filename="../shell/main_window.cpp" line="239"/>
         <source>Restore Database</source>
         <translation>Restore Database</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="240"/>
+        <location filename="../shell/main_window.cpp" line="241"/>
         <source>SQLite Database (*.sqlite *.db)</source>
         <translation>SQLite Database (*.sqlite *.db)</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="252"/>
-        <location filename="../shell/main_window.cpp" line="255"/>
+        <location filename="../shell/main_window.cpp" line="253"/>
+        <location filename="../shell/main_window.cpp" line="256"/>
         <source>Restore Success</source>
         <translation>Restore Success</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="252"/>
+        <location filename="../shell/main_window.cpp" line="253"/>
         <source>External database successfully restored.</source>
         <translation>External database successfully restored.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="255"/>
+        <location filename="../shell/main_window.cpp" line="256"/>
         <source>The original database was restored. You may now try restoring an external database again.</source>
         <translation>The original database was restored. You may now try restoring an external database again.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="269"/>
+        <location filename="../shell/main_window.cpp" line="270"/>
         <source>Could not clear the interrupted restore file. You may need to delete it manually before restoring:
 
 %1</source>
@@ -1179,7 +1189,7 @@ Reconcile transactions to resolve this discrepancy.</translation>
 %1</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="272"/>
+        <location filename="../shell/main_window.cpp" line="273"/>
         <source>Could not delete existing database. You may need to delete it manually before restoring:
 
 %1</source>
@@ -1188,12 +1198,12 @@ Reconcile transactions to resolve this discrepancy.</translation>
 %1</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="279"/>
+        <location filename="../shell/main_window.cpp" line="280"/>
         <source>Restore Interrupted</source>
         <translation>Restore Interrupted</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="280"/>
+        <location filename="../shell/main_window.cpp" line="281"/>
         <source>A previous restore was interrupted. The original database may still be recoverable at:
 
 %1
@@ -1206,36 +1216,36 @@ Would you like to recover it now? This will replace your current database.</sour
 Would you like to recover it now? This will replace your current database.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="285"/>
+        <location filename="../shell/main_window.cpp" line="286"/>
         <source>&amp;Recover Original</source>
         <translation>&amp;Recover Original</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="286"/>
+        <location filename="../shell/main_window.cpp" line="287"/>
         <source>&amp;Discard and Continue</source>
         <translation>&amp;Discard and Continue</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="260"/>
-        <location filename="../shell/main_window.cpp" line="263"/>
-        <location filename="../shell/main_window.cpp" line="266"/>
-        <location filename="../shell/main_window.cpp" line="269"/>
-        <location filename="../shell/main_window.cpp" line="272"/>
+        <location filename="../shell/main_window.cpp" line="261"/>
+        <location filename="../shell/main_window.cpp" line="264"/>
+        <location filename="../shell/main_window.cpp" line="267"/>
+        <location filename="../shell/main_window.cpp" line="270"/>
+        <location filename="../shell/main_window.cpp" line="273"/>
         <source>Restore Error</source>
         <translation>Restore Error</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="260"/>
+        <location filename="../shell/main_window.cpp" line="261"/>
         <source>Could not move existing database file.</source>
         <translation>Could not move existing database file.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="263"/>
+        <location filename="../shell/main_window.cpp" line="264"/>
         <source>Could not import database file.</source>
         <translation>Could not import database file.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="266"/>
+        <location filename="../shell/main_window.cpp" line="267"/>
         <source>Could not recover original database file. Your data may be at risk.</source>
         <translation>Could not recover original database file. Your data may be at risk.</translation>
     </message>
@@ -1319,16 +1329,6 @@ Would you like to recover it now? This will replace your current database.</tran
         <location filename="../coordinator.cpp" line="40"/>
         <source>FundOS could not read from the database and cannot continue.</source>
         <translation>FundOS could not read from the database and cannot continue.</translation>
-    </message>
-    <message>
-        <location filename="../shell/main_window.cpp" line="185"/>
-        <source>Destructive Operation</source>
-        <translation>Destructive Operation</translation>
-    </message>
-    <message>
-        <location filename="../shell/main_window.cpp" line="186"/>
-        <source>This operation deletes the old database. You should perform a backup first. Continue?</source>
-        <translation>This operation deletes the old database. You should perform a backup first. Continue?</translation>
     </message>
 </context>
 <context>

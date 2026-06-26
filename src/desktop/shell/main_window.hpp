@@ -3,6 +3,7 @@
 #include "shell/status_bar.hpp"
 #include "content/error_page.hpp"
 #include <QMainWindow>
+#include <QMessageBox>
 #include <QString>
 
 class MainWindow : public QMainWindow {
@@ -16,6 +17,7 @@ class MainWindow : public QMainWindow {
 	void load_error_page(ErrorPage* page);
 	void open_locale_page(std::optional<fundos::currency_locale::selection> currency_locale, std::optional<fundos::percentage_locale::selection> percentage_locale);
 
+	QMessageBox::StandardButton confirm_destruction();
 public:
 	MainWindow();
 

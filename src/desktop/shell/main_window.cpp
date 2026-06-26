@@ -12,10 +12,10 @@
 #include <QFileDialog>
 #include <QFuture>
 #include <QFutureWatcher>
-#include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
 
+/// Increment when toolbar layout or dockable panel configuration changes incompatibly.
 static constexpr int WINDOW_VERSION = 1;
 MainWindow::MainWindow() {
 	setWindowTitle("FundOS");
@@ -95,6 +95,7 @@ void MainWindow::open_locale_page(
 	connect(locale_page, &LocalePage::save_requested, database,    &AppDatabase::set_locales);
 	connect(database,    &AppDatabase::locales_saved, locale_page, &LocalePage::on_save_result);
 	connect(locale_page, &LocalePage::cancelled,      this,        &MainWindow::go_home);
+	// Lambda because AppCoordinator::update_locales is not a slot.
 	connect(locale_page, &LocalePage::saved,          this, [this](fundos::currency_locale::selection currency, fundos::percentage_locale::selection percentage) {
 		coordinator->update_locales(currency, percentage);
 	});
@@ -112,7 +113,7 @@ void MainWindow::on_result(const fundos::db::outcome& result) {
 		}
 		switch (result.code) {
 			case error::none:         // Conflicts with the if (!result) guard
-			case error::not_ready:    // not_ready should cause an error page on db open instead of home, making this function unreachable
+			case error::not_ready:    // triggers connection_opened -> on_db_open -> load_error_page before db_outcome is ever emitted
 			case error::inaccessible: // would prevent the db from opening, making this function unreachable
 			case error::readonly:     // would prevent the db from opening, making this function unreachable
 				FUNDOS_UNREACHABLE();
@@ -179,18 +180,18 @@ void MainWindow::on_migrate(fundos::db::outcome status) {
 	}
 }
 
-static QMessageBox::StandardButton confirm_destruction(QWidget* parent) {
+QMessageBox::StandardButton MainWindow::confirm_destruction() {
 	return QMessageBox::question(
-		parent,
-		QObject::tr("Destructive Operation"),
-		QObject::tr("This operation deletes the old database. You should perform a backup first. Continue?"),
+		this,
+		tr("Destructive Operation"),
+		tr("This operation deletes the old database. You should perform a backup first. Continue?"),
 		QMessageBox::Ok | QMessageBox::Cancel,
 		QMessageBox::Cancel
 	);
 }
 
 void MainWindow::db_backup() {
-	QString defaultName = QString("FundOS Backup %1.sqlite")
+	QString default_name = QString("FundOS Backup %1.sqlite")
 		.arg(QDate::currentDate().toString("yyyy-MM-dd"));
 
 	QSettings settings;
@@ -198,7 +199,7 @@ void MainWindow::db_backup() {
 	QString destination = QFileDialog::getSaveFileName(
 		this,
 		tr("Backup Database"),
-		last_directory + "/" + defaultName,
+		last_directory + "/" + default_name,
 		tr("SQLite Database (*.sqlite)")
 	);
 	if (destination.isEmpty()) { return; }
@@ -218,7 +219,7 @@ void MainWindow::on_backup_copy_failed() {
 }
 
 void MainWindow::db_create_new() {
-	if (QMessageBox::Ok != confirm_destruction(this)) { return; }
+	if (QMessageBox::Ok != confirm_destruction()) { return; }
 	emit db_create_new_requested();
 }
 void MainWindow::on_create_new(bool succeeded) {
@@ -229,7 +230,7 @@ void MainWindow::on_create_new(bool succeeded) {
 	}
 }
 void MainWindow::db_restore() {
-	if (QMessageBox::Ok != confirm_destruction(this)) { return; }
+	if (QMessageBox::Ok != confirm_destruction()) { return; }
 
 	QSettings settings;
 	QString last_directory = settings.value("backup/last_directory", QDir::homePath()).toString();
