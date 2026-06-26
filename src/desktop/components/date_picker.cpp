@@ -131,11 +131,18 @@ class DateSectionWidget : public QWidget {
 		update();
 	}
 
+	// Auto-advancing digit entry: as the user types digits into the focused section, this guesses when the section is "complete" and jumps to the next one without requiring an explicit confirm keypress.
+	// Two-digit sections (month, day) advance as soon as a value is unambiguous
+	// (e.g. "2" advances immediately since no month starts with 2 in tens digit position >9, but "1" waits for a second digit since "1" could become "1" or "10"-"19").
+	// The same digit-by-digit logic also re-derives a fresh value if an additional digit makes the buffered value invalid (see the "second" digit re-interpretation branches below).
 	void handle_digit(const QString& digit) {
 		if (!focused_section.has_value()) { return; }
 		digit_buffer += digit;
 		switch (*focused_section) {
 			case Section::year: {
+				// Two-digit year shorthand: "19"/"20" are treated as literal century prefixes (waiting for two more digits), since those are common as the start of a full 4-digit year.
+				// Any other two-digit value is resolved immediately using a sliding 100-year window centered near the current year + 50,
+				// so e.g. typing "47" near the year 2026 resolves to 2047 rather than 1947, while "85" resolves to 1985.
 				auto is_plausible_century_prefix = [](int two_digit) {
 					return two_digit == 19 || two_digit == 20;
 				};
@@ -187,6 +194,9 @@ class DateSectionWidget : public QWidget {
 						advance_section();
 						digit_buffer.clear();
 					} else {
+						// Two digits typed don't form a valid month (e.g. "15").
+						// Rather than rejecting the input outright, treat the second digit as the start of a fresh entry,
+						// so fast typing isn't punished by requiring the user to notice and correct an invalid combination.
 						int second = digit_buffer[1].digitValue();
 						digit_buffer = digit_buffer[1];
 						if (second >= 1 && second <= 9) {
@@ -220,6 +230,7 @@ class DateSectionWidget : public QWidget {
 						owner->set_date(picked_date);
 						digit_buffer.clear();
 					} else {
+						// Two digits typed don't form a valid day (e.g. "35").
 						int second = digit_buffer[1].digitValue();
 						digit_buffer = digit_buffer[1];
 						if (second >= 1 && second <= 9) {
@@ -444,6 +455,8 @@ class DatePickerPopup : public QWidget {
 				));
 
 				QDate captured = cell_date;
+				// refresh_calendar() is called repeatedly (every month navigation) on the same long-lived button objects;
+				// without disconnecting first, each call would stack another connection, causing one click to eventually fire the handler many times.
 				disconnect(button, &QPushButton::clicked, nullptr, nullptr);
 				connect(button, &QPushButton::clicked, this, [this, captured]() {
 					owner->set_date(captured);
@@ -526,6 +539,9 @@ class DatePickerPopup : public QWidget {
 public:
 	explicit DatePickerPopup(QDate value, DatePicker* owner_widget, QWidget* parent = nullptr)
 		: QWidget(parent, Qt::Popup)
+		// Qt::Popup makes this an auto-dismissing top-level window:
+		// clicking outside it closes it automatically, and close() (called after a day is picked) hides it cleanly.
+		// This is why day_buttons' click handler can just call close() with no explicit hide-popup bookkeeping.
 		, current_date(value)
 		, owner(owner_widget)
 		, spinner_month(value.month())
@@ -738,6 +754,8 @@ DatePicker::DatePicker(QDateTime value, QWidget* parent)
 	popup->installEventFilter(this);
 	popup->hide();
 
+	// Installed on qApp (not `this`), so eventFilter below receives every mouse press in the whole application.
+	// Needed to detect clicks outside both this widget and the popup (which is a separate top-level window) so focus can be cleared; a local filter can't see clicks elsewhere.
 	qApp->installEventFilter(this);
 
 	connect(calendar_button, &QToolButton::clicked, this, &DatePicker::open_popup);

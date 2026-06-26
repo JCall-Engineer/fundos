@@ -288,7 +288,7 @@ Reconcile transactions to resolve this discrepancy.</translation>
 <context>
     <name>DatePickerPopup</name>
     <message>
-        <location filename="../components/date_picker.cpp" line="647"/>
+        <location filename="../components/date_picker.cpp" line="663"/>
         <source>Today</source>
         <translation>Today</translation>
     </message>
