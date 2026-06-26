@@ -979,24 +979,24 @@ Reconcile transactions to resolve this discrepancy.</translation>
         <translation>Space around number</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="190"/>
-        <location filename="../content/locale_page.cpp" line="197"/>
+        <location filename="../content/locale_page.cpp" line="194"/>
+        <location filename="../content/locale_page.cpp" line="201"/>
         <source>Custom</source>
         <translation>Custom</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="272"/>
+        <location filename="../content/locale_page.cpp" line="276"/>
         <source>Invalid Input</source>
         <translation>Invalid Input</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="272"/>
+        <location filename="../content/locale_page.cpp" line="276"/>
         <source>Currency symbol is limited to 4 characters (some international characters count as 2 or more)</source>
         <translation>Currency symbol is limited to 4 characters (some international characters count as 2 or more)</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="346"/>
-        <location filename="../content/locale_page.cpp" line="370"/>
+        <location filename="../content/locale_page.cpp" line="350"/>
+        <location filename="../content/locale_page.cpp" line="375"/>
         <source>(incomplete)</source>
         <translation>(incomplete)</translation>
     </message>

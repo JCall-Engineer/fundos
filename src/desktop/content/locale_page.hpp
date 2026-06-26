@@ -28,11 +28,16 @@ class LocalePage : public QWidget {
 	QButtonGroup* percentage_symbol_placement_group = nullptr;
 	QLabel*       percentage_preview                = nullptr;
 
+	// Continuously synced from widget state via on_currency_preview/on_percentage_preview;
+	// read in on_confirm() to build the final selection.
 	fundos::currency_locale::spec   currency_fields;
 	fundos::percentage_locale::spec percentage_fields;
 
+	/// Holds the confirmed selection between on_confirm() and on_save_result(),
+	/// so saved() can emit the correct values once the database acknowledges the write.
 	std::optional<std::pair<fundos::currency_locale::selection, fundos::percentage_locale::selection>> pending_locales;
 
+	/// @param can_cancel Cancel is only meaningful when locales already exist; first-time setup must commit.
 	void setup_layout(bool can_cancel = false);
 
 public:

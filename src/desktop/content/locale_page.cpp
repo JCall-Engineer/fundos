@@ -174,7 +174,11 @@ LocalePage::LocalePage(
 	std::optional<percentage_locale> current_percentage,
 	QWidget* parent
 ) : QWidget(parent) {
+	// Cancel is only meaningful when locales already exist; first-time setup must commit.
 	setup_layout(current_currency.has_value() && current_percentage.has_value());
+
+	// Defaults to USD and English percentage for first-time setup.
+	// TODO: consider deriving defaults from QLocale::system() instead.
 	if (!current_currency.has_value()) {
 		current_currency = currency_locale(&fundos::currency_locale::locales.named.USD);
 	}
@@ -217,7 +221,7 @@ LocalePage::LocalePage(
 	if (current_currency->is_preset()) {
 		const char* identifier = current_currency->identifier();
 		for (int i = 0; i < currency_combo->count(); i++) {
-			if (currency_combo->itemData(i).toInt() >= 0) {
+			if (currency_combo->itemData(i).toInt() >= 0) { // skip the "Custom" entry which stores -1
 				const auto& entry = fundos::currency_locale::locales.entries[currency_combo->itemData(i).toInt()];
 				if (std::string_view(entry.identifier) == identifier) {
 					currency_combo->setCurrentIndex(i);
@@ -248,7 +252,7 @@ LocalePage::LocalePage(
 	if (current_percentage->is_preset()) {
 		const char* identifier = current_percentage->identifier();
 		for (int i = 0; i < percentage_combo->count(); i++) {
-			if (percentage_combo->itemData(i).toInt() >= 0) {
+			if (percentage_combo->itemData(i).toInt() >= 0) { // skip the "Custom" entry which stores -1
 				const auto& entry = fundos::percentage_locale::locales.entries[percentage_combo->itemData(i).toInt()];
 				if (std::string_view(entry.identifier) == identifier) {
 					percentage_combo->setCurrentIndex(i);
@@ -356,6 +360,7 @@ void LocalePage::on_currency_preview() {
 		.negative_format     = static_cast<currency_spec::negative_notation>(notation_id),
 	};
 
+	// Preview with a large negative value to exercise all formatting features (symbol, separators, negative notation).
 	currency_preview->setText(QString::fromStdString(
 		fundos::format_currency(-123654789, currency_fields)
 	));
@@ -377,6 +382,7 @@ void LocalePage::on_percentage_preview() {
 		.symbol_position         = static_cast<percentage_spec::symbol_placement>(placement_id),
 	};
 
+	// Preview with a large negative value to exercise all formatting features (symbol position, spacing, negative notation).
 	percentage_preview->setText(QString::fromStdString(
 		fundos::format_percentage(-4230, percentage_fields)
 	));
