@@ -875,6 +875,126 @@ TEST(DbQuery, SaveBudget_RollbackOnError) {
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM phase_targets"), 3);
 }
 
+TEST(DbQuery, SaveBudget_ReorderPreservedAcrossSave) {
+	FUNDOS_TEST_DB();
+
+	fund emergency_savings; emergency_savings.name = "Emergency Savings";
+	fund fund_one;          fund_one.name          = "Fund One";
+	fund fund_two;          fund_two.name          = "Fund Two";
+	fund fund_three;        fund_three.name        = "Fund Three";
+	fund fund_four;         fund_four.name         = "Fund Four";
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(emergency_savings)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(fund_one)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(fund_two)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(fund_three)));
+	ASSERT_TRUE(static_cast<bool>(database->save_fund(fund_four)));
+
+	budget new_budget;
+	new_budget.name          = "Reorder Budget";
+	new_budget.overflow_fund = emergency_savings.id();
+
+	budget_phase<fixed_target> fixed_phase;
+
+	fixed_target fixed_target_one;
+	fixed_target_one.fund_id        = fund_one.id();
+	fixed_target_one.amount         = currency{1};
+	fixed_target_one.cap            = std::nullopt;
+	fixed_target_one.allow_overdraw = false;
+	fixed_phase.targets.push_back(fixed_target_one);
+
+	fixed_target fixed_target_two;
+	fixed_target_two.fund_id        = fund_two.id();
+	fixed_target_two.amount         = currency{2};
+	fixed_target_two.cap            = std::nullopt;
+	fixed_target_two.allow_overdraw = false;
+	fixed_phase.targets.push_back(fixed_target_two);
+
+	budget_phase<percentage_target> percentage_phase;
+
+	percentage_target percentage_target_one;
+	percentage_target_one.fund_id        = fund_three.id();
+	percentage_target_one.amount         = percentage{1};
+	percentage_target_one.cap            = std::nullopt;
+	percentage_target_one.allow_overdraw = false;
+	percentage_phase.targets.push_back(percentage_target_one);
+
+	percentage_target percentage_target_two;
+	percentage_target_two.fund_id        = fund_four.id();
+	percentage_target_two.amount         = percentage{2};
+	percentage_target_two.cap            = std::nullopt;
+	percentage_target_two.allow_overdraw = false;
+	percentage_phase.targets.push_back(percentage_target_two);
+
+	new_budget.phases.push_back(fixed_phase);
+	new_budget.phases.push_back(percentage_phase);
+
+	ASSERT_TRUE(static_cast<bool>(database->save_budget(new_budget)));
+
+	any_budget_phase* fixed_phase_pointer      = nullptr;
+	any_budget_phase* percentage_phase_pointer = nullptr;
+
+	new_budget.each_phase([&](int, any_budget_phase* phase) {
+		std::visit([&](auto& typed_phase) {
+			using PhaseType = std::decay_t<decltype(typed_phase)>;
+			if constexpr (std::is_same_v<PhaseType, budget_phase<fixed_target>>) {
+				fixed_phase_pointer = phase;
+			} else if constexpr (std::is_same_v<PhaseType, budget_phase<percentage_target>>) {
+				percentage_phase_pointer = phase;
+			}
+		}, *phase);
+	});
+
+	ASSERT_NE(fixed_phase_pointer, nullptr);
+	ASSERT_NE(percentage_phase_pointer, nullptr);
+
+	new_budget.reorder_phase(fixed_phase_pointer, nullptr);
+
+	new_budget.find_phase([&](int, budget_phase<fixed_target>* phase) {
+		fixed_target* first_target  = &*phase->targets.begin();
+		phase->reorder_target(first_target, nullptr);
+		return true;
+	}, [](int, budget_phase<percentage_target>*) {
+		return false;
+	});
+
+	new_budget.find_phase([](int, budget_phase<fixed_target>*) {
+		return false;
+	}, [&](int, budget_phase<percentage_target>* phase) {
+		percentage_target* first_target = &*phase->targets.begin();
+		phase->reorder_target(first_target, nullptr);
+		return true;
+	});
+
+	ASSERT_TRUE(static_cast<bool>(database->save_budget(new_budget)));
+
+	auto result = database->get_budgets();
+	ASSERT_TRUE(static_cast<bool>(result));
+	ASSERT_EQ(result.value().size(), 1);
+
+	budget& loaded_budget = result.value()[0];
+	ASSERT_EQ(loaded_budget.phases.size(), 2);
+
+	auto phase_iterator = loaded_budget.phases.begin();
+
+	auto* loaded_percentage_phase = std::get_if<budget_phase<percentage_target>>(&*phase_iterator++);
+	ASSERT_NE(loaded_percentage_phase, nullptr);
+	ASSERT_EQ(loaded_percentage_phase->targets.size(), 2);
+	{
+		auto target_iterator = loaded_percentage_phase->targets.begin();
+		EXPECT_EQ(target_iterator->amount.basis_points, 2); ++target_iterator;
+		EXPECT_EQ(target_iterator->amount.basis_points, 1);
+	}
+
+	auto* loaded_fixed_phase = std::get_if<budget_phase<fixed_target>>(&*phase_iterator++);
+	ASSERT_NE(loaded_fixed_phase, nullptr);
+	ASSERT_EQ(loaded_fixed_phase->targets.size(), 2);
+	{
+		auto target_iterator = loaded_fixed_phase->targets.begin();
+		EXPECT_EQ(target_iterator->amount.minor_units, 2); ++target_iterator;
+		EXPECT_EQ(target_iterator->amount.minor_units, 1);
+	}
+}
+
 TEST(DbQuery, AccountHistory_ClearedAndPending) {
 	FUNDOS_TEST_DB();
 	int rc = sqlite3_exec(connection, std::format(R"sql(
