@@ -270,7 +270,7 @@ void FundPage::on_history(fundos::db::result<fundos::db::allocation_history> rec
 			table
 		);
 		auto* memo = new QLabel(QString::fromStdString(transaction.record.memo), table);
-		auto* amount = theme::currency_label(transaction.record.amount, app_coordinator->context()->currency_locale().info(), table);
+		auto* amount = theme::currency_label(transaction.allocated.amount, app_coordinator->context()->currency_locale().info(), table);
 		auto* balance = theme::currency_label(transaction.fund_balance, app_coordinator->context()->currency_locale().info(), table);
 
 		auto* button_container = new QWidget(table);
