@@ -21,7 +21,7 @@
 QString ImportDialog::warning_message(fundos::import::warning type, int32_t count) {
 	using warning = fundos::import::warning;
 	switch (type) {
-		case warning::missing_acctid:      return tr("%n accounts(s) were missing an unique identifier and could not be imported.", "", count);
+		case warning::missing_acctid:      return tr("%n accounts(s) were missing a unique identifier and could not be imported.", "", count);
 		case warning::skipped_transaction: return tr("%n transaction(s) could not be parsed and were skipped.", "", count);
 		case warning::missing_fitid:       return tr("%n transaction(s) were missing a unique identifier and may be imported as duplicates.", "", count);
 		case warning::missing_date:        return tr("%n transaction(s) were missing a date.", "", count);
