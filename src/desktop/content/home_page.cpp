@@ -16,6 +16,7 @@ HomePage::HomePage(AppCoordinator* coordinator, QWidget* parent) : QWidget(paren
 	auto* root_layout = new QVBoxLayout(this);
 	root_layout->setContentsMargins(0, 0, 0, 0);
 
+	// Keep show_closed_* in sync with the toggle buttons wired up in make_panel so make_panel can correctly construct the initial state on refreshes.
 	connect(this, &HomePage::toggle_closed_accounts, this, [this](bool visible) {
 		show_closed_accounts = visible;
 	});
@@ -124,11 +125,11 @@ HomePage::HomePage(AppCoordinator* coordinator, QWidget* parent) : QWidget(paren
 	}
 	budget_panel = make_panel(budget_list, tr("BUDGETS"), {
 		{
-			.tooltip   = QString("Create Fund"),
+			.tooltip   = QString("Create Budget"),
 			.icon_path = QString(":/icons/plus.svg"),
 			.action    = [this]() {
 				bool accepted = false;
-				QString name = QInputDialog::getText(this, tr("New Fund"), tr("Fund name:"), QLineEdit::Normal, "", &accepted);
+				QString name = QInputDialog::getText(this, tr("New Budget"), tr("Budget name:"), QLineEdit::Normal, "", &accepted);
 				if (!accepted) { return; }
 				name = name.trimmed();
 				if (name.isEmpty()) { return; }
@@ -298,9 +299,12 @@ void HomePage::resizeEvent(QResizeEvent* event) {
 	relayout();
 }
 
+/// Below this width the three panels stack vertically; at or above they sit side by side.
 static constexpr int HORIZONTAL_BREAKPOINT = 900;
 void HomePage::relayout() {
-	if (budget_panel == nullptr) { return; } // budget_list is the last pointer set in the ctor
+	// budget_panel is the last member assigned in the constructor; guards against
+	// relayout() being called via resizeEvent before construction completes.
+	if (budget_panel == nullptr) { return; }
 
 	bool use_horizontal = width() >= HORIZONTAL_BREAKPOINT;
 
@@ -328,7 +332,7 @@ void HomePage::relayout() {
 
 	container_layout->addWidget(budget_panel);
 
-	// setWidget replaces the old container and deletes it,
-	// but our list widgets are parented to HomePage so they survive
+	// list widgets (account_list, fund_list, budget_list) are parented to HomePage, not the container,
+	// so setWidget() can safely delete the old container without destroying the list contents.
 	scroll_area->setWidget(container);
 }

@@ -539,41 +539,49 @@ Reconcile transactions to resolve this discrepancy.</translation>
 <context>
     <name>HomePage</name>
     <message>
-        <location filename="../content/home_page.cpp" line="53"/>
+        <location filename="../content/home_page.cpp" line="54"/>
         <source>ACCOUNTS</source>
         <translation>ACCOUNTS</translation>
     </message>
     <message>
-        <location filename="../content/home_page.cpp" line="77"/>
+        <location filename="../content/home_page.cpp" line="78"/>
         <source>New Account</source>
         <translation>New Account</translation>
     </message>
     <message>
-        <location filename="../content/home_page.cpp" line="77"/>
+        <location filename="../content/home_page.cpp" line="78"/>
         <source>Account name:</source>
         <translation>Account name:</translation>
     </message>
     <message>
-        <location filename="../content/home_page.cpp" line="95"/>
+        <location filename="../content/home_page.cpp" line="96"/>
         <source>FUNDS</source>
         <translation>FUNDS</translation>
     </message>
     <message>
-        <location filename="../content/home_page.cpp" line="107"/>
-        <location filename="../content/home_page.cpp" line="131"/>
+        <location filename="../content/home_page.cpp" line="108"/>
         <source>New Fund</source>
         <translation>New Fund</translation>
     </message>
     <message>
-        <location filename="../content/home_page.cpp" line="107"/>
-        <location filename="../content/home_page.cpp" line="131"/>
+        <location filename="../content/home_page.cpp" line="108"/>
         <source>Fund name:</source>
         <translation>Fund name:</translation>
     </message>
     <message>
-        <location filename="../content/home_page.cpp" line="125"/>
+        <location filename="../content/home_page.cpp" line="126"/>
         <source>BUDGETS</source>
         <translation>BUDGETS</translation>
+    </message>
+    <message>
+        <location filename="../content/home_page.cpp" line="132"/>
+        <source>New Budget</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../content/home_page.cpp" line="132"/>
+        <source>Budget name:</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
