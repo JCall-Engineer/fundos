@@ -331,124 +331,124 @@ Reconcile transactions to resolve this discrepancy.</translation>
         <translation>Error Message: &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="93"/>
+        <location filename="../content/error_page.cpp" line="94"/>
         <source>Database Migration Required</source>
         <translation>Database Migration Required</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="94"/>
+        <location filename="../content/error_page.cpp" line="95"/>
         <source>This database was created by an older version of FundOS and needs to be migrated. It is recommended you make a backup before proceeding.</source>
         <translation>This database was created by an older version of FundOS and needs to be migrated. It is recommended you make a backup before proceeding.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="110"/>
+        <location filename="../content/error_page.cpp" line="111"/>
         <source>Database Requires a Newer Version</source>
         <translation>Database Requires a Newer Version</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="111"/>
+        <location filename="../content/error_page.cpp" line="112"/>
         <source>This database was created by a newer version of FundOS. Update FundOS to access it.</source>
         <translation>This database was created by a newer version of FundOS. Update FundOS to access it.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="121"/>
+        <location filename="../content/error_page.cpp" line="122"/>
         <source>Unrecognized Database File</source>
         <translation>Unrecognized Database File</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="122"/>
+        <location filename="../content/error_page.cpp" line="123"/>
         <source>This file was not created by FundOS.</source>
         <translation>This file was not created by FundOS.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="132"/>
+        <location filename="../content/error_page.cpp" line="133"/>
         <source>Database Schema is Corrupted</source>
         <translation>Database Schema is Corrupted</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="133"/>
+        <location filename="../content/error_page.cpp" line="134"/>
         <source>The database structure is unrecognized and cannot be recovered.</source>
         <translation>The database structure is unrecognized and cannot be recovered.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="155"/>
+        <location filename="../content/error_page.cpp" line="156"/>
         <source>Database is Corrupted</source>
         <translation>Database is Corrupted</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="156"/>
+        <location filename="../content/error_page.cpp" line="157"/>
         <source>The database file is damaged and cannot be opened.</source>
         <translation>The database file is damaged and cannot be opened.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="167"/>
+        <location filename="../content/error_page.cpp" line="168"/>
         <source>Database Unavailable</source>
         <translation>Database Unavailable</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="168"/>
+        <location filename="../content/error_page.cpp" line="169"/>
         <source>The database is busy or locked by another process.</source>
         <translation>The database is busy or locked by another process.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="177"/>
+        <location filename="../content/error_page.cpp" line="178"/>
         <source>Can&apos;t Open Database</source>
         <translation>Can&apos;t Open Database</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="178"/>
+        <location filename="../content/error_page.cpp" line="179"/>
         <source>The path to the database does not exist or FundOS does not have permission to access it.</source>
         <translation>The path to the database does not exist or FundOS does not have permission to access it.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="187"/>
+        <location filename="../content/error_page.cpp" line="188"/>
         <source>Database is Read-Only</source>
         <translation>Database is Read-Only</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="188"/>
+        <location filename="../content/error_page.cpp" line="189"/>
         <source>FundOS does not have permission to write to the database. Check your filesystem permissions.</source>
         <translation>FundOS does not have permission to write to the database. Check your filesystem permissions.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="197"/>
+        <location filename="../content/error_page.cpp" line="198"/>
         <source>Out of Memory</source>
         <translation>Out of Memory</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="198"/>
+        <location filename="../content/error_page.cpp" line="199"/>
         <source>FundOS ran out of memory while opening the database.</source>
         <translation>FundOS ran out of memory while opening the database.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="207"/>
+        <location filename="../content/error_page.cpp" line="208"/>
         <source>Disk Full</source>
         <translation>Disk Full</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="208"/>
+        <location filename="../content/error_page.cpp" line="209"/>
         <source>There is not enough disk space to open the database.</source>
         <translation>There is not enough disk space to open the database.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="225"/>
-        <location filename="../content/error_page.cpp" line="257"/>
+        <location filename="../content/error_page.cpp" line="226"/>
+        <location filename="../content/error_page.cpp" line="258"/>
         <source>Internal Error</source>
         <translation>Internal Error</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="226"/>
-        <location filename="../content/error_page.cpp" line="258"/>
+        <location filename="../content/error_page.cpp" line="227"/>
+        <location filename="../content/error_page.cpp" line="259"/>
         <source>An unexpected internal error occurred. Please report this issue.</source>
         <translation>An unexpected internal error occurred. Please report this issue.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="244"/>
+        <location filename="../content/error_page.cpp" line="245"/>
         <source>Storage Error</source>
         <translation>Storage Error</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="245"/>
+        <location filename="../content/error_page.cpp" line="246"/>
         <source>The database encountered an unrecoverable error.</source>
         <translation>The database encountered an unrecoverable error.</translation>
     </message>

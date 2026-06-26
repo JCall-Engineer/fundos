@@ -10,7 +10,7 @@
 class ErrorPage : public QWidget {
 	Q_OBJECT
 
-	enum class button : int {
+	enum class button : uint8_t {
 		retry,
 		migrate,
 		backup,

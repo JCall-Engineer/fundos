@@ -73,6 +73,7 @@ void ErrorPage::setup_error(const QString& title_text, QString description_text,
 ErrorPage::ErrorPage(const fundos::db::status& status, QWidget* parent) : QWidget(parent) {
 	setup_layout();
 
+	// Convenience wrapper that binds the sqlite3 error message for all open-error cases.
 	auto setup_open_error = [&](const QString& title_text, QString description_text) {
 		setup_error(title_text, description_text, status.sqlite3_outcome.msg);
 	};
@@ -263,7 +264,8 @@ ErrorPage::ErrorPage(const fundos::db::outcome& outcome, QWidget* parent) : QWid
 			break;
 
 		default:
-			// The only errors that result in closing the db are corrupted or internal. Verify with db::sqlite_runtime_error and MainWindow::on_result
+			// Only corrupted and internal errors cause MainWindow::on_result to load an ErrorPage;
+			// see db::sqlite_runtime_error for the full mapping and MainWindow::on_result for the routing.
 			FUNDOS_UNREACHABLE();
 	}
 }
