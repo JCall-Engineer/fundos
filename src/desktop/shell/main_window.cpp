@@ -241,25 +241,39 @@ void MainWindow::db_restore() {
 	);
 	if (source.isEmpty()) { return; }
 	settings.setValue("backup/last_directory", QFileInfo(source).absolutePath());
-	emit db_restore_requested(source);
+	emit db_restore_requested({ .source = source });
 }
-void MainWindow::on_restore(AppDatabase::RestoreResult result) {
-	switch (result) {
+void MainWindow::on_restore(AppDatabase::RestoreContext context) {
+	auto db_path = coordinator->database()->live_path();
+	auto temp_path = coordinator->database()->recovery_path();
+	switch (context.result) {
+		// terminal success states
 		case AppDatabase::RestoreResult::success:
-			QMessageBox::information(this, tr("Restore Success"), tr("Database Restoration Successful"));
+			QMessageBox::information(this, tr("Restore Success"), tr("External database successfully restored."));
 			return;
-		case AppDatabase::RestoreResult::failed_to_move:
+		case AppDatabase::RestoreResult::orphaned_backup_restored:
+			QMessageBox::information(this, tr("Restore Success"), tr("The original database was restored. You may now try restoring an external database again."));
+			return;
+
+		// terminal failure states
+		case AppDatabase::RestoreResult::failed_to_backup:
 			QMessageBox::critical(this, tr("Restore Error"), tr("Could not move existing database file."));
 			return;
-		case AppDatabase::RestoreResult::failed_to_copy:
+		case AppDatabase::RestoreResult::failed_to_import:
 			QMessageBox::critical(this, tr("Restore Error"), tr("Could not import database file."));
 			return;
-		case AppDatabase::RestoreResult::data_at_risk:
+		case AppDatabase::RestoreResult::failed_to_restore:
 			QMessageBox::critical(this, tr("Restore Error"), tr("Could not recover original database file. Your data may be at risk."));
 			return;
-		case AppDatabase::RestoreResult::leftover_temp_detected:
-			auto db_path = coordinator->database()->live_path();
-			auto temp_path = coordinator->database()->recovery_path();
+		case AppDatabase::RestoreResult::failed_to_clean_orphaned:
+			QMessageBox::critical(this, tr("Restore Error"), tr("Could not clear the interrupted restore file. You may need to delete it manually before restoring:\n\n%1").arg(temp_path));
+			return;
+		case AppDatabase::RestoreResult::live_prevents_orphaned:
+			QMessageBox::critical(this, tr("Restore Error"), tr("Could not delete existing database. You may need to delete it manually before restoring:\n\n%1").arg(db_path));
+			return;
+
+		// non-terminal: requires caller input before proceeding
+		case AppDatabase::RestoreResult::orphaned_backup_detected:
 			QMessageBox box(this);
 			box.setIcon(QMessageBox::Warning);
 			box.setWindowTitle(tr("Restore Interrupted"));
@@ -267,29 +281,17 @@ void MainWindow::on_restore(AppDatabase::RestoreResult result) {
 				"A previous restore was interrupted. The original database may still be recoverable at:"
 				"\n\n%1\n\n"
 				"Would you like to recover it now? This will replace your current database."
-			).arg(db_path));
+			).arg(temp_path));
 			QPushButton* recover_button = box.addButton(tr("&Recover Original"), QMessageBox::YesRole);
 			box.addButton(tr("&Discard and Continue"), QMessageBox::NoRole);
 			box.setDefaultButton(recover_button);
 			box.exec();
 			if (box.clickedButton() == recover_button) {
-				if (!QFile::remove(db_path)) {
-					QMessageBox::critical(this, tr("Restore Error"), tr("Could not delete existing database."));
-					return;
-				}
-				if (!QFile::rename(temp_path, db_path)) {
-					QMessageBox::critical(this, tr("Restore Error"), tr("Could not restore original database."));
-					return;
-				}
-				QMessageBox::information(this, tr("Restore Recovered"), tr("The original database was restored."));
-				return;
+				context.step = AppDatabase::RestoreStep::recover;
+				emit db_restore_requested(context);
 			} else {
-				if (!QFile::remove(temp_path)) {
-					QMessageBox::critical(this, tr("Restore Error"), tr("Could not delete original database."));
-					return;
-				}
-				QMessageBox::information(this, tr("Restore Recovered"), tr("The original database was deleted."));
-				return;
+				context.step = AppDatabase::RestoreStep::clean;
+				emit db_restore_requested(context);
 			}
 			return;
 	}

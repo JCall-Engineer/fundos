@@ -61,34 +61,71 @@ void AppDatabase::backup(QString destination) {
 	}
 }
 
-void AppDatabase::restore(QString source) {
-	// A leftover .tmp from a previous failed restore means the original database may already be displaced.
-	// Refuse to proceed rather than silently overwrite it.
-	if (QFile::exists(temp_path)) {
-		emit restore_complete(RestoreResult::leftover_temp_detected);
-		return;
+void AppDatabase::restore(RestoreContext context) {
+	// Do not emit operation_started/finished as there is no way to reasonably interrupt this process
+	switch (context.step) {
+		case RestoreStep::start:
+			context.reopen_on_failure = database && database->is_connected();
+			if (context.reopen_on_failure) { database->close(); }
+
+			// A leftover .tmp from a previous failed restore means the original database may already be displaced.
+			// Refuse to proceed rather than silently overwrite it.
+			if (QFile::exists(temp_path)) {
+				context.result = RestoreResult::orphaned_backup_detected;
+				emit restore_complete(context);
+				return;
+			}
+
+			// fall through to normal restore flow
+			break;
+		case RestoreStep::recover:
+			// The start step closed the connection but did not rename db_path (early return on orphaned_backup_detected).
+			// Remove the live file to make room for the orphaned backup.
+			if (!QFile::remove(db_path)) {
+				context.result = RestoreResult::live_prevents_orphaned;
+				emit restore_complete(context);
+				return;
+			}
+			if (!QFile::rename(temp_path, db_path)) {
+				context.result = RestoreResult::failed_to_restore;
+				emit restore_complete(context);
+				return;
+			}
+			open();
+			context.result = RestoreResult::orphaned_backup_restored;
+			emit restore_complete(context);
+			return; // Stop the normal restore flow
+		case RestoreStep::clean:
+			if (!QFile::remove(temp_path)) {
+				context.result = RestoreResult::failed_to_clean_orphaned;
+				emit restore_complete(context);
+				return;
+			}
+			// fall through to normal restore flow
+			break;
 	}
 
-	const bool was_open = database && database->is_connected();
-	if (was_open) { database->close(); }
-	// Do not emit operation_started/finished as there is no way to reasonably interrupt this process
 	if (!QFile::rename(db_path, temp_path)) {
-		emit restore_complete(RestoreResult::failed_to_move);
+		context.result = RestoreResult::failed_to_backup;
+		emit restore_complete(context);
 		return;
 	}
-	if (!QFile::copy(source, db_path)) {
+	if (!QFile::copy(context.source, db_path)) {
 		if (QFile::rename(temp_path, db_path)) { // best effort recovery
-			if (was_open) { open(); }
-			emit restore_complete(RestoreResult::failed_to_copy);
+			if (context.reopen_on_failure) { open(); }
+			context.result = RestoreResult::failed_to_import;
+			emit restore_complete(context);
 		} else {
 			// Recovery rename also failed; original database may no longer exist at db_path.
-			emit restore_complete(RestoreResult::data_at_risk);
+			context.result = RestoreResult::failed_to_restore;
+			emit restore_complete(context);
 		}
 		return;
 	}
 	QFile::remove(temp_path);
 	open();
-	emit restore_complete(RestoreResult::success);
+	context.result = RestoreResult::success;
+	emit restore_complete(context);
 }
 
 void AppDatabase::create_new() {

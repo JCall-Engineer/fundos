@@ -172,82 +172,82 @@ Reconcile transactions to resolve this discrepancy.</translation>
         <translation>migrating database...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="97"/>
+        <location filename="../database.cpp" line="141"/>
         <source>saving locales...</source>
         <translation>saving locales...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="123"/>
+        <location filename="../database.cpp" line="167"/>
         <source>fetching locale information...</source>
         <translation>fetching locale information...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="148"/>
+        <location filename="../database.cpp" line="192"/>
         <source>fetching accounts...</source>
         <translation>fetching accounts...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="157"/>
+        <location filename="../database.cpp" line="201"/>
         <source>fetching funds...</source>
         <translation>fetching funds...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="166"/>
+        <location filename="../database.cpp" line="210"/>
         <source>fetching budgets...</source>
         <translation>fetching budgets...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="175"/>
+        <location filename="../database.cpp" line="219"/>
         <source>fetching account balance...</source>
         <translation>fetching account balance...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="184"/>
+        <location filename="../database.cpp" line="228"/>
         <source>fetching fund balance...</source>
         <translation>fetching fund balance...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="193"/>
+        <location filename="../database.cpp" line="237"/>
         <source>saving account...</source>
         <translation>saving account...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="202"/>
+        <location filename="../database.cpp" line="246"/>
         <source>saving fund...</source>
         <translation>saving fund...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="211"/>
+        <location filename="../database.cpp" line="255"/>
         <source>saving budget...</source>
         <translation>saving budget...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="220"/>
+        <location filename="../database.cpp" line="264"/>
         <source>deleting budget...</source>
         <translation>deleting budget...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="229"/>
+        <location filename="../database.cpp" line="273"/>
         <source>saving transaction...</source>
         <translation>saving transaction...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="239"/>
+        <location filename="../database.cpp" line="282"/>
         <source>fetching account history...</source>
         <translation>fetching account history...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="248"/>
+        <location filename="../database.cpp" line="291"/>
         <source>fetching fund history...</source>
         <translation>fetching fund history...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="257"/>
+        <location filename="../database.cpp" line="300"/>
         <source>preparing import...</source>
         <translation>preparing import...</translation>
     </message>
     <message>
-        <location filename="../database.cpp" line="266"/>
+        <location filename="../database.cpp" line="309"/>
         <source>performing import...</source>
         <translation>performing import...</translation>
     </message>
@@ -1154,34 +1154,88 @@ Reconcile transactions to resolve this discrepancy.</translation>
         <translation>SQLite Database (*.sqlite *.db)</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="249"/>
+        <location filename="../shell/main_window.cpp" line="252"/>
+        <location filename="../shell/main_window.cpp" line="255"/>
         <source>Restore Success</source>
         <translation>Restore Success</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="249"/>
-        <source>Database Restoration Successful</source>
-        <translation>Database Restoration Successful</translation>
+        <location filename="../shell/main_window.cpp" line="252"/>
+        <source>External database successfully restored.</source>
+        <translation>External database successfully restored.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="252"/>
         <location filename="../shell/main_window.cpp" line="255"/>
-        <location filename="../shell/main_window.cpp" line="258"/>
+        <source>The original database was restored. You may now try restoring an external database again.</source>
+        <translation>The original database was restored. You may now try restoring an external database again.</translation>
+    </message>
+    <message>
+        <location filename="../shell/main_window.cpp" line="269"/>
+        <source>Could not clear the interrupted restore file. You may need to delete it manually before restoring:
+
+%1</source>
+        <translation>Could not clear the interrupted restore file. You may need to delete it manually before restoring:
+
+%1</translation>
+    </message>
+    <message>
+        <location filename="../shell/main_window.cpp" line="272"/>
+        <source>Could not delete existing database. You may need to delete it manually before restoring:
+
+%1</source>
+        <translation>Could not delete existing database. You may need to delete it manually before restoring:
+
+%1</translation>
+    </message>
+    <message>
+        <location filename="../shell/main_window.cpp" line="279"/>
+        <source>Restore Interrupted</source>
+        <translation>Restore Interrupted</translation>
+    </message>
+    <message>
+        <location filename="../shell/main_window.cpp" line="280"/>
+        <source>A previous restore was interrupted. The original database may still be recoverable at:
+
+%1
+
+Would you like to recover it now? This will replace your current database.</source>
+        <translation>A previous restore was interrupted. The original database may still be recoverable at:
+
+%1
+
+Would you like to recover it now? This will replace your current database.</translation>
+    </message>
+    <message>
+        <location filename="../shell/main_window.cpp" line="285"/>
+        <source>&amp;Recover Original</source>
+        <translation>&amp;Recover Original</translation>
+    </message>
+    <message>
+        <location filename="../shell/main_window.cpp" line="286"/>
+        <source>&amp;Discard and Continue</source>
+        <translation>&amp;Discard and Continue</translation>
+    </message>
+    <message>
+        <location filename="../shell/main_window.cpp" line="260"/>
+        <location filename="../shell/main_window.cpp" line="263"/>
+        <location filename="../shell/main_window.cpp" line="266"/>
+        <location filename="../shell/main_window.cpp" line="269"/>
+        <location filename="../shell/main_window.cpp" line="272"/>
         <source>Restore Error</source>
         <translation>Restore Error</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="252"/>
+        <location filename="../shell/main_window.cpp" line="260"/>
         <source>Could not move existing database file.</source>
         <translation>Could not move existing database file.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="255"/>
+        <location filename="../shell/main_window.cpp" line="263"/>
         <source>Could not import database file.</source>
         <translation>Could not import database file.</translation>
     </message>
     <message>
-        <location filename="../shell/main_window.cpp" line="258"/>
+        <location filename="../shell/main_window.cpp" line="266"/>
         <source>Could not recover original database file. Your data may be at risk.</source>
         <translation>Could not recover original database file. Your data may be at risk.</translation>
     </message>

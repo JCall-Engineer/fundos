@@ -14,7 +14,8 @@
 class AppDatabase : public QObject {
 	Q_OBJECT
 
-	QString db_path, temp_path;
+	QString db_path;
+	QString temp_path;
 	QThread worker_thread;
 	std::shared_ptr<fundos::db> database;
 
@@ -47,12 +48,36 @@ public:
 		int64_t     schema_version;
 	};
 
+	enum class RestoreStep : uint8_t {
+		start,   // initial restore attempt
+		recover, // recover orphaned temp
+		clean,   // discard orphaned temp and retry
+	};
+
 	enum class RestoreResult : uint8_t {
+		// terminal success states
 		success,
-		failed_to_move,         // original untouched at db_path; restore never started
-		failed_to_copy,         // recovery succeeded; original restored to db_path
-		data_at_risk,           // recovery itself failed; original may be lost
-		leftover_temp_detected, // previous failed recovery exists, defer to manual resolution
+		orphaned_backup_restored, // previous failed recovery was recovered
+
+		// terminal failure states
+		failed_to_backup,         // original untouched at db_path; restore never started
+		failed_to_import,         // could not restore external db; original restored successfully to db_path
+		failed_to_restore,        // recovering the temp backup failed; original may be lost
+		failed_to_clean_orphaned, // deleting the temp backup failed; cannot proceed with import
+		live_prevents_orphaned,   // could not remove live database before recovering temp backup
+
+		// non-terminal: requires caller input before proceeding
+		orphaned_backup_detected, // previous failed recovery exists, defer to manual resolution
+	};
+
+	struct RestoreContext {
+		QString source;
+
+		// Set during RestoreStep::start; gates whether open() is called if the original is restored after a failed import.
+		bool reopen_on_failure = false;
+
+		RestoreStep step = RestoreStep::start;
+		RestoreResult result = RestoreResult::success;
 	};
 
 	QString live_path()     { return db_path; }
@@ -74,9 +99,9 @@ public slots:
 	/// Restores the database from `source`, replacing the current file at db_path.
 	/// Uses a rename-to-temp safety net so the original isn't lost on a failed copy: db_path -> db_path.tmp, then attempt to copy source -> db_path.
 	/// If that copy fails, attempt to rename .tmp back to db_path (best-effort recovery).
-	/// RestoreResult::data_at_risk means even that recovery rename failed, so the original database may no longer be at db_path;
+	/// RestoreResult::failed_to_restore means even that recovery rename failed, so the original database may no longer be at db_path;
 	/// this is the one case callers should treat as urgent/destructive.
-	void restore(QString source);
+	void restore(RestoreContext context);
 	void create_new();
 
 	void set_locales(fundos::currency_locale::selection currency, fundos::percentage_locale::selection percentage);
@@ -119,7 +144,7 @@ signals:
 
 	void backup_complete(fundos::db::outcome status); // db was open, outcome from db::backup
 	void backup_copy_failed();                        // db was closed, QFile::copy failed
-	void restore_complete(RestoreResult result);
+	void restore_complete(RestoreContext context);
 	void create_new_complete(bool succeeded);
 
 	void locales_saved(fundos::db::outcome status);

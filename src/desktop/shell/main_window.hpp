@@ -29,7 +29,7 @@ signals:
 
 	void db_backup_requested(QString destination);
 	void db_create_new_requested();
-	void db_restore_requested(QString source);
+	void db_restore_requested(AppDatabase::RestoreContext context);
 
 private slots:
 	void on_db_open(fundos::db::status open_result);
@@ -49,7 +49,7 @@ private slots:
 	void on_create_new(bool succeeded);
 
 	void db_restore();
-	void on_restore(AppDatabase::RestoreResult result);
+	void on_restore(AppDatabase::RestoreContext context);
 
 	void db_manage_locale();
 
