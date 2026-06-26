@@ -22,6 +22,7 @@ struct currency {
 
 	// Convert operator allows this to be used like a true primitive type
 	constexpr explicit operator int64_t() const { return minor_units; }
+	constexpr currency operator-() const { return { -minor_units }; }
 
 	constexpr currency operator+(const currency& rhs) const { return { minor_units + rhs.minor_units }; }
 	constexpr currency operator-(const currency& rhs) const { return { minor_units - rhs.minor_units }; }

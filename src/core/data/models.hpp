@@ -451,18 +451,22 @@ struct budget : db_managed {
 
 	///-------------------------------------------------------------------------------------------------------------------+
 	/// This is **THE** FundOS function. The heart of it all. The magic.                                                  |
-	/// Distributes an income transaction amount across funds by processing phases in their defined order.                |
+	/// Distributes a transaction amount across funds by processing phases in their defined order.                        |
 	/// - fixed phases claim a set amount from the remainder.                                                             |
 	/// - percentage phases claim a percentage of the remainder at the point they run.                                    |
 	/// Any unclaimed remainder (or negative remainder) goes to the overflow fund.                                        |
+	/// For negative (expense) transactions the logic is symmetric: cap becomes a floor,                                  |
+	/// allow_overdraw permits depleting beyond the remainder, and overflow absorbs any excess.                           |
 	/// @param transaction The transaction to allocate; must already be persisted.                                        |
-	/// @param current_balances Current balance per fund_id, used to enforce caps.                                        |
+	/// @param current_balances Current balance per fund_id, used to enforce caps and floors.                             |
 	/// @return One allocation per fund that received a nonzero amount.                                                   |
 	///-------------------------------------------------------------------------------------------------------------------+
 	inline std::vector<allocation> apply(const transaction& transaction, const std::unordered_map<int64_t, currency>& current_balances) const {
 		// unordered_map operator[] default constructs currency{} on non-existent keys
 		std::unordered_map<int64_t, currency> allocations;
 		currency remainder = transaction.amount;
+		const bool expense = transaction.amount.minor_units < 0;
+
 		auto allocate = [&](const auto& target, currency allocated) -> void {
 			if (target->cap) {
 				currency current = current_balances.contains(target->fund_id)
@@ -472,14 +476,28 @@ struct budget : db_managed {
 					? allocations.at(target->fund_id)
 					: currency{0};
 
-				currency room = std::max(currency{0}, *target->cap - current);
-				allocated = std::min(allocated, room);
+				// For income: room is how much the fund can still grow before hitting cap.
+				// For expenses: room is how much the fund can still shrink before hitting the floor.
+				currency room = expense
+					? std::min(currency{0}, *target->cap - current)  // negative room: how far fund can drop
+					: std::max(currency{0}, *target->cap - current);
+				allocated = expense
+					? std::max(allocated, room)
+					: std::min(allocated, room);
 			}
 
-			if (remainder >= allocated || target->allow_overdraw) {
+			// For income: partial-allocate whatever positive remainder is left.
+			// For expenses: partial-allocate whatever negative remainder is left.
+			// allow_overdraw bypasses this and takes the full allocated amount regardless.
+			if (expense ? remainder.minor_units <= allocated.minor_units
+						: remainder.minor_units >= allocated.minor_units) {
 				allocations[target->fund_id] += allocated;
 				remainder -= allocated;
-			} else if (remainder.minor_units > 0) {
+			} else if (target->allow_overdraw) {
+				allocations[target->fund_id] += allocated;
+				remainder -= allocated;
+			} else if (expense ? remainder.minor_units < 0
+							: remainder.minor_units > 0) {
 				allocations[target->fund_id] += remainder;
 				remainder.minor_units = 0;
 			}
@@ -488,10 +506,13 @@ struct budget : db_managed {
 		// phase ordering is user-defined; fixed and percentage phases may be interleaved
 		each_phase([&](int, const budget_phase<fixed_target>* phase) -> void {
 			phase->each_target([&](int, const fixed_target* target) -> void {
-				allocate(target, target->amount);
+				allocate(target, expense ? -target->amount : target->amount);
 			});
 		}, [&](int, const budget_phase<percentage_target>* phase) -> void {
-			currency phase_balance = remainder.minor_units < 0 ? currency{0} : remainder;
+			// clamp phase_balance to zero on the side that has no capacity left
+			currency phase_balance = expense
+				? (remainder.minor_units > 0 ? currency{0} : remainder)
+				: (remainder.minor_units < 0 ? currency{0} : remainder);
 			phase->each_target([&](int, const percentage_target* target) -> void {
 				allocate(target, target->amount.scale(phase_balance));
 			});

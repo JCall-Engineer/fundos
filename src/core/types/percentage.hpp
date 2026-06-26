@@ -35,6 +35,7 @@ struct percentage {
 
 	// Convert operator allows this to be used like a true primitive type
 	constexpr explicit operator int64_t() const { return basis_points; }
+	constexpr percentage operator-() const { return { -basis_points }; }
 
 	constexpr percentage operator+(const percentage& rhs) const { return { basis_points + rhs.basis_points }; }
 	constexpr percentage operator-(const percentage& rhs) const { return { basis_points - rhs.basis_points }; }
