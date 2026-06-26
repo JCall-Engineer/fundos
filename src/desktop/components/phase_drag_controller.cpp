@@ -88,7 +88,7 @@ void PhaseDragController::on_drag_moved(QPoint global_position) {
 	}
 }
 
-void PhaseDragController::on_drag_released(QPoint global_position) {
+void PhaseDragController::on_drag_released(QPoint) {
 	if (!dragged_widget) { return; }
 
 	auto_scroll_timer->stop();
