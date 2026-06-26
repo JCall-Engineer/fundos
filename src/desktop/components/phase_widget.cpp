@@ -134,6 +134,7 @@ bool PhaseWidget::eventFilter(QObject* object, QEvent* event) {
 	if (event->type() == QEvent::FocusIn) {
 		auto* field = qobject_cast<QLineEdit*>(object);
 		if (field != nullptr) {
+			// selectAll must be queued; calling it directly during FocusIn is overridden by Qt's focus handling.
 			QMetaObject::invokeMethod(field, "selectAll", Qt::QueuedConnection);
 		}
 	}

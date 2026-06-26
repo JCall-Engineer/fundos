@@ -65,5 +65,6 @@ private:
 	QGridLayout*           grid_layout;
 
 public:
+	/// Public so BudgetDialog can register it with PhaseDragController after construction.
 	DragHandle*            phase_drag_handle = nullptr;
 };

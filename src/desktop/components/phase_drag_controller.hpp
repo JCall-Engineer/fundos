@@ -33,6 +33,7 @@ public:
 	void watch(DragHandle* handle, QWidget* phase_widget, fundos::any_budget_phase* phase);
 
 	/// Clears all registered phase entries. Call before re-registering after a rebuild.
+	/// Does not disconnect drag handles; Qt cleans up their connections when the widgets are deleted.
 	void clear();
 
 signals:

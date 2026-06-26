@@ -14,7 +14,7 @@ BudgetDialog::BudgetDialog(AppCoordinator* coordinator, fundos::budget opening, 
 	connect(this,     &BudgetDialog::save_budget_requested,   database, &AppDatabase::save_budget);
 	connect(this,     &BudgetDialog::delete_budget_requested, database, &AppDatabase::delete_budget);
 	connect(database, &AppDatabase::budget_saved,             this,     &BudgetDialog::on_save);
-	connect(database, &AppDatabase::budget_deleted,           this,     &BudgetDialog::on_save); // It looks weird but the handling is the same for delete as save
+	connect(database, &AppDatabase::budget_deleted,           this,     &BudgetDialog::on_save); // delete and save have the same outcome handling: accept on success, re-enable button_box on failure
 
 	setWindowTitle(tr("Edit Budget"));
 	setMinimumWidth(700);
@@ -73,7 +73,8 @@ BudgetDialog::BudgetDialog(AppCoordinator* coordinator, fundos::budget opening, 
 				overflow_combo->setCurrentIndex(overflow_combo->count() - 1);
 			}
 		}
-		record.overflow_fund = overflow_combo->currentData().toLongLong(); // Make sure new budgets are valid
+		// New budgets have no overflow_fund set; initialize it to the combo's default selection.
+		record.overflow_fund = overflow_combo->currentData().toLongLong();
 		connect(overflow_combo, &QComboBox::currentIndexChanged, this, [this](int) {
 			record.overflow_fund = overflow_combo->currentData().toLongLong();
 		});
@@ -109,7 +110,7 @@ BudgetDialog::BudgetDialog(AppCoordinator* coordinator, fundos::budget opening, 
 		scroll_layout = new QVBoxLayout(scroll_content);
 		scroll_layout->setContentsMargins(8, 8, 8, 8);
 		scroll_layout->setSpacing(8);
-		scroll_layout->addStretch();
+		scroll_layout->addStretch(); // trailing stretch; rebuild_phases inserts phase widgets before it
 
 		scroll_area->setWidget(scroll_content);
 

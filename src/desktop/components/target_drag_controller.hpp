@@ -46,7 +46,8 @@ public:
 	/// @param description The text to show while dragging.
 	void watch(DragHandle* handle, QWidget* target_widget, fundos::percentage_target* target, const QString& description);
 
-	/// Clears all registered target entries. Call before re-registering after a rebuild.
+	/// Clears all registered phase entries. Call before re-registering after a rebuild.
+	/// Does not disconnect drag handles; Qt cleans up their connections when the widgets are deleted.
 	void clear();
 
 signals:

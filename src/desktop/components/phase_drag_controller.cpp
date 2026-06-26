@@ -23,7 +23,8 @@ void PhaseDragController::watch(DragHandle* handle, QWidget* phase_widget, fundo
 	connect(handle, &DragHandle::drag_moved,    this, &PhaseDragController::on_drag_moved);
 	connect(handle, &DragHandle::drag_released, this, &PhaseDragController::on_drag_released);
 
-	// Associate the handle's parent phase widget so on_drag_started can identify it
+	// Properties used to recover the associated widget and phase from sender() in on_drag_started,
+	// since signal connections don't carry per-registration context.
 	handle->setProperty("phase_widget", QVariant::fromValue(static_cast<QWidget*>(phase_widget)));
 	handle->setProperty("phase_ptr",    QVariant::fromValue(static_cast<void*>(phase)));
 }

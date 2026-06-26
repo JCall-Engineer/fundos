@@ -270,17 +270,17 @@ Reconcile transactions to resolve this discrepancy.</translation>
         <translation>Overflow fund</translation>
     </message>
     <message>
-        <location filename="../content/budget_dialog.cpp" line="81"/>
+        <location filename="../content/budget_dialog.cpp" line="82"/>
         <source>Fixed phase</source>
         <translation>Fixed phase</translation>
     </message>
     <message>
-        <location filename="../content/budget_dialog.cpp" line="82"/>
+        <location filename="../content/budget_dialog.cpp" line="83"/>
         <source>Percentage phase</source>
         <translation>Percentage phase</translation>
     </message>
     <message>
-        <location filename="../content/budget_dialog.cpp" line="99"/>
+        <location filename="../content/budget_dialog.cpp" line="100"/>
         <source>Phases</source>
         <translation>Phases</translation>
     </message>
@@ -1306,12 +1306,12 @@ Would you like to recover it now? This will replace your current database.</tran
         <translation>Percentage</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="189"/>
+        <location filename="../components/phase_widget.cpp" line="190"/>
         <source>none</source>
         <translation>none</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="220"/>
+        <location filename="../components/phase_widget.cpp" line="221"/>
         <source>Remove target</source>
         <translation>Remove target</translation>
     </message>

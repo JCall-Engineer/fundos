@@ -37,6 +37,9 @@ void TargetDragController::watch(DragHandle* handle, QWidget* target_widget, fun
 	connect(handle, &DragHandle::drag_started,  this, &TargetDragController::on_drag_started);
 	connect(handle, &DragHandle::drag_moved,    this, &TargetDragController::on_drag_moved);
 	connect(handle, &DragHandle::drag_released, this, &TargetDragController::on_drag_released);
+
+	// Properties used to recover the associated widget and phase from sender() in on_drag_started,
+	// since signal connections don't carry per-registration context.
 	handle->setProperty("target_widget", QVariant::fromValue(static_cast<QWidget*>(target_widget)));
 	handle->setProperty("fixed_target_ptr", QVariant::fromValue(static_cast<void*>(target)));
 }
