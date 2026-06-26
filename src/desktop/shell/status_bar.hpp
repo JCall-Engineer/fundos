@@ -10,6 +10,8 @@ class StatusBar : public QStatusBar {
 	QWidget*     dot          = nullptr;
 	QLabel*      text         = nullptr;
 	QToolButton* db_button    = nullptr;
+
+	// Nulled out when the menu closes; guards against a slow database response arriving after the menu is gone.
 	QLabel*      info_size    = nullptr;
 	QLabel*      info_journal = nullptr;
 	QLabel*      info_schema  = nullptr;
@@ -19,6 +21,8 @@ class StatusBar : public QStatusBar {
 	void apply_ready();
 	void apply_yellow(const QString& message);
 	void apply_red(const QString& message);
+
+	/// Routes to red if disconnected, yellow if connected (error is transient/recoverable).
 	void apply_error(const QString& message);
 
 public:

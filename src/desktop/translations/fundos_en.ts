@@ -1450,53 +1450,53 @@ Would you like to recover it now? This will replace your current database.</tran
         <translation>attempted illegal operation</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="201"/>
+        <location filename="../shell/status_bar.cpp" line="204"/>
         <source>123.4 MB</source>
         <extracomment>Minimum width is derived from the longest value we expect to display (a size like &quot;123.4 MB&quot;). The label starts empty; on_db_info fills it once the database thread responds.</extracomment>
         <translation>123.4 MB</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="213"/>
+        <location filename="../shell/status_bar.cpp" line="216"/>
         <source>DATABASE</source>
         <translation>DATABASE</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="214"/>
+        <location filename="../shell/status_bar.cpp" line="217"/>
         <source>size on disk</source>
         <translation>size on disk</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="215"/>
+        <location filename="../shell/status_bar.cpp" line="218"/>
         <source>journal mode</source>
         <translation>journal mode</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="216"/>
+        <location filename="../shell/status_bar.cpp" line="219"/>
         <source>schema version</source>
         <translation>schema version</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="219"/>
+        <location filename="../shell/status_bar.cpp" line="222"/>
         <source>ACTIONS</source>
         <translation>ACTIONS</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="220"/>
+        <location filename="../shell/status_bar.cpp" line="223"/>
         <source>Manage Locale...</source>
         <translation>Manage Locale...</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="221"/>
+        <location filename="../shell/status_bar.cpp" line="224"/>
         <source>Back Up Database...</source>
         <translation>Back Up Database...</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="224"/>
+        <location filename="../shell/status_bar.cpp" line="227"/>
         <source>Restore from Backup...</source>
         <translation>Restore from Backup...</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="228"/>
+        <location filename="../shell/status_bar.cpp" line="231"/>
         <source>Replace with New Database...</source>
         <translation>Replace with New Database...</translation>
     </message>

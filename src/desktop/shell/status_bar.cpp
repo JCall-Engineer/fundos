@@ -152,10 +152,13 @@ void StatusBar::set_status(const fundos::db::outcome& outcome) {
 			return apply_error(disconnected(tr("attempted illegal operation")));
 		case error::internal:
 			return apply_error(disconnected(tr("unexpected internal error")));
+		case error::interrupted:
+			return apply_ready(); // interrupts are user-initiated; treat as a clean state
 	}
 }
 
 static QString format_size(int64_t bytes) {
+	// Ordered largest to smallest; first match wins.
 	static constexpr std::pair<int64_t, const char*> thresholds[] = {
 		{ 1'073'741'824, " GB" },
 		{ 1'048'576,     " MB" },
@@ -237,6 +240,8 @@ void StatusBar::show_db_menu() {
 
 	emit db_info_requested();
 	menu->adjustSize();
+
+	// Position menu so its bottom-right corner aligns with the button's top-right corner.
 	menu->exec(db_button->mapToGlobal(
 		db_button->rect().topRight() - QPoint(menu->width(), menu->height())
 	));
