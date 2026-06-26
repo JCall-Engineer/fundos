@@ -32,11 +32,12 @@ NavigableRow::NavigableRow(
 
 void NavigableRow::set_amount(QLabel* amount_label, bool has_amount) {
 	amount_label->setParent(this);
-	// Insert before the open_button (last item), after the stretch
+	// Index 2 = after name_label (0) and stretch (1), before open_button (last).
 	static_cast<QHBoxLayout*>(layout())->insertWidget(2, amount_label);
 	properties.has_amount = has_amount;
 }
 
 void NavigableRow::on_toggle(bool show_closed) {
+	// Closed rows with a balance remain visible regardless of show_closed, so the user doesn't lose sight of accounts/funds that still hold money.
 	setVisible(!properties.is_closed || show_closed || properties.has_amount);
 }

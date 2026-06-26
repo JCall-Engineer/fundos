@@ -7,7 +7,7 @@
 class FundComboItem : public QStandardItem {
 public:
 	int64_t fund_id = 0;
-	std::optional<fundos::currency> balance;
+	std::optional<fundos::currency> balance; // populated asynchronously after construction; absent until the balance response arrives
 
 	explicit FundComboItem(const QString& name, int64_t fund_id) : QStandardItem(name), fund_id(fund_id) {}
 };
@@ -15,7 +15,7 @@ public:
 class FundComboHeader : public QStandardItem {
 public:
 	explicit FundComboHeader(const QString& name) : QStandardItem(name) {
-		setFlags(Qt::NoItemFlags);
+		setFlags(Qt::NoItemFlags);  // makes the item non-interactive (unselectable, non-clickable)
 	}
 };
 

@@ -81,6 +81,9 @@ QWidget* TableView::body_container() const {
 }
 
 void TableView::add_header_label(int column, const QString &text) {
+	// Ghost labels are invisible zero-height placeholders in the body grid.
+	// They expand with their column so sync_header() can read their geometry
+	// to set matching fixed widths on the real header labels above.
 	QLabel* ghost = new QLabel(text, body_widget);
 	ghost->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	ghost->setFixedHeight(0);
@@ -134,6 +137,7 @@ void TableView::sync_header() {
 
 void TableView::showEvent(QShowEvent* event) {
 	QWidget::showEvent(event);
+	// Deferred so layout geometry is final before reading ghost label widths.
 	QTimer::singleShot(0, this, &TableView::sync_header);
 }
 

@@ -28,8 +28,9 @@ void FundComboDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
 		return;
 	}
 
-	QStyledItemDelegate::paint(painter, option, index);
+	QStyledItemDelegate::paint(painter, option, index); // draws background, selection highlight, and fund name
 
+	// Draw balance on top, right-aligned, colored by sign
 	const auto* fund_item = dynamic_cast<const FundComboItem*>(standard_item);
 	if (fund_item == nullptr || !fund_item->balance.has_value()) {
 		return;
