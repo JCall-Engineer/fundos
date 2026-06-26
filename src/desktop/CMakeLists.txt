@@ -9,6 +9,12 @@ qt_add_executable(fundos WIN32
 	${CMAKE_CURRENT_BINARY_DIR}/app.rc
 )
 
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/translations)
+qt_add_translations(fundos
+	TS_FILES ${CMAKE_CURRENT_SOURCE_DIR}/translations/fundos_en.ts
+	LUPDATE_OPTIONS -no-obsolete
+)
+
 qt_add_resources(fundos "resources"
 	PREFIX "/"
 	BASE ${CMAKE_SOURCE_DIR}/res
