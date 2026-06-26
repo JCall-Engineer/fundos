@@ -196,6 +196,13 @@ struct statements {
 		WHERE id = ? AND budget_id = ?
 	)sql" };
 
+	/// Used so that rearranging phases does not violate a unique constraint
+	statement_slot shuffle_phases { .sql = R"sql(
+		UPDATE budget_phases
+		SET position = -(position + 1)
+		WHERE budget_id = ?
+	)sql" };
+
 	statement_slot get_targets { .sql = R"sql(
 		SELECT id, fund_id, amount, cap, allow_overdraw
 		FROM phase_targets
@@ -210,6 +217,13 @@ struct statements {
 		UPDATE phase_targets
 		SET position = ?, fund_id = ?, amount = ?, cap = ?, allow_overdraw = ?
 		WHERE id = ? AND phase_id = ?
+	)sql" };
+
+	/// Used so that rearranging targets does not violate a unique constraint
+	statement_slot shuffle_targets { .sql = R"sql(
+		UPDATE phase_targets
+		SET position = -(position + 1)
+		WHERE phase_id = ?
 	)sql" };
 
 	/// Used to resolve imported bank ids

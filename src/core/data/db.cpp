@@ -794,6 +794,12 @@ db::outcome db::save_budget(budget& saving) {
 			return false;
 		};
 
+		// Vacate all position slots to avoid unique constraint conflicts during reorder
+		result = sql_execute(prepared->named.shuffle_phases.statement, [&](sqlite3_stmt* stmt) {
+			sqlite3_bind_int64(stmt, 1, saving.id_);
+		});
+		if (!result) { return result; }
+
 		// We are "finding" errors as we save phases
 		auto phase_err = saving.find_phase(
 			[&](int pos, budget_phase<fixed_target>* phase) -> bool {
@@ -801,6 +807,11 @@ db::outcome db::save_budget(budget& saving) {
 
 				result = delete_orphaned_targets(phase->id_, collect_target_ids(phase));
 				if (!result) { return true; }
+
+				result = sql_execute(prepared->named.shuffle_targets.statement, [&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64(stmt, 1, phase->id_);
+				});
+				if (!result) { return result; }
 
 				// "finding" errors as we save targets
 				auto target_err = phase->find_target([&](int pos, fixed_target* target) -> bool {
@@ -815,6 +826,11 @@ db::outcome db::save_budget(budget& saving) {
 
 				result = delete_orphaned_targets(phase->id_, collect_target_ids(phase));
 				if (!result) { return true; }
+
+				result = sql_execute(prepared->named.shuffle_targets.statement, [&](sqlite3_stmt* stmt) {
+					sqlite3_bind_int64(stmt, 1, phase->id_);
+				});
+				if (!result) { return result; }
 
 				// "finding" errors as we save targets
 				auto target_err = phase->find_target([&](int pos, percentage_target* target) -> bool {
