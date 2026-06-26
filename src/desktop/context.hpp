@@ -4,6 +4,10 @@
 #include "database.hpp"
 #include <QObject>
 
+/// Owns the current AppContext and replaces it wholesale on every update (locale change, accounts/funds/budgets refresh, single-record update).
+/// AppContext is treated as immutable once published: every mutation method builds a new AppContext from the old one's fields plus the change, then swaps current_context.
+/// This means any shared_ptr<AppContext> a widget is holding stays valid and unchanged even after the coordinator moves on,
+/// at the cost of a full struct copy + populate_maps() per single-field update.
 class AppContext : public QObject {
 	Q_OBJECT
 
@@ -18,6 +22,11 @@ class AppContext : public QObject {
 	std::optional<std::vector<fundos::fund>>    fund_list;
 	std::optional<std::vector<fundos::budget>>  budget_list;
 
+	// Raw pointers into account_list/fund_list/budget_list.
+	// Valid only as long as this AppContext's vectors are not reallocated;
+	// AppCoordinator never mutates an existing AppContext in place,
+	// it builds a new one and calls populate_maps() on it,
+	// so these pointers are safe for the AppContext's whole lifetime.
 	std::unordered_map<int64_t, fundos::account*> account_by_id;
 	std::unordered_map<int64_t, fundos::fund*>    fund_by_id;
 	std::unordered_map<int64_t, fundos::budget*>  budget_by_id;
@@ -42,7 +51,9 @@ class AppContext : public QObject {
 		return iterator != lookup.end() ? iterator->second : nullptr;
 	}
 
-	/// Used to make the constructor private but accessible to make_shared.
+	/// Used to make the constructor effectively private: make_shared requires a
+	/// public constructor, so this dummy tag type acts as the access control instead.
+	/// Only AppCoordinator constructs AppContext instances (see friend declaration above).
 	struct private_tag {};
 
 public:

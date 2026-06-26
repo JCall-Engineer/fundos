@@ -168,6 +168,9 @@ QWidget* HomePage::make_panel(QWidget* list, const QString& title, std::vector<b
 		button->setIcon(theme::colored_svg_icon(spec.icon_path, theme::text, theme::toolbar_icon_size));
 		button->setIconSize(theme::label_icon_size(label));
 		button->setAutoRaise(true);
+
+		// toggle_signal and checked_icon_path are a pair: both must be set for the button to become checkable.
+		// Setting only one silently leaves the button as a plain non-toggling action button.
 		if (spec.toggle_signal && !spec.checked_icon_path.isEmpty()) {
 			button->setStyleSheet("QToolButton:checked { background: transparent; border: none; }");
 			button->setCheckable(true);

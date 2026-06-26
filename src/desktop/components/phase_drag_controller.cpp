@@ -120,6 +120,8 @@ void PhaseDragController::on_auto_scroll() {
 }
 
 fundos::any_budget_phase* PhaseDragController::insertion_point_at(int viewport_y) const {
+	// Phase widgets live in scroll_content's coordinate space, which scrolls independently of the viewport the cursor position is reported in.
+	// Round-trip through global screen coordinates to convert between them.
 	QPoint content_pos = scroll_content->mapFromGlobal(
 		scroll_area->viewport()->mapToGlobal(QPoint(0, viewport_y))
 	);

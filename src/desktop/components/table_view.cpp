@@ -147,6 +147,10 @@ void TableView::resizeEvent(QResizeEvent* event) {
 }
 
 bool TableView::eventFilter(QObject* object, QEvent* event) {
+	// Three independent triggers for sync_header(), not redundant:
+	//  - showEvent catches first display
+	//  - resizeEvent catches window resizes
+	//  - LayoutRequest filter catches body content changes (rows added/removed) that don't necessarily resize or show the TableView itself
 	if (object == body_widget && event->type() == QEvent::LayoutRequest) {
 		QTimer::singleShot(0, this, &TableView::sync_header);
 	}

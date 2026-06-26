@@ -34,6 +34,10 @@ void TargetDragController::watch(DragHandle* handle, QWidget* target_widget, fun
 	}
 
 	fixed_entries.append({ target_widget, target, description });
+	// target_widget and target must outlive this registration;
+	// nothing here guards against either being deleted while still registered.
+	// clear() must be called before the corresponding widgets/data are destroyed.
+
 	connect(handle, &DragHandle::drag_started,  this, &TargetDragController::on_drag_started);
 	connect(handle, &DragHandle::drag_moved,    this, &TargetDragController::on_drag_moved);
 	connect(handle, &DragHandle::drag_released, this, &TargetDragController::on_drag_released);

@@ -78,6 +78,8 @@ private:
 	template<typename TargetType>
 	int indicator_y_for(TargetType* before, const QList<TargetEntry<TargetType>>& entry_list, QWidget* dragged) const;
 
+	// Exactly one of these two is non-null for the lifetime of the controller, set by whichever constructor was used.
+	// Every method below branches on `if (fixed_phase)` to select which entry list/target type is active.
 	fundos::budget_phase<fundos::fixed_target>*      fixed_phase      = nullptr;
 	fundos::budget_phase<fundos::percentage_target>* percentage_phase = nullptr;
 

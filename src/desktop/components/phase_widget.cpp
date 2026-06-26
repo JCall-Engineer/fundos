@@ -205,6 +205,7 @@ void PhaseWidget::build_target_row(TargetType* target, int row) {
 			target->cap = std::nullopt;
 			cap_edit->clear();
 		} else {
+			// Re-enabling the cap always starts from zero; the previous cap value (if any) is not remembered across an uncheck/recheck.
 			target->cap = fundos::currency{0};
 			cap_edit->setText(QString::fromStdString(target->cap->to_string(currency_locale)));
 		}
@@ -242,7 +243,10 @@ void PhaseWidget::build_target_row(TargetType* target, int row) {
 }
 
 void PhaseWidget::rebuild_target_rows() {
-	// Remove all rows except the column header (row 0)
+	// Row 0 holds the column header (built once in build_column_header_row and never rebuilt); only rows >= 1 are target rows that get torn down and recreated here.
+	// Background widgets span the same row/column as other row widgets (see row_background, which overlaps column_handle through column_remove).
+	// An index-based sweep over grid cells only sees one widget per cell, so it would delete the background but silently leave the overlapping drag handle behind.
+	// Iterating findChildren() instead visits every widget regardless of cell overlap. (Found via a real bug where the drag handle survived a rebuild because of this.)
 	const QList<QWidget*> children = grid_container->findChildren<QWidget*>(Qt::FindDirectChildrenOnly);
 	for (auto* child : children) {
 		auto* item = grid_layout->itemAt(grid_layout->indexOf(child));

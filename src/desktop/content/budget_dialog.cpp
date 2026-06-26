@@ -167,6 +167,9 @@ void BudgetDialog::rebuild_phases() {
 	record.each_phase([&](int, fundos::budget_phase<fundos::fixed_target>* phase) {
 		auto* widget = new PhaseWidget(phase, app_coordinator, scroll_area, drop_indicator, scroll_content);
 		connect(widget, &PhaseWidget::phase_remove_requested, this, [this, phase]() {
+			// phase is a budget_phase<fixed_target>*;
+			// on_phase_remove_requested needs the any_budget_phase* wrapper instead,
+			// so find_phase translates between the two by matching on the same underlying pointer via get_if.
 			on_phase_remove_requested(
 				record.find_phase([phase](int, fundos::any_budget_phase* any) {
 					return std::get_if<fundos::budget_phase<fundos::fixed_target>>(any) == phase;
@@ -189,7 +192,9 @@ void BudgetDialog::rebuild_phases() {
 		});
 		scroll_layout->insertWidget(scroll_layout->count() - 1, widget);
 		phase_drag_controller->watch(widget->phase_drag_handle, widget, record.find_phase(
-			[](int, const fundos::budget_phase<fundos::fixed_target>*)         { return false; },
+			// find_phase needs both a fixed- and percentage-phase predicate (it's a std::visit under the hood);
+			// since this branch is building a fixed phase widget, the percentage predicate always returns false by design.
+			[](int, const fundos::budget_phase<fundos::fixed_target>*)             { return false; },
 			[phase](int, const fundos::budget_phase<fundos::percentage_target>* p) { return p == phase; }
 		));
 	});

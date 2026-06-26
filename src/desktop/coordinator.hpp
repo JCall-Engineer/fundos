@@ -20,6 +20,10 @@ public:
 
 	AppDatabase* database() { return app_database; }
 	std::shared_ptr<AppContext> context() { return current_context; }
+
+	/// True once locales, accounts, funds, and budgets have all been received at least once.
+	/// Gates whether a mutation should fire created() (the first time everything is present) vs refreshed() (already had a full context, this is just an update).
+	/// See on_*_received below.
 	const bool is_ready() const {
 		return (current_context
 			&& current_context->currency

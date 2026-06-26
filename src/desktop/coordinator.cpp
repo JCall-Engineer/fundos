@@ -48,6 +48,7 @@ void AppCoordinator::on_locales_received(
 	fundos::db::result<fundos::currency_locale::selection>   currency,
 	fundos::db::result<fundos::percentage_locale::selection> percentage
 ) {
+	// Currency and percentage are independent failures; each gets its own retry/give-up decision since one succeeding doesn't help if the other failed.
 	if (!currency && currency.status().code != fundos::db::error::not_found) {
 		if (show_retry_dialog(currency.status())) {
 			emit locales_requested();

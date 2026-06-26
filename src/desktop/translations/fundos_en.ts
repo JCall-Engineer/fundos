@@ -1311,7 +1311,7 @@ Would you like to recover it now? This will replace your current database.</tran
         <translation>none</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="221"/>
+        <location filename="../components/phase_widget.cpp" line="222"/>
         <source>Remove target</source>
         <translation>Remove target</translation>
     </message>
