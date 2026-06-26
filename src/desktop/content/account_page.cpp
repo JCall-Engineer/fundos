@@ -537,7 +537,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 	};
 	auto add_ledger_balance = [&](fundos::import_ledger_balance& ledger_balance, std::optional<fundos::currency> balance_checker) -> void {
 		const bool ledger_contradicted = balance_checker && *balance_checker != ledger_balance.amount;
-		
+
 		const auto background_color = ledger_contradicted ? theme::error_background : theme::success_background;
 		auto* background_widget = new QWidget(table);
 		background_widget->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);

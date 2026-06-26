@@ -466,72 +466,72 @@ Reconcile transactions to resolve this discrepancy.</translation>
         <translation>From</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="68"/>
+        <location filename="../content/fund_page.cpp" line="65"/>
         <source>Until</source>
         <translation>Until</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="75"/>
+        <location filename="../content/fund_page.cpp" line="69"/>
         <source>Last Month</source>
         <translation>Last Month</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="85"/>
+        <location filename="../content/fund_page.cpp" line="79"/>
         <source>3 Months</source>
         <translation>3 Months</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="95"/>
+        <location filename="../content/fund_page.cpp" line="89"/>
         <source>YTD</source>
         <translation>YTD</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="138"/>
+        <location filename="../content/fund_page.cpp" line="132"/>
         <source>Open Fund</source>
         <translation>Open Fund</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="156"/>
+        <location filename="../content/fund_page.cpp" line="150"/>
         <source>Close Fund</source>
         <translation>Close Fund</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="228"/>
+        <location filename="../content/fund_page.cpp" line="225"/>
         <source>Error getting transaction history.</source>
         <translation>Error getting transaction history.</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="237"/>
+        <location filename="../content/fund_page.cpp" line="234"/>
         <source>No transactions recorded during the selected period.</source>
         <translation>No transactions recorded during the selected period.</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="244"/>
+        <location filename="../content/fund_page.cpp" line="241"/>
         <source>Date</source>
         <translation>Date</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="245"/>
+        <location filename="../content/fund_page.cpp" line="242"/>
         <source>Memo</source>
         <translation>Memo</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="246"/>
+        <location filename="../content/fund_page.cpp" line="243"/>
         <source>Amount</source>
         <translation>Amount</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="247"/>
+        <location filename="../content/fund_page.cpp" line="244"/>
         <source>Balance</source>
         <translation>Balance</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="289"/>
+        <location filename="../content/fund_page.cpp" line="286"/>
         <source>Invalid Account</source>
         <translation>Invalid Account</translation>
     </message>
     <message>
-        <location filename="../content/fund_page.cpp" line="289"/>
+        <location filename="../content/fund_page.cpp" line="286"/>
         <source>The transaction references an account which doesn&apos;t exist.</source>
         <translation>The transaction references an account which doesn&apos;t exist.</translation>
     </message>

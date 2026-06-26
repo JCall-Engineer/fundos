@@ -6,12 +6,12 @@ using namespace fundos;
 
 static inline void AssertAllocationsMatch(const std::vector<allocation>& actual, std::vector<std::pair<int64_t, currency>> expected) {
 	ASSERT_EQ(actual.size(), expected.size());
-	
+
 	std::unordered_map<int64_t, currency> actual_map;
 	for (const auto& alloc : actual) {
 		actual_map[alloc.fund_id] = alloc.amount;
 	}
-	
+
 	for (const auto& [fund_id, amount] : expected) {
 		ASSERT_TRUE(actual_map.contains(fund_id));
 		EXPECT_EQ(actual_map[fund_id].minor_units, amount.minor_units);

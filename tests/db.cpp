@@ -1023,7 +1023,7 @@ TEST(DbQuery, AccountHistory_ClearedAndPending) {
 
 	ASSERT_EQ(history.value().ledger_balances.size(), 0);
 	ASSERT_EQ(history.value().transactions.size(), 2);
-	
+
 	ASSERT_EQ(history.value().transactions[0].record.id(), 4);
 	ASSERT_EQ(history.value().transactions[0].account_balance, currency{210});
 

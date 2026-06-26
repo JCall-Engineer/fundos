@@ -60,17 +60,11 @@ FundPage::FundPage(
 		auto today = QDateTime::currentDateTime();
 		auto* after_label = new QLabel(tr("From"), this);
 		after_picker = new DatePicker(today.addMonths(-1), this);
-		connect(after_picker, &DatePicker::updated, this, [this](){
-			if (loading_preset_date_range) { return; }
-			fetch_history();
-		});
+		connect(after_picker, &DatePicker::updated, this, &FundPage::fetch_history);
 
 		auto* before_label = new QLabel(tr("Until"), this);
 		before_picker = new DatePicker(today, this);
-		connect(before_picker, &DatePicker::updated, this, [this](){
-			if (loading_preset_date_range) { return; }
-			fetch_history();
-		});
+		connect(before_picker, &DatePicker::updated, this, &FundPage::fetch_history);
 
 		auto* month_button = new QPushButton(tr("Last Month"), this);
 		connect(month_button, &QPushButton::clicked, this, [this]() {
@@ -184,6 +178,9 @@ void FundPage::on_toggle_open() {
 }
 
 void FundPage::on_fund_saved(fundos::db::outcome saved) {
+	// Reverts both fields unconditionally on failure, even though only one of rename()/on_toggle_open() actually changed per call.
+	// Safe because the untouched field's "previous" value equals its current value,
+	// so restoring it is a no-op; relies on the single-edit-in-flight assumption above.
 	if (!saved) {
 		record.name = previous_name;
 		name_label->set_text(QString::fromStdString(previous_name));
@@ -210,7 +207,7 @@ void FundPage::fetch_history() {
 
 	auto* info_layout = new QHBoxLayout(info_row);
 
-	auto* spinner = new LoadingSpinner(this);
+	auto* spinner = new LoadingSpinner(info_row);
 	info_layout->addWidget(spinner);
 
 	fundos::datetime after  = {after_picker->get_date().startOfDay().toMSecsSinceEpoch()};
@@ -221,7 +218,7 @@ void FundPage::fetch_history() {
 void FundPage::on_history(fundos::db::result<fundos::db::allocation_history> received) {
 	clear_history();
 	if (!received) {
-		auto* info_row = new QWidget(this);
+		auto* info_row = new QWidget(history_panel);
 		history_layout->addWidget(info_row);
 
 		auto* info_layout = new QHBoxLayout(info_row);
@@ -230,15 +227,15 @@ void FundPage::on_history(fundos::db::result<fundos::db::allocation_history> rec
 	}
 	auto& history = received.value();
 	if (history.transactions.empty()) {
-		auto* info_row = new QWidget(this);
+		auto* info_row = new QWidget(history_panel);
 		history_layout->addWidget(info_row);
 
 		auto* info_layout = new QHBoxLayout(info_row);
 		info_layout->addWidget(theme::header_label(tr("No transactions recorded during the selected period."), history_panel), 0, Qt::AlignCenter);
 		return;
 	}
-	
-	auto* table = new TableView(true, this);
+
+	auto* table = new TableView(true, history_panel);
 	table->set_header_vertical_padding(8);
 	table->add_header_label(0, QStringLiteral(""));
 	table->add_header_label(1, tr("Date"));

@@ -327,7 +327,7 @@ void HomePage::relayout() {
 	container_layout->addWidget(divider1);
 
 	container_layout->addWidget(fund_panel);
-	
+
 	auto* divider2 = new QFrame(container);
 	divider2->setFrameShape(divider_shape);
 	divider2->setFrameShadow(QFrame::Plain);

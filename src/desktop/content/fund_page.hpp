@@ -18,7 +18,15 @@ class FundPage : public QWidget {
 	QVBoxLayout* history_layout;
 	DatePicker* after_picker;
 	DatePicker* before_picker;
+
+	/// Suppresses the automatic fetch_history() that DatePicker::updated would otherwise trigger for each picker individually.
+	/// The preset buttons change both pickers in sequence and want exactly one fetch afterward, not two (one per picker).
 	bool loading_preset_date_range = false;
+
+	// Single-slot rollback buffer for the most recent unconfirmed edit.
+	// Set immediately before emitting save_fund_requested, read back in on_fund_saved to revert `record` if the save failed.
+	// Only one edit can be in flight at a time this way:
+	// a second save before the first's result arrives would overwrite these and lose the ability to roll back the first edit correctly.
 	std::string previous_name;
 	std::optional<fundos::datetime> previous_closed_at;
 
