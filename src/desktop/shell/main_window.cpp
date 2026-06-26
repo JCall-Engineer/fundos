@@ -257,6 +257,41 @@ void MainWindow::on_restore(AppDatabase::RestoreResult result) {
 		case AppDatabase::RestoreResult::data_at_risk:
 			QMessageBox::critical(this, tr("Restore Error"), tr("Could not recover original database file. Your data may be at risk."));
 			return;
+		case AppDatabase::RestoreResult::leftover_temp_detected:
+			auto db_path = coordinator->database()->live_path();
+			auto temp_path = coordinator->database()->recovery_path();
+			QMessageBox box(this);
+			box.setIcon(QMessageBox::Warning);
+			box.setWindowTitle(tr("Restore Interrupted"));
+			box.setText(tr(
+				"A previous restore was interrupted. The original database may still be recoverable at:"
+				"\n\n%1\n\n"
+				"Would you like to recover it now? This will replace your current database."
+			).arg(db_path));
+			QPushButton* recover_button = box.addButton(tr("&Recover Original"), QMessageBox::YesRole);
+			box.addButton(tr("&Discard and Continue"), QMessageBox::NoRole);
+			box.setDefaultButton(recover_button);
+			box.exec();
+			if (box.clickedButton() == recover_button) {
+				if (!QFile::remove(db_path)) {
+					QMessageBox::critical(this, tr("Restore Error"), tr("Could not delete existing database."));
+					return;
+				}
+				if (!QFile::rename(temp_path, db_path)) {
+					QMessageBox::critical(this, tr("Restore Error"), tr("Could not restore original database."));
+					return;
+				}
+				QMessageBox::information(this, tr("Restore Recovered"), tr("The original database was restored."));
+				return;
+			} else {
+				if (!QFile::remove(temp_path)) {
+					QMessageBox::critical(this, tr("Restore Error"), tr("Could not delete original database."));
+					return;
+				}
+				QMessageBox::information(this, tr("Restore Recovered"), tr("The original database was deleted."));
+				return;
+			}
+			return;
 	}
 }
 

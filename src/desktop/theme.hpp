@@ -43,16 +43,22 @@ static inline QSize label_icon_size(const QWidget* label) {
 	return QSize(side, side);
 }
 
+/// @warning Safe only on the main/GUI thread; static cache is not protected by a mutex.
 static inline QPixmap colored_svg(const QString& path, QColor color, QSize size) {
 	using Key = std::tuple<QString, QRgb, QSize>;
 	struct key_hash {
 		size_t operator()(const Key& key) const {
+			// XOR-combining qHash outputs is fast but collision-prone for keys that
+			// differ only in width vs height (e.g. swapped dimensions hash the same).
+			// Acceptable here since icon sizes are small and not adversarial input.
 			return qHash(std::get<0>(key))
 				^ qHash(std::get<1>(key))
 				^ qHash(std::get<2>(key).width())
 				^ qHash(std::get<2>(key).height());
 		}
 	};
+	// Intentionally unbounded for process lifetime; key space is small
+	// (finite icon paths x colors x sizes), so this never grows unreasonably.
 	static std::unordered_map<Key, QPixmap, key_hash> cache;
 
 	Key key{path, color.rgba(), size};
@@ -67,6 +73,9 @@ static inline QPixmap colored_svg(const QString& path, QColor color, QSize size)
 	painter.setRenderHint(QPainter::Antialiasing);
 	QSvgRenderer renderer(path);
 	renderer.render(&painter);
+
+	// SourceIn keeps the alpha shape just rendered, replaces RGB with `color`.
+	// This recolors a monochrome SVG without re-rendering per color.
 	painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
 	painter.fillRect(pixmap.rect(), color);
 
@@ -95,6 +104,7 @@ static inline QPalette make_palette() {
 	return palette;
 }
 
+/// Creates a label displaying a currency amount, colored by sign: red (error_foreground) if negative, green (success_foreground) otherwise.
 static inline QLabel* currency_label(fundos::currency amount, const fundos::currency_locale::spec& locale, QWidget* parent = nullptr) {
 	auto* label = new QLabel(QString::fromStdString(amount.to_string(locale)), parent);
 	QPalette palette = label->palette();

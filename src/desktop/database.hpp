@@ -6,21 +6,32 @@
 #include <QString>
 #include <QThread>
 
+/// Manages database access on a dedicated worker thread.
+/// @warning All public slots execute on an internal worker thread, not the calling thread.
+/// Never call slots directly — always connect via QObject::connect(), which defaults to Qt::QueuedConnection across threads.
+///
+/// @note `database` is null only before the first open() call ever succeeds or fails; after that it is always non-null but may be disconnected.
 class AppDatabase : public QObject {
 	Q_OBJECT
 
-	QString db_path;
+	QString db_path, temp_path;
 	QThread worker_thread;
 	std::shared_ptr<fundos::db> database;
 
+	/// @overload
+	/// Unwraps the result and forwards the contained outcome to the primary overload.
 	template<typename T>
 	void update_status(const fundos::db::result<T>& result);
+
+	/// Routes an operations outcome to the appropriate signal based on current connection state.
+	/// If the database is connected db_outcome is emitted, otherwise connection_closed is emitted.
 	void update_status(const fundos::db::outcome& status);
 
 public:
 	explicit AppDatabase(QObject* parent) : QObject(parent) {
 		QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
 		db_path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/fundos.sqlite";
+		temp_path = db_path + ".tmp";
 
 		moveToThread(&worker_thread);
 		worker_thread.start();
@@ -38,14 +49,19 @@ public:
 
 	enum class RestoreResult : uint8_t {
 		success,
-		failed_to_move,
-		failed_to_copy,
-		data_at_risk,
+		failed_to_move,         // original untouched at db_path; restore never started
+		failed_to_copy,         // recovery succeeded; original restored to db_path
+		data_at_risk,           // recovery itself failed; original may be lost
+		leftover_temp_detected, // previous failed recovery exists, defer to manual resolution
 	};
+
+	QString live_path()     { return db_path; }
+	QString recovery_path() { return temp_path; }
 
 public:
 	/// Called from the main thread to interrupt a long-running database operation.
-	/// sqlite3_interrupt() is thread-safe; safe to call even when not connected.
+	/// Unlike slots, this is the one public method intentionally called cross-thread;
+	/// sqlite3_interrupt() is thread-safe, so no queued connection is needed.
 	void interrupt() { if (database) { database->interrupt(); } }
 
 public slots:
@@ -54,6 +70,12 @@ public slots:
 	void open();
 
 	void backup(QString destination);
+
+	/// Restores the database from `source`, replacing the current file at db_path.
+	/// Uses a rename-to-temp safety net so the original isn't lost on a failed copy: db_path -> db_path.tmp, then attempt to copy source -> db_path.
+	/// If that copy fails, attempt to rename .tmp back to db_path (best-effort recovery).
+	/// RestoreResult::data_at_risk means even that recovery rename failed, so the original database may no longer be at db_path;
+	/// this is the one case callers should treat as urgent/destructive.
 	void restore(QString source);
 	void create_new();
 
@@ -82,9 +104,13 @@ public slots:
 	void perform_import(std::shared_ptr<fundos::import::pending_import> pending);
 
 signals:
+	/// Informs the client that an operation is in progress so that a modal can be displayed to potentially interrupt the operation.
 	void operation_started(QString description);
+
+	// Informs the client that the operation is no longer interruptable.
 	void operation_finished();
 
+	/// Informs the client of every outcome so the status bar can be kept up to date and error messages can be centrally displayed.
 	void db_outcome(fundos::db::outcome status);
 
 	void connection_closed(fundos::db::outcome status);

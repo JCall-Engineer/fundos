@@ -35,7 +35,7 @@ void AppDatabase::migrate() {
 
 void AppDatabase::open() {
 	const bool was_open = database && database->is_connected();
-	if (was_open) { database->close(); }
+	if (was_open) { database->close(); } // Closing here is silent (no connection_closed emit); the upcoming connection_opened carries the real signal callers care about.
 	// Do not emit operation_started/finished as there is no way to reasonably interrupt this process
 
 	std::string path_str = db_path.toStdString();
@@ -45,7 +45,7 @@ void AppDatabase::open() {
 }
 
 void AppDatabase::backup(QString destination) {
-	QFile::remove(destination); // Delete the existing file
+	QFile::remove(destination); // Delete the existing file so QFile::copy/database->backup don't choke
 	// Do not emit operation_started/finished as there is no way to reasonably interrupt this process
 	if (database && database->is_connected()) {
 		auto saved = database->backup(destination.toStdString());
@@ -62,10 +62,16 @@ void AppDatabase::backup(QString destination) {
 }
 
 void AppDatabase::restore(QString source) {
+	// A leftover .tmp from a previous failed restore means the original database may already be displaced.
+	// Refuse to proceed rather than silently overwrite it.
+	if (QFile::exists(temp_path)) {
+		emit restore_complete(RestoreResult::leftover_temp_detected);
+		return;
+	}
+
 	const bool was_open = database && database->is_connected();
 	if (was_open) { database->close(); }
 	// Do not emit operation_started/finished as there is no way to reasonably interrupt this process
-	QString temp_path = db_path + ".tmp";
 	if (!QFile::rename(db_path, temp_path)) {
 		emit restore_complete(RestoreResult::failed_to_move);
 		return;
@@ -75,6 +81,7 @@ void AppDatabase::restore(QString source) {
 			if (was_open) { open(); }
 			emit restore_complete(RestoreResult::failed_to_copy);
 		} else {
+			// Recovery rename also failed; original database may no longer exist at db_path.
 			emit restore_complete(RestoreResult::data_at_risk);
 		}
 		return;
@@ -231,7 +238,6 @@ void AppDatabase::save_transaction(fundos::transaction transaction, std::vector<
 	emit transaction_saved(saved);
 	emit operation_finished();
 	update_status(saved);
-
 }
 
 void AppDatabase::request_account_history(int64_t account_id, fundos::datetime after, fundos::datetime before) {
