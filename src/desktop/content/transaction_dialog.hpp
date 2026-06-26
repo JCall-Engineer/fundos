@@ -11,6 +11,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QGridLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -35,18 +36,18 @@ class TransactionDialog : public QDialog {
 	std::unordered_map<int64_t, fundos::currency> adjusted_balances;
 	justification current_justification = justification::custom;
 
-	QLineEdit*   amount_field;
-	QLineEdit*   memo_field;
-	DatePicker*  date_recorded_picker;
-	QCheckBox*   reconciled_checkbox;
-	DatePicker*  date_reconciled_picker;
-	QLabel*      date_cleared_label;
-	QComboBox*   justified_by_combo;
-	QComboBox*   add_fund_combo;
-	QPushButton* add_fund_button;
-	QPushButton* save_button;
-	TableView*   allocation_table;
-	QLabel*      allocation_total_label;
+	QLineEdit*        amount_field;
+	QLineEdit*        memo_field;
+	DatePicker*       date_recorded_picker;
+	QCheckBox*        reconciled_checkbox;
+	DatePicker*       date_reconciled_picker;
+	QLabel*           date_cleared_label;
+	QComboBox*        justified_by_combo;
+	QComboBox*        add_fund_combo;
+	QPushButton*      add_fund_button;
+	QDialogButtonBox* button_box;
+	TableView*        allocation_table;
+	QLabel*           allocation_total_label;
 
 	void populate_justified_by_combo();
 	void populate_add_fund_combo();

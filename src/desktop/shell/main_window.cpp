@@ -108,7 +108,7 @@ void MainWindow::on_result(const fundos::db::outcome& result) {
 		QString msg;
 		if (result.msg.has_value()) {
 			const auto& view = result.msg->view();
-			msg = "\n\n" + tr("Error Message:") + " \"" + QString::fromUtf8(view.data(), view.size()) + "\"";
+			msg = "\n\n" + tr("Error Message: \"%1\"").arg(QString::fromUtf8(view.data(), view.size()));
 		}
 		switch (result.code) {
 			case error::none:         // Conflicts with the if (!result) guard
@@ -127,7 +127,7 @@ void MainWindow::on_result(const fundos::db::outcome& result) {
 				return load_error_page(new ErrorPage(result, this));
 
 			case error::internal:
-				QMessageBox::critical(this, tr("Internal Error"), tr("This operation resulted in an unexpected error.") + " " + tr("Please report this issue.") + msg);
+				QMessageBox::critical(this, tr("Internal Error"), tr("This operation resulted in an unexpected error. Please report this issue.") + msg);
 				return load_error_page(new ErrorPage(result, this));
 
 			case error::unavailable:
@@ -143,7 +143,7 @@ void MainWindow::on_result(const fundos::db::outcome& result) {
 				return;
 
 			case error::constraint:
-				QMessageBox::critical(this, tr("Unexpected Error"), tr("An operation violated a database constraint.") + " " + tr("Please report this issue.") + msg);
+				QMessageBox::critical(this, tr("Unexpected Error"), tr("An operation violated a database constraint. Please report this issue.") + msg);
 				return;
 
 			case error::not_found:
@@ -151,7 +151,7 @@ void MainWindow::on_result(const fundos::db::outcome& result) {
 				return;
 
 			case error::bad_request:
-				QMessageBox::critical(this, tr("Unexpected Error"), tr("An operation was attempted in an unexpected state.") + " " + tr("Please report this issue.") + msg);
+				QMessageBox::critical(this, tr("Unexpected Error"), tr("An operation was attempted in an unexpected state. Please report this issue.") + msg);
 				return;
 
 			case error::rejected:

@@ -65,7 +65,7 @@ void ErrorPage::setup_error(const QString& title_text, QString description_text,
 	title->setText(title_text);
 	if (msg.has_value()) {
 		auto view = msg->view();
-		description_text += "\n\n" + tr("Error Message:") + " \"" + QString::fromUtf8(view.data(), view.size()) + "\"";
+		description_text += "\n\n" + tr("Error Message: \"%1\"").arg(QString::fromUtf8(view.data(), view.size()));
 	}
 	description->setText(description_text);
 };
@@ -91,8 +91,7 @@ ErrorPage::ErrorPage(const fundos::db::status& status, QWidget* parent) : QWidge
 			// The database is fine, recovery options are not appropriate, but backup before migration is
 			setup_open_error(
 				tr("Database Migration Required"),
-				tr("This database was created by an older version of FundOS and needs to be migrated.") + " " +
-				tr("It is recommended you make a backup before proceeding.")
+				tr("This database was created by an older version of FundOS and needs to be migrated. It is recommended you make a backup before proceeding.")
 			);
 			add_button(button::backup);
 			add_button(button::migrate);
@@ -224,7 +223,7 @@ ErrorPage::ErrorPage(const fundos::db::status& status, QWidget* parent) : QWidge
 					// Something really bad happened and the system is in an unpredictable state: no reasonable action can be taken
 					setup_open_error(
 						tr("Internal Error"),
-						tr("An unexpected internal error occurred.") + " " + tr("Please report this issue.")
+						tr("An unexpected internal error occurred. Please report this issue.")
 					);
 					add_button(button::quit);
 					break;
@@ -256,7 +255,7 @@ ErrorPage::ErrorPage(const fundos::db::outcome& outcome, QWidget* parent) : QWid
 		case error::internal:
 			setup_error(
 				tr("Internal Error"),
-				tr("An unexpected internal error occurred.") + " " + tr("Please report this issue."),
+				tr("An unexpected internal error occurred. Please report this issue."),
 				outcome.msg
 			);
 			add_button(button::retry);

@@ -135,16 +135,14 @@ TransactionDialog::TransactionDialog(
 	add_row_layout->addWidget(add_fund_combo, 1);
 	add_row_layout->addWidget(add_fund_button);
 
-	auto* button_row = new QWidget(this);
-	auto* button_layout = new QHBoxLayout(button_row);
-	outer->addWidget(button_row, row, 0, 1, 2);
+	button_box = new QDialogButtonBox(
+		QDialogButtonBox::Save | QDialogButtonBox::Cancel,
+		this
+	);
+	outer->addWidget(button_box, row, 0, 1, 2);
 
-	auto* cancel_button = new QPushButton(tr("Cancel"), this);
-	save_button = new QPushButton(tr("Save"), this);
-
-	button_layout->addStretch();
-	button_layout->addWidget(cancel_button);
-	button_layout->addWidget(save_button);
+	connect(button_box, &QDialogButtonBox::accepted, this, &TransactionDialog::on_save_clicked);
+	connect(button_box, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
 	auto* database = app_coordinator->database();
 	connect(this,     &TransactionDialog::request_fund_balance, database, &AppDatabase::request_fund_balance);
@@ -175,8 +173,6 @@ TransactionDialog::TransactionDialog(
 		add_fund_button->setEnabled(index > 0);
 	});
 	connect(add_fund_button, &QPushButton::clicked, this, &TransactionDialog::on_add_fund_clicked);
-	connect(cancel_button,   &QPushButton::clicked, this, &QDialog::reject);
-	connect(save_button,     &QPushButton::clicked, this, &TransactionDialog::on_save_clicked);
 
 	connect(reconciled_checkbox, &QCheckBox::toggled, this, [this](bool checked) {
 		date_reconciled_picker->setEnabled(checked);
@@ -501,13 +497,14 @@ void TransactionDialog::on_save_clicked() {
 		return;
 	}
 
-	save_button->setEnabled(false);
+	button_box->setEnabled(false);
 	emit save_requested(saving, current_allocations);
 }
 
 void TransactionDialog::on_save_completed(fundos::db::outcome outcome) {
-	save_button->setEnabled(true);
 	if (outcome) {
 		accept();
+	} else {
+		button_box->setEnabled(true);
 	}
 }

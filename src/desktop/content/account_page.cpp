@@ -337,7 +337,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		footer_layout->addSpacing(12);
 	};
 
-	add_legend_item(":/icons/building-bank.svg", tr("Cleared via OFX"));
+	add_legend_item(":/icons/building-bank.svg", tr("Bank Cleared"));
 	add_legend_item(":/icons/writing.svg",       tr("Reconciled"));
 	add_legend_item(":/icons/clock.svg",         tr("Pending"));
 
@@ -428,7 +428,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 					background->lower();
 
 					auto* fund = app_coordinator->context()->fund(allocation.fund_id);
-					QString fund_name = tr("Fund id: \"%1\"").arg(QString::number(allocation.fund_id));
+					QString fund_name = tr("Fund id: %1").arg(QString::number(allocation.fund_id));
 					if (fund != nullptr) { fund_name = QString::fromStdString(fund->name); }
 
 					auto* fund_label = new QLabel(fund_name, allocations_widget);
@@ -563,23 +563,23 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 			table
 		);
 
-		auto* memo = new QLabel(tr("OFX Balance"), table);
+		auto* memo = new QLabel(tr("Bank Balance"), table);
 
 		auto* amount = ledger_contradicted
 			? theme::currency_label(ledger_balance.amount - *balance_checker, app_coordinator->context()->currency_locale().info(), table)
 			: new QLabel("", table);
 
 		if (ledger_contradicted) {
-			memo->setText(tr("OFX Balance — Discrepancy"));
+			memo->setText(tr("Bank Balance — Discrepancy"));
 			amount->setToolTip(tr(
-				"Discrepancy between your last reconciled balance and the OFX balance reported by your bank.\n"
+				"Discrepancy between your last reconciled balance and the balance reported by your bank.\n"
 				"A negative value means the bank's figure is lower than your register.\n"
 				"Reconcile transactions to resolve this discrepancy."
 			));
 		}
 
 		auto* balance = theme::currency_label(ledger_balance.amount, app_coordinator->context()->currency_locale().info(), table);
-		balance->setToolTip(tr("Balance reported by your bank at the time of this OFX import."));
+		balance->setToolTip(tr("Balance reported by your bank at the time of this import."));
 
 		table->body_layout()->addWidget(background_widget, row, 0, 1, 6);
 		table->body_layout()->addWidget(icon_container,    row, 0, 1, 1);

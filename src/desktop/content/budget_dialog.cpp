@@ -78,8 +78,10 @@ BudgetDialog::BudgetDialog(AppCoordinator* coordinator, fundos::budget opening, 
 			record.overflow_fund = overflow_combo->currentData().toLongLong();
 		});
 
-		auto* add_fixed_button = new QPushButton(tr("+ Fixed phase"), controls);
-		auto* add_percentage_button = new QPushButton(tr("+ Percentage phase"), controls);
+		auto* add_fixed_button = new QPushButton(tr("Fixed phase"), controls);
+		auto* add_percentage_button = new QPushButton(tr("Percentage phase"), controls);
+		add_fixed_button->setIcon(theme::colored_svg_icon(":/icons/plus.svg", theme::text.name(), theme::toolbar_icon_size));
+		add_percentage_button->setIcon(theme::colored_svg_icon(":/icons/plus.svg", theme::text.name(), theme::toolbar_icon_size));
 		connect(add_fixed_button,      &QPushButton::clicked, this, &BudgetDialog::on_add_fixed_phase);
 		connect(add_percentage_button, &QPushButton::clicked, this, &BudgetDialog::on_add_percentage_phase);
 

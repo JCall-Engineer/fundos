@@ -56,12 +56,12 @@ ImportDialog::ImportDialog(AppCoordinator* coordinator, QWidget* parent) : QDial
 void ImportDialog::show_file_selection_page() {
 	auto* page   = new QWidget(this);
 	auto* vbox   = new QVBoxLayout(page);
-	auto* label  = new QLabel(tr("Select an OFX file to import:"), page);
+	auto* label  = new QLabel(tr("Select a bank statement file to import:"), page);
 	auto* row    = new QHBoxLayout();
 	auto* path   = new QLineEdit(page);
-	auto* browse = new QPushButton(tr("Browse..."), page);
-	auto* next   = new QPushButton(tr("Next"), page);
-	auto* cancel = new QPushButton(tr("Cancel"), page);
+	auto* browse = new QPushButton(tr("&Browse..."), page);
+	auto* next   = new QPushButton(tr("&Next"), page);
+	auto* cancel = new QPushButton(tr("&Cancel"), page);
 
 	path->setReadOnly(true);
 	next->setEnabled(false);
@@ -86,7 +86,7 @@ void ImportDialog::show_file_selection_page() {
 			this,
 			tr("Import from Bank"),
 			last_directory,
-			tr("OFX File (*.ofx)")
+			tr("Bank Statement (*.ofx *.qfx);;All Files (*)")
 		);
 		if (selected.isEmpty()) { return; }
 		settings.setValue("import/last_directory", QFileInfo(selected).absolutePath());
@@ -143,13 +143,13 @@ void ImportDialog::show_parse_error_page(fundos::import::error error) {
 	auto* page   = new QWidget(this);
 	auto* vbox   = new QVBoxLayout(page);
 	auto* detail = new QLabel(page);
-	auto* close  = new QPushButton(tr("Close"), page);
+	auto* close  = new QPushButton(tr("&Close"), page);
 
 	switch (error) {
-		case parse_error::bad_format: detail->setText(tr("The selected file is not a recognized OFX format."));  break;
-		case parse_error::io_error:   detail->setText(tr("There was an error reading the selected file."));      break;
-		case parse_error::malformed:  detail->setText(tr("The selected file is damaged or incomplete."));        break;
-		case parse_error::none:       FUNDOS_UNREACHABLE();                                                      break;
+		case parse_error::bad_format: detail->setText(tr("The selected file is not a recognized format.")); break;
+		case parse_error::io_error:   detail->setText(tr("There was an error reading the selected file.")); break;
+		case parse_error::malformed:  detail->setText(tr("The selected file is damaged or incomplete."));   break;
+		case parse_error::none:       FUNDOS_UNREACHABLE();                                                 break;
 	}
 
 	auto* button_row = new QHBoxLayout();
@@ -192,8 +192,8 @@ void ImportDialog::show_warnings_page(const fundos::import::result& result) {
 	vbox->addStretch();
 
 	auto* button_row = new QHBoxLayout();
-	auto* cancel     = new QPushButton(tr("Cancel"), page);
-	auto* next       = new QPushButton(tr("Continue"), page);
+	auto* cancel     = new QPushButton(tr("&Cancel"), page);
+	auto* next       = new QPushButton(tr("&Next"), page);
 	button_row->addStretch();
 	button_row->addWidget(cancel);
 	button_row->addWidget(next);
@@ -221,7 +221,8 @@ void ImportDialog::show_account_page(fundos::import::bank_account* bank_account)
 	auto* preview = new QListWidget(page);
 	preview->setFixedHeight(150);
 	for (const auto& imported : bank_account->transactions) {
-		preview->addItem(tr("%1 — %2")
+		//: List preview row: transaction memo followed by amount (e.g. "LITTLE CAESARS — $7.58")
+		preview->addItem(tr("%1 — %2", "memo followed by amount")
 			.arg(QString::fromStdString(imported.record.memo))
 			.arg(QString::fromStdString(imported.record.amount.to_string(app_coordinator->context()->currency_locale().info()))));
 	}
@@ -235,8 +236,8 @@ void ImportDialog::show_account_page(fundos::import::bank_account* bank_account)
 		picker->addItem(QString::fromStdString(account.name), QVariant::fromValue(account.id()));
 	}
 
-	auto* confirm    = new QPushButton(tr("Continue"), page);
-	auto* cancel     = new QPushButton(tr("Cancel"), page);
+	auto* confirm    = new QPushButton(tr("&Next"), page);
+	auto* cancel     = new QPushButton(tr("&Cancel"), page);
 	auto* button_row = new QHBoxLayout();
 	button_row->addStretch();
 	button_row->addWidget(cancel);
@@ -287,16 +288,16 @@ void ImportDialog::show_transaction_page() {
 	auto* page          = new QWidget(this);
 	auto* vbox          = new QVBoxLayout(page);
 	auto* bulk_row      = new QHBoxLayout();
-	auto* use_existing  = new QPushButton(tr("Use All Existing Memos"), page);
-	auto* use_imported  = new QPushButton(tr("Use All Imported Memos"), page);
-	auto* show_all      = new QCheckBox(tr("Show all transactions"), page);
+	auto* use_existing  = new QPushButton(tr("Use All &Existing Memos"), page);
+	auto* use_imported  = new QPushButton(tr("Use All &Imported Memos"), page);
+	auto* show_all      = new QCheckBox(tr("Show &All Transactions"), page);
 	auto* list_header   = theme::header_label(tr("Transactions with potential matches in your register:"), page);
 	auto* scroll        = new QScrollArea(page);
 	auto* scroll_widget = new QWidget(scroll);
 	auto* card_layout   = new QVBoxLayout(scroll_widget);
 	auto* button_row    = new QHBoxLayout();
-	auto* cancel        = new QPushButton(tr("Cancel"), page);
-	auto* finish        = new QPushButton(tr("Finish"), page);
+	auto* cancel        = new QPushButton(tr("&Cancel"), page);
+	auto* finish        = new QPushButton(tr("&Finish"), page);
 
 	bulk_row->addWidget(use_existing);
 	bulk_row->addWidget(use_imported);
@@ -362,10 +363,11 @@ void ImportDialog::show_transaction_page() {
 
 			auto* importing_hbox = new QHBoxLayout();
 			auto* importing_label = new QLabel(tr("Importing"), card);
+			//: Transaction date as reported by the bank; em dash shown when date is unavailable
 			auto* importing_date  = new QLabel(
 				txn.record.date_cleared
 					? QDateTime::fromMSecsSinceEpoch(txn.record.date_cleared->milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat))
-					: tr("—"),
+					: tr("—", "date unavailable"),
 				card
 			);
 			auto* importing_memo  = new QLabel(QString::fromStdString(txn.record.memo), card);
@@ -577,7 +579,7 @@ void ImportDialog::show_transaction_page() {
 void ImportDialog::show_success_page(int32_t imported, int32_t merged) {
 	auto* page   = new QWidget(this);
 	auto* label  = new QLabel(tr("%1 transaction(s) imported, %2 merged.").arg(imported).arg(merged), page);
-	auto* close  = new QPushButton(tr("Close"), page);
+	auto* close  = new QPushButton(tr("&Close"), page);
 
 	auto* button_row = new QHBoxLayout();
 	button_row->addStretch();
@@ -652,7 +654,7 @@ void ImportDialog::on_import_prepared(fundos::db::outcome result) {
 		auto* page   = new QWidget(this);
 		auto* vbox   = new QVBoxLayout(page);
 		auto* detail = new QLabel(tr("FundOS could not prepare the import. Please try again."), page);
-		auto* close  = new QPushButton(tr("Close"), page);
+		auto* close  = new QPushButton(tr("&Close"), page);
 
 		auto* button_row = new QHBoxLayout();
 		button_row->addStretch();
@@ -684,7 +686,7 @@ void ImportDialog::on_import_performed(fundos::db::outcome result) {
 		auto* page   = new QWidget(this);
 		auto* vbox   = new QVBoxLayout(page);
 		auto* detail = new QLabel(tr("FundOS could not complete the import. Please try again."), page);
-		auto* close  = new QPushButton(tr("Close"), page);
+		auto* close  = new QPushButton(tr("&Close"), page);
 
 		auto* button_row = new QHBoxLayout();
 		button_row->addStretch();

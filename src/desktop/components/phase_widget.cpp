@@ -81,7 +81,8 @@ void PhaseWidget::build_header_row(QVBoxLayout* layout, const QString& kind_labe
 		fund_combo->addItem(QString::fromStdString(fund.name), static_cast<qlonglong>(fund.id()));
 	}
 
-	auto* add_button = new QPushButton(tr("+ Add target"), header);
+	auto* add_button = new QPushButton(tr("Add target"), header);
+	add_button->setIcon(theme::colored_svg_icon(":/icons/plus.svg", theme::text.name(), theme::toolbar_icon_size));
 	connect(add_button, &QPushButton::clicked, this, &PhaseWidget::on_add_target);
 
 	auto* remove_button = new QPushButton(header);

@@ -104,7 +104,7 @@ void StatusBar::on_db_open(fundos::db::status open_result) {
 				case error::internal:
 					return apply_error(tr("unexpected internal error"));
 				default:
-					return apply_error(tr("db error code: ") + QString::number(static_cast<int>(open_result.sqlite3_outcome.code)));
+					return apply_error(tr("db error code: %1").arg(QString::number(static_cast<int>(open_result.sqlite3_outcome.code))));
 			}
 		}
 	}
@@ -117,10 +117,10 @@ void StatusBar::set_status(const fundos::db::outcome& outcome) {
 		db_button->setEnabled(false);
 	}
 
-	QString disconnected;
-	if (!is_connected) {
-		disconnected = tr("disconnected") + ": ";
-	}
+	//: Status bar error; %1 is the error description, shown when database connection is lost
+	auto disconnected = [&](const QString& message) {
+		return is_connected ? message : tr("disconnected: %1").arg(message);
+	};
 
 	if (outcome.msg.has_value()) {
 		const auto& view = outcome.msg->view();
@@ -131,27 +131,27 @@ void StatusBar::set_status(const fundos::db::outcome& outcome) {
 		case error::none:
 			return apply_ready();
 		case error::not_ready:
-			return apply_error(disconnected + tr("database is not ready"));
+			return apply_error(disconnected(tr("database is not ready")));
 		case error::corrupted:
-			return apply_error(disconnected + tr("database is corrupted"));
+			return apply_error(disconnected(tr("database is corrupted")));
 		case error::unavailable:
-			return apply_error(disconnected + tr("database busy, try again"));
+			return apply_error(disconnected(tr("database busy, try again")));
 		case error::readonly:
-			return apply_error(disconnected + tr("database is read-only"));
+			return apply_error(disconnected(tr("database is read-only")));
 		case error::out_of_memory:
-			return apply_error(disconnected + tr("out of memory"));
+			return apply_error(disconnected(tr("out of memory")));
 		case error::disk_full:
-			return apply_error(disconnected + tr("disk full"));
+			return apply_error(disconnected(tr("disk full")));
 		case error::constraint:
-			return apply_error(disconnected + tr("constraint violation"));
+			return apply_error(disconnected(tr("constraint violation")));
 		case error::not_found:
-			return apply_error(disconnected + tr("record not found"));
+			return apply_error(disconnected(tr("record not found")));
 		case error::bad_request:
-			return apply_error(disconnected + tr("incorrect API usage"));
+			return apply_error(disconnected(tr("incorrect API usage")));
 		case error::rejected:
-			return apply_error(disconnected + tr("attempted illegal operation"));
+			return apply_error(disconnected(tr("attempted illegal operation")));
 		case error::internal:
-			return apply_error(disconnected + tr("unexpected internal error"));
+			return apply_error(disconnected(tr("unexpected internal error")));
 	}
 }
 
@@ -196,8 +196,8 @@ void StatusBar::show_db_menu() {
 		auto* key_label = new QLabel(key, widget);
 		*value_label = new QLabel(widget);
 
-		// Minimum width is derived from the longest value we expect to display (a size like "123.4 MB").
-		// The label starts empty; on_db_info fills it once the database thread responds.
+		//: Minimum width is derived from the longest value we expect to display (a size like "123.4 MB").
+		//: The label starts empty; on_db_info fills it once the database thread responds.
 		(*value_label)->setMinimumWidth((*value_label)->fontMetrics().horizontalAdvance(tr("123.4 MB")));
 		(*value_label)->setAlignment(Qt::AlignRight);
 
