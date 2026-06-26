@@ -1,6 +1,7 @@
 #include "home_page.hpp"
 #include "theme.hpp"
 #include "components/navigable_row.hpp"
+#include "content/budget_dialog.hpp"
 #include "content/import_dialog.hpp"
 #include <QFrame>
 #include <QHBoxLayout>
@@ -40,6 +41,7 @@ HomePage::HomePage(AppCoordinator* coordinator, QWidget* parent) : QWidget(paren
 	connect(this, &HomePage::fund_balance_requested,    database, &AppDatabase::request_fund_balance);
 	connect(this, &HomePage::accounts_requested,        database, &AppDatabase::request_accounts);
 	connect(this, &HomePage::funds_requested,           database, &AppDatabase::request_funds);
+	connect(this, &HomePage::budgets_requested,         database, &AppDatabase::request_budgets);
 
 	account_list = new QWidget(this);
 	{
@@ -125,7 +127,18 @@ HomePage::HomePage(AppCoordinator* coordinator, QWidget* parent) : QWidget(paren
 			.tooltip   = QString("Create Fund"),
 			.icon_path = QString(":/icons/plus.svg"),
 			.action    = [this]() {
-				emit open_budget(fundos::budget{});
+				bool accepted = false;
+				QString name = QInputDialog::getText(this, tr("New Fund"), tr("Fund name:"), QLineEdit::Normal, "", &accepted);
+				if (!accepted) { return; }
+				name = name.trimmed();
+				if (name.isEmpty()) { return; }
+
+				auto* dialog = new BudgetDialog(app_coordinator, fundos::budget{ .name = name.toStdString() }, this);
+				dialog->setAttribute(Qt::WA_DeleteOnClose);
+				connect(dialog, &QDialog::accepted, this, [this]() {
+					emit budgets_requested();
+				});
+				dialog->show();
 			},
 		},
 	});
@@ -262,7 +275,12 @@ void HomePage::make_budgets(const std::vector<fundos::budget>& budgets) {
 
 		auto* row = new NavigableRow(props, QString::fromStdString(record.name), this);
 		connect(row, &NavigableRow::clicked, this, [this](size_t index) {
-			emit open_budget(app_coordinator->context()->budgets()[index]);
+			auto* dialog = new BudgetDialog(app_coordinator, app_coordinator->context()->budgets()[index], this);
+			dialog->setAttribute(Qt::WA_DeleteOnClose);
+			connect(dialog, &QDialog::accepted, this, [this]() {
+				emit budgets_requested();
+			});
+			dialog->show();
 		});
 		layout->addWidget(row);
 	}

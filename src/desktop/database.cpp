@@ -206,6 +206,15 @@ void AppDatabase::save_fund(fundos::fund fund) {
 	update_status(saved);
 }
 
+void AppDatabase::save_budget(fundos::budget budget) {
+	if (!database) { return; }
+	emit operation_started(tr("saving budget..."));
+	auto saved = database->save_budget(budget);
+	emit budget_saved(saved);
+	emit operation_finished();
+	update_status(saved);
+}
+
 void AppDatabase::save_transaction(fundos::transaction transaction, std::vector<fundos::allocation> allocations) {
 	if (!database) { return; }
 	emit operation_started(tr("saving transaction..."));

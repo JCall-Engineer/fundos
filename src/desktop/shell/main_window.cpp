@@ -4,7 +4,6 @@
 #include "content/home_page.hpp"
 #include "content/account_page.hpp"
 #include "content/fund_page.hpp"
-#include "content/budget_page.hpp"
 #include <QApplication>
 #include <QtConcurrent>
 #include <QDate>
@@ -165,7 +164,6 @@ void MainWindow::go_home() {
 	auto* home_page = new HomePage(coordinator, this);
 	connect(home_page, &HomePage::open_account, this, &MainWindow::open_account);
 	connect(home_page, &HomePage::open_fund,    this, &MainWindow::open_fund);
-	connect(home_page, &HomePage::open_budget,  this, &MainWindow::open_budget);
 	setCentralWidget(home_page);
 }
 void MainWindow::on_quit() {
@@ -280,7 +278,4 @@ void MainWindow::open_fund(const fundos::fund& opening) {
 	connect(fund_page, &FundPage::go_home,           this, &MainWindow::go_home);
 	connect(fund_page, &FundPage::account_requested, this, &MainWindow::open_account_with_transaction);
 	setCentralWidget(fund_page);
-}
-void MainWindow::open_budget(const fundos::budget& opening) {
-
 }

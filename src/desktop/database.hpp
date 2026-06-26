@@ -70,6 +70,7 @@ public slots:
 
 	void save_account(fundos::account account);
 	void save_fund(fundos::fund fund);
+	void save_budget(fundos::budget budget);
 
 	void save_transaction(fundos::transaction transaction, std::vector<fundos::allocation> allocations);
 
@@ -107,6 +108,7 @@ signals:
 
 	void account_saved(fundos::db::outcome status);
 	void fund_saved(fundos::db::outcome status);
+	void budget_saved(fundos::db::outcome status);
 
 	void transaction_saved(fundos::db::outcome status);
 

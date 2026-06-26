@@ -56,6 +56,7 @@ signals:
 
 	void accounts_requested();
 	void funds_requested();
+	void budgets_requested();
 
 	void account_balance_requested(int64_t account_id);
 	void fund_balance_requested   (int64_t fund_id);
@@ -65,5 +66,4 @@ signals:
 
 	void open_account(const fundos::account& opening);
 	void open_fund(const fundos::fund& opening);
-	void open_budget(const fundos::budget& opening);
 };

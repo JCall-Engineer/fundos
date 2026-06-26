@@ -56,5 +56,4 @@ private slots:
 	void open_account(const fundos::account& opening);
 	void open_account_with_transaction(const fundos::account& opening, std::optional<fundos::transaction> requested);
 	void open_fund(const fundos::fund& opening);
-	void open_budget(const fundos::budget& opening);
 };

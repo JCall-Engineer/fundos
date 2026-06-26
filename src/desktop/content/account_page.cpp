@@ -177,7 +177,7 @@ void AccountPage::open_transaction(const fundos::db::transaction_history::alloca
 	dialog->setAttribute(Qt::WA_DeleteOnClose);
 	connect(dialog, &QDialog::accepted, this, &AccountPage::fetch_history);
 	connect(dialog, &QDialog::rejected, this, &AccountPage::update_backgrounds);
-	dialog->exec();
+	dialog->show();
 }
 
 void AccountPage::update_open_close_button() {
