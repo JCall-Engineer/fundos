@@ -28,15 +28,12 @@ TargetDragController::TargetDragController(
 }
 
 void TargetDragController::watch(DragHandle* handle, QWidget* target_widget, fundos::fixed_target* target, const QString& description) {
-	if (fixed_phase == nullptr) {
-		FUNDOS_ASSERT(false, "watch(fixed_target*) called on a percentage phase controller");
-		return;
-	}
+	FUNDOS_REQUIRE(fixed_phase != nullptr, "watch(fixed_target*) called on a percentage phase controller");
 
-	fixed_entries.append({ target_widget, target, description });
 	// target_widget and target must outlive this registration;
 	// nothing here guards against either being deleted while still registered.
 	// clear() must be called before the corresponding widgets/data are destroyed.
+	fixed_entries.append({ target_widget, target, description });
 
 	connect(handle, &DragHandle::drag_started,  this, &TargetDragController::on_drag_started);
 	connect(handle, &DragHandle::drag_moved,    this, &TargetDragController::on_drag_moved);
@@ -49,10 +46,7 @@ void TargetDragController::watch(DragHandle* handle, QWidget* target_widget, fun
 }
 
 void TargetDragController::watch(DragHandle* handle, QWidget* target_widget, fundos::percentage_target* target, const QString& description) {
-	if (percentage_phase == nullptr) {
-		FUNDOS_ASSERT(false, "watch(percentage_target*) called on a fixed phase controller");
-		return;
-	}
+	FUNDOS_REQUIRE(percentage_phase != nullptr, "watch(percentage_target*) called on a fixed phase controller");
 
 	percentage_entries.append({ target_widget, target, description });
 	connect(handle, &DragHandle::drag_started,  this, &TargetDragController::on_drag_started);

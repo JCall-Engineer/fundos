@@ -250,20 +250,14 @@ struct budget_phase : db_managed {
 		auto target_it = std::find_if(targets.begin(), targets.end(),
 			[target](const TargetType& element) { return &element == target; });
 
-		if (target_it == targets.end()) {
-			FUNDOS_ASSERT(false, "Attempted to reorder element not in list");
-			return;
-		}
+		FUNDOS_REQUIRE(target_it != targets.end(), "Attempted to reorder element not in list");
 
 		auto before_it = before == nullptr
 			? targets.end()
 			: std::find_if(targets.begin(), targets.end(),
 				[before](const TargetType& element) { return &element == before; });
 
-		if (before != nullptr && before_it == targets.end()) {
-			FUNDOS_ASSERT(false, "Attempted to reorder element before other not in list");
-			return;
-		}
+		FUNDOS_REQUIRE(before == nullptr || before_it != targets.end(), "Attempted to reorder element before other not in list");
 
 		targets.splice(before_it, targets, target_it);
 	}
@@ -431,20 +425,14 @@ struct budget : db_managed {
 		auto phase_it = std::find_if(phases.begin(), phases.end(),
 			[phase](const any_budget_phase& element) { return &element == phase; });
 
-		if (phase_it == phases.end()) {
-			FUNDOS_ASSERT(false, "Attempted to reorder element not in list");
-			return;
-		}
+		FUNDOS_REQUIRE(phase_it != phases.end(), "Attempted to reorder element not in list");
 
 		auto before_it = before == nullptr
 			? phases.end()
 			: std::find_if(phases.begin(), phases.end(),
 				[before](const any_budget_phase& element) { return &element == before; });
 
-		if (before != nullptr && before_it == phases.end()) {
-			FUNDOS_ASSERT(false, "Attempted to reorder element before other not in list");
-			return;
-		}
+		FUNDOS_REQUIRE(before == nullptr || before_it != phases.end(), "Attempted to reorder element before other not in list");
 
 		phases.splice(before_it, phases, phase_it);
 	}

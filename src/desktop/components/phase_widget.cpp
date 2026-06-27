@@ -288,10 +288,7 @@ void PhaseWidget::on_add_target() {
 }
 
 void PhaseWidget::on_remove_fixed_target(fundos::fixed_target* target) {
-	if (fixed_phase == nullptr) {
-		FUNDOS_ASSERT(false, "on_remove_fixed_target called on a percentage phase widget");
-		return;
-	}
+	FUNDOS_REQUIRE(fixed_phase != nullptr, "on_remove_fixed_target called on a percentage phase widget");
 	fixed_phase->targets.remove_if([target](const fundos::fixed_target& element) {
 		return &element == target;
 	});
@@ -299,10 +296,7 @@ void PhaseWidget::on_remove_fixed_target(fundos::fixed_target* target) {
 }
 
 void PhaseWidget::on_remove_percentage_target(fundos::percentage_target* target) {
-	if (percentage_phase == nullptr) {
-		FUNDOS_ASSERT(false, "on_remove_percentage_target called on a fixed phase widget");
-		return;
-	}
+	FUNDOS_REQUIRE(percentage_phase != nullptr, "on_remove_percentage_target called on a fixed phase widget");
 	percentage_phase->targets.remove_if([target](const fundos::percentage_target& element) {
 		return &element == target;
 	});
