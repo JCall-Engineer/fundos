@@ -426,87 +426,64 @@ void import_ofx(parse_context& context) {
 }
 
 #pragma endregion
-#pragma region Dispatch Helpers
-
-static result dispatch(std::ifstream& file, const currency_locale::spec& locale, codec encoding) {
-	result output;
-	parse_context context { file, encoding, locale, output };
-	import_ofx(context);
-	return output;
-}
-
-static std::optional<codec> resolve_xml_header(const std::string& first_line) {
-	auto extract = [&first_line](const std::string& key) -> std::string {
-		std::string search = key + "=\"";
-		size_t start = first_line.find(search);
-		if (start == std::string::npos) { return ""; }
-		start += search.size();
-		size_t end = first_line.find('"', start);
-		if (end == std::string::npos) { return ""; }
-		return first_line.substr(start, end - start);
-	};
-
-	if (!first_line.ends_with("?>")) { return std::nullopt; }
-	if (extract("VERSION") != "1.0") { return std::nullopt; }
-
-	std::string encoding_str = extract("ENCODING");
-	if (encoding_str == "UTF-8" || encoding_str == "") { return codec::utf8; }
-	if (encoding_str == "ISO-8859-1" || encoding_str == "WINDOWS-1252") { return codec::cp1252; }
-	return std::nullopt;
-}
-
-static std::optional<codec> resolve_legacy_header(std::ifstream& file) {
-	std::string line, header_encoding, header_charset;
-	while (std::getline(file, line)) {
-		if (!line.empty() && line.back() == '\r') { line.pop_back(); }
-		if (line.empty()) { break; }
-		upper(line);
-
-		size_t colon = line.find(":");
-		if (colon == std::string::npos) { return std::nullopt; }
-		std::string key = line.substr(0, colon);
-		std::string value = line.substr(colon + 1);
-		if (key == "DATA" && value != "OFXSGML") { return std::nullopt; }
-		if (key == "SECURITY" && value != "NONE") { return std::nullopt; }
-		if (key == "COMPRESSION" && value != "NONE") { return std::nullopt; }
-		if (key == "ENCODING") { header_encoding = value; }
-		if (key == "CHARSET") { header_charset = value; }
-	}
-
-	if (header_encoding == "UTF-8" || header_charset == "UTF-8")         { return codec::utf8; }
-	if (header_encoding.empty() && header_charset.empty())               { return codec::cp1252; }
-	if (header_encoding == "USASCII" || header_encoding == "ISO-8859-1") { return codec::cp1252; }
-	if (header_charset == "ISO-8859-1" || header_charset == "1252")      { return codec::cp1252; }
-	return std::nullopt;
-}
-
-#pragma endregion
 
 static const std::string legacy_header = "OFXHEADER:";
 result import_ofx(const std::string& filepath, const currency_locale::spec& locale) {
 	std::ifstream file(filepath);
 	if (!file.is_open()) { return result(error::io_error); }
 
-	std::string first_line;
-	std::getline(file, first_line);
-	upper(strip(first_line));
+	std::string preamble;
+	std::getline(file, preamble, '<');
+	file.unget();
 
-	if (first_line.starts_with("<?XML")) {
-		auto encoding = resolve_xml_header(first_line);
-		if (!encoding) { return result(error::bad_format); }
-		return dispatch(file, locale, *encoding);
+	std::string doc_tag;
+	std::getline(file, doc_tag, '>');
+
+	upper(preamble);
+	upper(doc_tag);
+
+	codec encoding;
+	if (preamble.find("OFXHEADER:") != std::string::npos) {
+		auto contains = [&preamble](const std::string& key) -> bool {
+			return preamble.find(key) != std::string::npos;
+		};
+
+		bool enc_utf8    = contains("ENCODING:UTF-8");
+		bool enc_usascii = contains("ENCODING:USASCII");
+		bool enc_latin1  = contains("ENCODING:ISO-8859-1");
+		bool cst_utf8    = contains("CHARSET:UTF-8");
+		bool cst_latin1  = contains("CHARSET:ISO-8859-1");
+		bool cst_1252    = contains("CHARSET:1252");
+
+		bool known       = enc_utf8 || enc_usascii || enc_latin1 || cst_utf8 || cst_latin1 || cst_1252;
+		bool has_enc     = contains("ENCODING:");
+		bool has_cst     = contains("CHARSET:");
+
+		if (!known && (has_enc || has_cst)) { return result(error::bad_format); }
+		encoding = (enc_utf8 || cst_utf8) ? codec::utf8 : codec::cp1252;
+	} else if (doc_tag.starts_with("<?XML")) {
+		auto extract = [&doc_tag](const std::string& key) -> std::string {
+			std::string search = key + "=\"";
+			size_t start = doc_tag.find(search);
+			if (start == std::string::npos) { return ""; }
+			start += search.size();
+			size_t end = doc_tag.find('"', start);
+			if (end == std::string::npos) { return ""; }
+			return doc_tag.substr(start, end - start);
+		};
+
+		std::string xml_encoding = extract("ENCODING");
+		if (xml_encoding == "UTF-8" || xml_encoding.empty())                     { encoding = codec::utf8; }
+		else if (xml_encoding == "ISO-8859-1" || xml_encoding == "WINDOWS-1252") { encoding = codec::cp1252; }
+		else { return result(error::bad_format); }
+	} else {
+		return result(error::bad_format);
 	}
 
-	if (first_line.starts_with(legacy_header)) {
-		strip(first_line.erase(0, legacy_header.length()));
-		if (first_line != "100") { return result(error::bad_format); }
-
-		auto encoding = resolve_legacy_header(file);
-		if (!encoding) { return result(error::bad_format); }
-		return dispatch(file, locale, *encoding);
-	}
-
-	return result(error::bad_format);
+	result output;
+	parse_context context { file, encoding, locale, output };
+	import_ofx(context);
+	return output;
 }
 
 } // namespace fundos::import
