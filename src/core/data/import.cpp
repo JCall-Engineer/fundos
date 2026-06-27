@@ -427,18 +427,36 @@ void import_ofx(parse_context& context) {
 
 #pragma endregion
 
-static const std::string legacy_header = "OFXHEADER:";
+/// Scans the file at most `limit` bytes until it finds `delimiter`
+/// @return true if it found the delimiter, false if it hit the limit
+static bool read_until(std::ifstream& file, std::string& out, char delimiter, size_t limit) {
+	out.clear();
+	char character;
+	while (out.size() < limit && file.get(character)) {
+		if (character == delimiter) { return true; }
+		out.push_back(character);
+	}
+	return false;
+}
+
 result import_ofx(const std::string& filepath, const currency_locale::spec& locale) {
 	std::ifstream file(filepath);
 	if (!file.is_open()) { return result(error::io_error); }
 
 	std::string preamble;
-	std::getline(file, preamble, '<');
+	// the longest conceivable preamble is *well* under 1024 bytes
+	if (!read_until(file, preamble, '<', 1024)) {
+		return result(error::bad_format);
+	}
 	file.unget();
 
 	std::string doc_tag;
-	std::getline(file, doc_tag, '>');
+	// longest conceivable opening xml tag is *well* under 256 bytes
+	if (!read_until(file, doc_tag, '>', 256)) {
+		return result(error::bad_format);
+	}
 
+	// Standardize casing for easier comparisons
 	upper(preamble);
 	upper(doc_tag);
 
