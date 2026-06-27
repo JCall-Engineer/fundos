@@ -9,6 +9,7 @@
 namespace fundos::import {
 
 enum class error {
+	// File-level failures: the import cannot proceed at all.
 	none,
 	io_error,
 	bad_format,
@@ -16,6 +17,7 @@ enum class error {
 };
 
 enum class warning : uint8_t {
+	// Row-level issues: the bad row is skipped/defaulted and counted here, but the import continues.
 	missing_acctid,
 	skipped_transaction,
 	missing_fitid,
@@ -24,7 +26,7 @@ enum class warning : uint8_t {
 	bad_date,
 	bad_amount,
 	bad_correction,
-	NUM_WARNINGS
+	NUM_WARNINGS  // sentinel: must stay last, new warnings should be added above this line
 };
 
 struct result {
@@ -34,7 +36,7 @@ struct result {
 
 	result() = default;
 	result(error e) { err = e; }
-	void set_error(error e) { err = e; data.accounts.clear(); }
+	void set_error(error e) { err = e; data.accounts.clear(); } // errors are file-level; a failed parse should not yield partial data
 	void add_warning(warning w) { ++warning_counts[(size_t)w]; }
 
 	bool ok() const { return err == error::none; }

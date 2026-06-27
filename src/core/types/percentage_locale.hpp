@@ -21,6 +21,11 @@ struct percentage_locale_entry {
 	spec info;
 };
 
+/// The unit of exchange between the database and GUI for locale data:
+/// the DB persists a selection and returns a selection, which the GUI consumes directly without needing to know which case it's in.
+/// Wraps either a pointer to a known locale (so registry updates are reflected automatically) or a one-off custom spec.
+/// identifier() doubles as the DB's serialization discriminator: a preset's identifier (e.g. "en") means look it up by name;
+/// "Custom" means reconstruct the spec field-by-field from individual meta settings instead.
 struct selection {
 	std::variant<const percentage_locale_entry*, spec> raw;
 
@@ -75,6 +80,8 @@ union registry {
 	percentage_locale_entry entries[num_locales];
 	data named;
 };
+
+// Unlike currency_locale::registry, this can stay constexpr: percentage_locale::spec has no non-trivial members (no std::string), so the union's implicit destructor is fine as-is.
 static constexpr registry locales = { .named = {} };
 
 static inline const percentage_locale_entry* get_locale(std::string_view identifier) {

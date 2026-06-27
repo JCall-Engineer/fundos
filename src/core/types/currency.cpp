@@ -7,7 +7,7 @@ std::optional<int64_t> parse_currency(const std::string& text, const currency_lo
 	enum class state : uint8_t { sign, whole, remainder };
 
 	uint8_t max_digits = 0;
-	for (int16_t s = locale.scale; s > 1; s /= 10) { ++max_digits; }
+	for (int16_t s = locale.scale; s > 1; s /= 10) { ++max_digits; } // relies on scale being a power of 10, see spec::scale
 
 	int64_t sign = 1;
 	int64_t whole = 0;
@@ -47,7 +47,11 @@ std::optional<int64_t> parse_currency(const std::string& text, const currency_lo
 	}
 	while (digits < max_digits) { remainder *= 10; ++digits; } // max_digits guarantees this doesn't overflow
 
-	// check for a trailing - ) or >
+	// Second pass for trailing sign markers: the main loop's `sign` state only catches a leading '-' (or '(' / '<'), since it only runs before any digit is seen.
+	// A trailing minus like "100-" would otherwise parse as positive, so this catches that case.
+	// ')' and '>' ride along here too since they're only ever valid as trailing markers anyway.
+	// Note: input with signs on both ends (e.g. "-100-") is not rejected; this loop unconditionally re-sets sign = -1 on the trailing marker,
+	// which is a harmless no-op since the leading pass already set it. Consistent with this parser's best-effort policy on malformed input.
 	for (int16_t i = static_cast<int16_t>(text.length()) - 1; i >= 0; --i) {
 		char c = text[i];
 		if (c >= '0' && c <= '9') { break; }
@@ -60,6 +64,9 @@ std::optional<int64_t> parse_currency(const std::string& text, const currency_lo
 
 inline // helper for format_currency writes the arbitrary size symbol in reverse byte order
 void copy_symbol_reversed(char* buffer, size_t& buffer_n, const currency_locale::spec& locale) {
+	// The 4 here must match the "4 bytes max for utf8 symbol" budget in format_currency's buffer comment.
+	FUNDOS_ASSERT(locale.symbol.size() <= 4, "currency symbol exceeds 4-byte budget, will be truncated");
+
 	size_t copied = 0;
 	for (auto it = locale.symbol.rbegin(); it != locale.symbol.rend() && copied < 4; ++it, ++copied) {
 		buffer[buffer_n++] = *it;
@@ -68,6 +75,9 @@ void copy_symbol_reversed(char* buffer, size_t& buffer_n, const currency_locale:
 
 std::string format_currency(int64_t minor_units, const currency_locale::spec& locale) {
 	// Unfortunately, std::format is of little help here after we add thousands separators (locale-variable no less), so we (mostly) build the whole string manually
+	// Built least-significant-digit first: % 10 and /= 10 naturally produce digits in that order,
+	// so writing them out as they're extracted (then reversing at the end) follows the grain of the algorithm instead of fighting it.
+	// Thousands separators and zero-padding minor_units fall out naturally too, since each digit's position is already known the moment it's pushed.
 
 	// 19 digits max (combined between major_units and minor_units): max uint64_t = 2^63 - 1 = 9,223,372,036,854,775,807
 	// 6 max thousands separators
@@ -79,10 +89,9 @@ std::string format_currency(int64_t minor_units, const currency_locale::spec& lo
 	size_t buffer_n = 0;
 
 	bool    is_negative =          minor_units < 0;
-	int64_t major_units = std::abs(minor_units / locale.scale); // Note: INT64_MIN with scale=1 (e.g. JPY) overflows std::abs
-	        minor_units = std::abs(minor_units % locale.scale); // Values that extreme are considered malformed input, consistent with the rest of this library.
+	int64_t major_units = std::abs(minor_units / locale.scale); // std::abs(INT64_MIN) is UB, but only reachable here when scale=1 (e.g. JPY) and minor_units is near INT64_MIN
+	        minor_units = std::abs(minor_units % locale.scale); // (values that extreme are considered malformed input anyway)
 
-	// In order to 0 pad the minor_units and thousands-separate the major_units it is beneficial to build the string in reverse order
 	if (locale.symbol_position == currency_locale::spec::symbol_placement::after) {
 		copy_symbol_reversed(buffer, buffer_n, locale);
 	}

@@ -10,6 +10,9 @@ namespace fundos {
 std::optional<int32_t> parse_percentage(const std::string& text);
 std::string format_percentage(int32_t basis_points, const percentage_locale::spec& locale);
 
+/// Minimal contract for any type that scale() can operate on: must support negation, conversion to/from a raw 64-bit integer, and construction from one.
+/// Currently only fundos::currency conforms to this; the concept exists so scale() isn't hardcoded to one type,
+/// in case a future scalar (quantity, weight, etc.) needs the same percentage-scaling logic.
 template<typename Scalar>
 concept SignedScalar = requires(Scalar value, int64_t factor) {
 	{ value * -1 } -> std::convertible_to<Scalar>; // no mixing signed and unsigned math
@@ -53,6 +56,17 @@ struct percentage {
 	constexpr S scale(const S& value) const {
 		// Split on percentage::whole() keeps high * basis_points within int64_t for ratio <= percentage::whole()
 		constexpr int64_t split = whole().basis_points;
+
+		// Intentionally left as a bare assert rather than FUNDOS_REQUIRE_OR_FALLBACK: there is no value of S
+		// that would represent "this computation didn't happen" without being arbitrary and potentially as
+		// misleading as the overflow it would be guarding against. A violated precondition here is a logic
+		// error in the caller, not a recoverable runtime condition.
+		//
+		// In practice this assert never fires because parse_percentage's best-effort design treats '-' as
+		// an unrecognized character and strips it (see its comment) — negative percentages are unrepresentable via
+		// the parser, by design, not merely incidentally absent. Still, this is a property of one call site, not
+		// something scale() itself enforces: a percentage built another way (basis_points is a public field) or
+		// a future parser change could violate this silently in release builds.
 		FUNDOS_ASSERT(basis_points >= 0 && basis_points <= split, "scale() risks overflow for percentages outside [0, 1]");
 
 		const int64_t raw = static_cast<int64_t>(value);

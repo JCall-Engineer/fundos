@@ -7,6 +7,12 @@ std::optional<int32_t> parse_percentage(const std::string& text) {
 
 	constexpr uint8_t max_decimals = 2;
 
+	// Unlike parse_currency, there is no sign handling: this parser is best-effort and simply skips any
+	// character it doesn't recognize, including '-'. For percentages this is a deliberate design choice,
+	// not a gap: it makes negative values unrepresentable to the end user, and the stripped sign gives
+	// immediate visual feedback (e.g. "-50" displays back as "50") that the input was rejected.
+	// percentage::scale() relies on this to assume non-negative basis_points from user input; see its comment.
+
 	int32_t whole = 0;
 	int32_t remainder = 0;
 
@@ -26,7 +32,7 @@ std::optional<int32_t> parse_percentage(const std::string& text) {
 			case state::whole:
 				if (is_digit) {
 					whole = whole * 10 + digit;
-					if (whole > 100) { return std::nullopt; }
+					if (whole > 100) { return std::nullopt; } // percentages are capped at 100% for this app's domain; see note at the 100.xx check below
 				}
 				else if (is_decimal_separator) { parse_state = state::remainder; }
 				break;
@@ -39,6 +45,11 @@ std::optional<int32_t> parse_percentage(const std::string& text) {
 		}
 	}
 	while (decimals < max_decimals) { remainder *= 10; ++decimals; } // max_decimals guarantees this doesn't overflow
+
+	// Together with the `whole > 100` check above, this caps parsed percentages at exactly 100.00%.
+	// This is a parsing-layer policy, not a constraint of the percentage type itself: percentage supports values outside [0, 1] (see scale()'s docstring).
+	// The cap exists because values above 100% are not meaningful in this app's domain (e.g. allocations can't exceed the whole);
+	// parse_percentage should not be assumed to enforce this if reused in a domain where >100% is valid.
 	if (whole == 100 && remainder > 0) { return std::nullopt; }
 
 	return { whole * 100 + remainder };

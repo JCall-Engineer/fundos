@@ -18,6 +18,8 @@
 	// If that promise is wrong, the compiler may miscompile surrounding code based on the false assumption, not just skip a check
 	#define FUNDOS_UNREACHABLE() FUNDOS_UNREACHABLE_IMPL()
 #else
+	// Prints condition, message, and source location to stderr, then aborts. This is the canonical
+	// debug behavior that FUNDOS_UNREACHABLE, FUNDOS_REQUIRE, and FUNDOS_REQUIRE_OR_FALLBACK all rely on.
 	#define FUNDOS_ASSERT(condition, message) \
 		do { if (!(condition)) { \
 			std::fprintf(stderr, "Assertion failed: %s\n  %s\n  %s:%d\n", #condition, message, __FILE__, __LINE__); \
@@ -28,11 +30,15 @@
 	#define FUNDOS_UNREACHABLE() FUNDOS_ASSERT(false, "Unreachable code executed")
 #endif
 
+// For use in void functions: aborts in debug if condition is false; returns with no value in release.
+// Note: the if-check below only runs in release builds, where FUNDOS_ASSERT is a no-op.
+// In debug builds, FUNDOS_ASSERT already aborts on failure, so this check is unreachable there.
 #define FUNDOS_REQUIRE(condition, message) \
 	do { FUNDOS_ASSERT(condition, message); \
 	     if (!(condition)) { return; } \
 	} while(0)
 
+// For use in value-returning functions: aborts in debug if condition is false; returns fallback in release.
 #define FUNDOS_REQUIRE_OR_FALLBACK(condition, message, fallback) \
 	do { FUNDOS_ASSERT(condition, message); \
 	     if (!(condition)) { return fallback; } \

@@ -77,9 +77,12 @@ struct imported_transaction {
 	transaction record;
 
 	/// Returns true if match was found by fitid — the match is definitive and cannot be changed.
+	/// fitid is a bank-issued unique identifier, so this match is closer to ground truth than any
+	/// heuristic candidate match; allowing a user override here would let them create inconsistent data.
 	bool is_definitive_match() const { return match_ != nullptr && match_->fitid == record.fitid; }
 
 	/// Match suggestions are initialized by db::prepare_import, can be adjusted by the user if not definitive.
+	/// @return false (and does nothing) if this transaction already has a definitive fitid match.
 	bool set_match(const transaction* candidate) {
 		if (!is_definitive_match()) {
 			match_ = candidate;
@@ -119,7 +122,7 @@ struct bank_account {
 		std::vector<const transaction*> view;
 		for (const auto& candidate : candidates) {
 			if (claimed.contains(&candidate)) { continue; }
-			if (candidate.fitid) { continue; } // Should be redundant with the previous statement but for safety
+			if (candidate.fitid) { continue; } // Should never trigger: db::prepare_import (the only populator of candidates) always claims fitid'd candidates already.
 			if (candidate.amount != subject.record.amount) { continue; }
 			if (subject.record.correct_action.has_value() && candidate.corrects_id.has_value()) { continue; }
 			view.push_back(&candidate);
@@ -221,6 +224,9 @@ struct budget_phase : db_managed {
 	/// @return Pointer to the first target for which on_target returned true, or nullptr.                                |
 	///-------------------------------------------------------------------------------------------------------------------+
 	inline TargetType* find_target(std::function<bool(int, TargetType*)> on_target) {
+		// Avoids duplicating traversal logic: delegates to the const overload via a const this*, then
+		// const_casts the result back. Safe because the underlying object is non-const here — we're only
+		// removing constness that we artificially added on this line, not violating actual const-ness.
 		const auto* self = this;
 		const TargetType* result = self->find_target([&](int position, const TargetType* target) {
 			return on_target(position, const_cast<TargetType*>(target));
@@ -353,6 +359,9 @@ struct budget : db_managed {
 	/// @return Pointer to the first phase for which on_phase returned true, or nullptr.                                  |
 	///-------------------------------------------------------------------------------------------------------------------+
 	inline any_budget_phase* find_phase(std::function<bool(int, any_budget_phase*)> on_phase) {
+		// Avoids duplicating traversal logic: delegates to the const overload via a const this*, then
+		// const_casts the result back. Safe because the underlying object is non-const here — we're only
+		// removing constness that we artificially added on this line, not violating actual const-ness.
 		const budget* self = this;
 		const any_budget_phase* result = self->find_phase([&](int position, const any_budget_phase* phase) {
 			return on_phase(position, const_cast<any_budget_phase*>(phase));
@@ -469,14 +478,19 @@ struct budget : db_managed {
 				currency room = expense
 					? std::min(currency{0}, *target->cap - current)  // negative room: how far fund can drop
 					: std::max(currency{0}, *target->cap - current);
+
+				// allocated and room are both negative for expenses, so clamping toward zero (less negative) means max,
+				// the reverse of the income case where clamping toward zero (less positive) would mean min.
 				allocated = expense
 					? std::max(allocated, room)
 					: std::min(allocated, room);
 			}
 
-			// For income: partial-allocate whatever positive remainder is left.
-			// For expenses: partial-allocate whatever negative remainder is left.
-			// allow_overdraw bypasses this and takes the full allocated amount regardless.
+			// Priority order: take the full allocation if the remainder covers it;
+			// otherwise take it anyway if overdraw is explicitly allowed;
+			// otherwise take whatever partial remainder is left, if any.
+			// If none of these apply (remainder is already zero or wrong-signed, and overdraw is off), the target gets nothing this phase
+			// — there is no explicit branch for that, it's the fallthrough of all three checks.
 			if (expense ? remainder.minor_units <= allocated.minor_units
 						: remainder.minor_units >= allocated.minor_units) {
 				allocations[target->fund_id] += allocated;
@@ -497,7 +511,10 @@ struct budget : db_managed {
 				allocate(target, expense ? -target->amount : target->amount);
 			});
 		}, [&](int, const budget_phase<percentage_target>* phase) -> void {
-			// clamp phase_balance to zero on the side that has no capacity left
+			// Percentage phases scale against what remains, so once remainder has crossed past zero (e.g. prior phases overdrew an income transaction, or over-allocated an expense),
+			// there is nothing meaningful left to take a percentage of — "20% of what remains" stops making sense once nothing remains.
+			// Clamping phase_balance to zero on that side makes the phase correctly claim nothing,
+			// leaving the (already over/under-shot) remainder to fall through to the overflow fund instead of producing a percentage of a deficit.
 			currency phase_balance = expense
 				? (remainder.minor_units > 0 ? currency{0} : remainder)
 				: (remainder.minor_units < 0 ? currency{0} : remainder);
