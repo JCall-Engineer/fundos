@@ -98,7 +98,10 @@ void ImportDialog::show_file_selection_page() {
 		fundos::currency_locale::spec locale = app_coordinator->context()->currency_locale().info();
 		parse_watcher = new QFutureWatcher<fundos::import::result>(this);
 		connect(parse_watcher, &QFutureWatcher<fundos::import::result>::finished, this, &ImportDialog::on_parse_finished);
-		show_spinner_page(tr("Reading file...")); // path is an invalid pointer at this point
+		show_spinner_page(tr("Reading file...")); // destroys the current page and invalidates `path`
+
+		// Deferred so the spinner page renders before the parse operation starts on the next event loop tick.
+		// TODO: Make this *actually* behave smoothly
 		QTimer::singleShot(0, this, [this, filepath, locale]() {
 			parse_watcher->setFuture(QtConcurrent::run([filepath, locale]() {
 				return fundos::import::import_ofx(filepath, locale);
@@ -453,6 +456,7 @@ void ImportDialog::show_transaction_page() {
 							.arg(QDateTime::fromMSecsSinceEpoch(candidate->date_recorded.milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat)))
 							.arg(QString::fromStdString(candidate->memo));
 						auto* item = new QListWidgetItem(label, picker_list);
+						// Qt's UserRole stores QVariant; pointers are stored via quintptr (a pointer-sized integer) as a workaround.
 						item->setData(Qt::UserRole, QVariant::fromValue(reinterpret_cast<quintptr>(candidate)));
 					}
 
@@ -561,6 +565,8 @@ void ImportDialog::show_transaction_page() {
 
 	connect(finish, &QPushButton::clicked, this, [this]() {
 		show_spinner_page(tr("Importing transactions..."));
+		// Deferred so the spinner page renders before the database operation starts on the next event loop tick.
+		// TODO: Make this *actually* behave smoothly
 		QTimer::singleShot(0, this, [this]() {
 			emit perform_import_requested(importing);
 		});
@@ -615,6 +621,7 @@ void ImportDialog::on_parse_finished() {
 
 	bool has_warnings = false;
 	using warning = fundos::import::warning;
+	// NUM_WARNINGS is a sentinel value equal to the number of warning types; used to iterate all warnings.
 	for (int32_t index = 0; index < static_cast<int32_t>(warning::NUM_WARNINGS); ++index) {
 		if (result.warning_counts[index] > 0) {
 			has_warnings = true;
@@ -633,6 +640,7 @@ void ImportDialog::on_parse_finished() {
 }
 
 void ImportDialog::on_account_saved(fundos::db::outcome status) {
+	// If the save failed rerender the current account page (iterator does not advance until the save succeeds and we receive new accounts)
 	if (!status) { on_accounts_updated(); return; }
 	emit refresh_accounts_requested();
 }
@@ -643,6 +651,8 @@ void ImportDialog::on_accounts_updated() {
 		show_account_page(bank_account);
 	} else {
 		show_spinner_page(tr("Preparing import..."));
+		// Deferred so the spinner page renders before the database operation starts on the next event loop tick.
+		// TODO: Make this *actually* behave smoothly
 		QTimer::singleShot(0, this, [this]() {
 			emit prepare_import_requested(importing);
 		});

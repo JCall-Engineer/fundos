@@ -4,153 +4,153 @@
 <context>
     <name>AccountPage</name>
     <message>
-        <location filename="../content/account_page.cpp" line="43"/>
+        <location filename="../content/account_page.cpp" line="44"/>
         <source>Home</source>
         <translation>Home</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="46"/>
+        <location filename="../content/account_page.cpp" line="47"/>
         <source>Import OFX</source>
         <translation>Import OFX</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="55"/>
+        <location filename="../content/account_page.cpp" line="56"/>
         <source>New Transaction</source>
         <translation>New Transaction</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="92"/>
+        <location filename="../content/account_page.cpp" line="94"/>
         <source>From</source>
         <translation>From</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="99"/>
+        <location filename="../content/account_page.cpp" line="101"/>
         <source>Until</source>
         <translation>Until</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="106"/>
+        <location filename="../content/account_page.cpp" line="108"/>
         <source>Last Month</source>
         <translation>Last Month</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="116"/>
+        <location filename="../content/account_page.cpp" line="118"/>
         <source>3 Months</source>
         <translation>3 Months</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="126"/>
+        <location filename="../content/account_page.cpp" line="128"/>
         <source>YTD</source>
         <translation>YTD</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="185"/>
+        <location filename="../content/account_page.cpp" line="187"/>
         <source>Open Account</source>
         <translation>Open Account</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="203"/>
+        <location filename="../content/account_page.cpp" line="205"/>
         <source>Close Account</source>
         <translation>Close Account</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="293"/>
+        <location filename="../content/account_page.cpp" line="295"/>
         <source>Error getting transaction history.</source>
         <translation>Error getting transaction history.</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="302"/>
+        <location filename="../content/account_page.cpp" line="304"/>
         <source>No transactions recorded during the selected period.</source>
         <translation>No transactions recorded during the selected period.</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="310"/>
+        <location filename="../content/account_page.cpp" line="312"/>
         <source>Date</source>
         <translation>Date</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="311"/>
+        <location filename="../content/account_page.cpp" line="313"/>
         <source>Memo</source>
         <translation>Memo</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="312"/>
+        <location filename="../content/account_page.cpp" line="314"/>
         <source>Amount</source>
         <translation>Amount</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="313"/>
+        <location filename="../content/account_page.cpp" line="315"/>
         <source>Balance</source>
         <translation>Balance</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="340"/>
+        <location filename="../content/account_page.cpp" line="342"/>
         <source>Bank Cleared</source>
         <translation>Bank Cleared</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="341"/>
+        <location filename="../content/account_page.cpp" line="343"/>
         <source>Reconciled</source>
         <translation>Reconciled</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="342"/>
+        <location filename="../content/account_page.cpp" line="344"/>
         <source>Pending</source>
         <translation>Pending</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="431"/>
+        <location filename="../content/account_page.cpp" line="434"/>
         <source>Fund id: %1</source>
         <translation>Fund id: %1</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="447"/>
+        <location filename="../content/account_page.cpp" line="450"/>
         <source>No allocations yet</source>
         <translation>No allocations yet</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="460"/>
+        <location filename="../content/account_page.cpp" line="463"/>
         <source>Edit</source>
         <translation>Edit</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="471"/>
+        <location filename="../content/account_page.cpp" line="474"/>
         <source>Make Correction</source>
         <translation>Make Correction</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="489"/>
-        <location filename="../content/account_page.cpp" line="498"/>
+        <location filename="../content/account_page.cpp" line="492"/>
+        <location filename="../content/account_page.cpp" line="501"/>
         <source>Delete Transaction</source>
         <translation>Delete Transaction</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="499"/>
+        <location filename="../content/account_page.cpp" line="502"/>
         <source>Delete &quot;%1&quot;?</source>
         <translation>Delete &quot;%1&quot;?</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="500"/>
+        <location filename="../content/account_page.cpp" line="503"/>
         <source>This transaction will be permanently removed from your register.</source>
         <translation>This transaction will be permanently removed from your register.</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="503"/>
+        <location filename="../content/account_page.cpp" line="506"/>
         <source>Delete</source>
         <translation>Delete</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="566"/>
+        <location filename="../content/account_page.cpp" line="572"/>
         <source>Bank Balance</source>
         <translation>Bank Balance</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="573"/>
+        <location filename="../content/account_page.cpp" line="579"/>
         <source>Bank Balance — Discrepancy</source>
         <translation>Bank Balance — Discrepancy</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="574"/>
+        <location filename="../content/account_page.cpp" line="580"/>
         <source>Discrepancy between your last reconciled balance and the balance reported by your bank.
 A negative value means the bank&apos;s figure is lower than your register.
 Reconcile transactions to resolve this discrepancy.</source>
@@ -159,7 +159,7 @@ A negative value means the bank&apos;s figure is lower than your register.
 Reconcile transactions to resolve this discrepancy.</translation>
     </message>
     <message>
-        <location filename="../content/account_page.cpp" line="582"/>
+        <location filename="../content/account_page.cpp" line="588"/>
         <source>Balance reported by your bank at the time of this import.</source>
         <translation>Balance reported by your bank at the time of this import.</translation>
     </message>
@@ -668,16 +668,16 @@ Reconcile transactions to resolve this discrepancy.</translation>
     </message>
     <message>
         <location filename="../content/import_dialog.cpp" line="63"/>
-        <location filename="../content/import_dialog.cpp" line="196"/>
-        <location filename="../content/import_dialog.cpp" line="239"/>
+        <location filename="../content/import_dialog.cpp" line="199"/>
+        <location filename="../content/import_dialog.cpp" line="242"/>
         <source>&amp;Next</source>
         <translation>&amp;Next</translation>
     </message>
     <message>
         <location filename="../content/import_dialog.cpp" line="64"/>
-        <location filename="../content/import_dialog.cpp" line="195"/>
-        <location filename="../content/import_dialog.cpp" line="240"/>
-        <location filename="../content/import_dialog.cpp" line="299"/>
+        <location filename="../content/import_dialog.cpp" line="198"/>
+        <location filename="../content/import_dialog.cpp" line="243"/>
+        <location filename="../content/import_dialog.cpp" line="302"/>
         <source>&amp;Cancel</source>
         <translation>&amp;Cancel</translation>
     </message>
@@ -692,199 +692,199 @@ Reconcile transactions to resolve this discrepancy.</translation>
         <translation>Reading file...</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="146"/>
-        <location filename="../content/import_dialog.cpp" line="582"/>
-        <location filename="../content/import_dialog.cpp" line="657"/>
-        <location filename="../content/import_dialog.cpp" line="689"/>
+        <location filename="../content/import_dialog.cpp" line="149"/>
+        <location filename="../content/import_dialog.cpp" line="588"/>
+        <location filename="../content/import_dialog.cpp" line="667"/>
+        <location filename="../content/import_dialog.cpp" line="699"/>
         <source>&amp;Close</source>
         <translation>&amp;Close</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="149"/>
+        <location filename="../content/import_dialog.cpp" line="152"/>
         <source>The selected file is not a recognized format.</source>
         <translation>The selected file is not a recognized format.</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="150"/>
+        <location filename="../content/import_dialog.cpp" line="153"/>
         <source>There was an error reading the selected file.</source>
         <translation>There was an error reading the selected file.</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="151"/>
+        <location filename="../content/import_dialog.cpp" line="154"/>
         <source>The selected file is damaged or incomplete.</source>
         <translation>The selected file is damaged or incomplete.</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="180"/>
+        <location filename="../content/import_dialog.cpp" line="183"/>
         <source>The file was read with the following warnings:</source>
         <translation>The file was read with the following warnings:</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="216"/>
+        <location filename="../content/import_dialog.cpp" line="219"/>
         <source>Balance: %1 as of %2</source>
         <translation>Balance: %1 as of %2</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="225"/>
+        <location filename="../content/import_dialog.cpp" line="228"/>
         <source>%1 — %2</source>
         <comment>memo followed by amount</comment>
         <extracomment>List preview row: transaction memo followed by amount (e.g. &quot;LITTLE CAESARS — $7.58&quot;)</extracomment>
         <translation>%1 — %2</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="230"/>
+        <location filename="../content/import_dialog.cpp" line="233"/>
         <source>Assign bank account &quot;%1&quot; to:</source>
         <translation>Assign bank account &quot;%1&quot; to:</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="233"/>
+        <location filename="../content/import_dialog.cpp" line="236"/>
         <source>Create New Account</source>
         <translation>Create New Account</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="258"/>
+        <location filename="../content/import_dialog.cpp" line="261"/>
         <source>New Account</source>
         <translation>New Account</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="258"/>
+        <location filename="../content/import_dialog.cpp" line="261"/>
         <source>Account name:</source>
         <translation>Account name:</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="291"/>
+        <location filename="../content/import_dialog.cpp" line="294"/>
         <source>Use All &amp;Existing Memos</source>
         <translation>Use All &amp;Existing Memos</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="292"/>
+        <location filename="../content/import_dialog.cpp" line="295"/>
         <source>Use All &amp;Imported Memos</source>
         <translation>Use All &amp;Imported Memos</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="293"/>
+        <location filename="../content/import_dialog.cpp" line="296"/>
         <source>Show &amp;All Transactions</source>
         <translation>Show &amp;All Transactions</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="294"/>
+        <location filename="../content/import_dialog.cpp" line="297"/>
         <source>Transactions with potential matches in your register:</source>
         <translation>Transactions with potential matches in your register:</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="300"/>
+        <location filename="../content/import_dialog.cpp" line="303"/>
         <source>&amp;Finish</source>
         <translation>&amp;Finish</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="355"/>
-        <location filename="../content/import_dialog.cpp" line="401"/>
+        <location filename="../content/import_dialog.cpp" line="358"/>
+        <location filename="../content/import_dialog.cpp" line="404"/>
         <source>Existing</source>
         <translation>Existing</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="365"/>
-        <location filename="../content/import_dialog.cpp" line="402"/>
+        <location filename="../content/import_dialog.cpp" line="368"/>
+        <location filename="../content/import_dialog.cpp" line="405"/>
         <source>Importing</source>
         <translation>Importing</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="370"/>
+        <location filename="../content/import_dialog.cpp" line="373"/>
         <source>—</source>
         <comment>date unavailable</comment>
         <extracomment>Transaction date as reported by the bank; em dash shown when date is unavailable</extracomment>
         <translation>—</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="395"/>
+        <location filename="../content/import_dialog.cpp" line="398"/>
         <source>Amount: %1</source>
         <translation>Amount: %1</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="400"/>
+        <location filename="../content/import_dialog.cpp" line="403"/>
         <source>Use Memo</source>
         <translation>Use Memo</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="428"/>
+        <location filename="../content/import_dialog.cpp" line="431"/>
         <source>Already Imported</source>
         <translation>Already Imported</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="432"/>
+        <location filename="../content/import_dialog.cpp" line="435"/>
         <source>Importing as New Transaction</source>
         <translation>Importing as New Transaction</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="436"/>
-        <location filename="../content/import_dialog.cpp" line="474"/>
+        <location filename="../content/import_dialog.cpp" line="439"/>
+        <location filename="../content/import_dialog.cpp" line="478"/>
         <source>Change Match</source>
         <translation>Change Match</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="436"/>
-        <location filename="../content/import_dialog.cpp" line="447"/>
-        <location filename="../content/import_dialog.cpp" line="464"/>
+        <location filename="../content/import_dialog.cpp" line="439"/>
+        <location filename="../content/import_dialog.cpp" line="450"/>
+        <location filename="../content/import_dialog.cpp" line="468"/>
         <source>Assign Match</source>
         <translation>Assign Match</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="444"/>
+        <location filename="../content/import_dialog.cpp" line="447"/>
         <source>Clear Match</source>
         <translation>Clear Match</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="445"/>
+        <location filename="../content/import_dialog.cpp" line="448"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="452"/>
+        <location filename="../content/import_dialog.cpp" line="455"/>
         <source>%1  %2</source>
         <translation>%1  %2</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="517"/>
+        <location filename="../content/import_dialog.cpp" line="521"/>
         <source>%1 transactions</source>
         <translation>%1 transactions</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="518"/>
+        <location filename="../content/import_dialog.cpp" line="522"/>
         <source>%1 already imported</source>
         <translation>%1 already imported</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="519"/>
+        <location filename="../content/import_dialog.cpp" line="523"/>
         <source>%1 potential merges</source>
         <translation>%1 potential merges</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="520"/>
+        <location filename="../content/import_dialog.cpp" line="524"/>
         <source>%1 importing as new</source>
         <translation>%1 importing as new</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="563"/>
+        <location filename="../content/import_dialog.cpp" line="567"/>
         <source>Importing transactions...</source>
         <translation>Importing transactions...</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="581"/>
+        <location filename="../content/import_dialog.cpp" line="587"/>
         <source>%1 transaction(s) imported, %2 merged.</source>
         <translation>%1 transaction(s) imported, %2 merged.</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="645"/>
+        <location filename="../content/import_dialog.cpp" line="653"/>
         <source>Preparing import...</source>
         <translation>Preparing import...</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="656"/>
+        <location filename="../content/import_dialog.cpp" line="666"/>
         <source>FundOS could not prepare the import. Please try again.</source>
         <translation>FundOS could not prepare the import. Please try again.</translation>
     </message>
     <message>
-        <location filename="../content/import_dialog.cpp" line="688"/>
+        <location filename="../content/import_dialog.cpp" line="698"/>
         <source>FundOS could not complete the import. Please try again.</source>
         <translation>FundOS could not complete the import. Please try again.</translation>
     </message>
@@ -1573,37 +1573,37 @@ Would you like to recover it now? This will replace your current database.</tran
         <translation>Add row</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="201"/>
+        <location filename="../content/transaction_dialog.cpp" line="202"/>
         <source>Custom</source>
         <translation>Custom</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="204"/>
+        <location filename="../content/transaction_dialog.cpp" line="205"/>
         <source>By fund</source>
         <translation>By fund</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="215"/>
+        <location filename="../content/transaction_dialog.cpp" line="216"/>
         <source>With budget</source>
         <translation>With budget</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="230"/>
+        <location filename="../content/transaction_dialog.cpp" line="231"/>
         <source>Select a fund to add...</source>
         <translation>Select a fund to add...</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="308"/>
+        <location filename="../content/transaction_dialog.cpp" line="309"/>
         <source>Unknown fund</source>
         <translation>Unknown fund</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="494"/>
+        <location filename="../content/transaction_dialog.cpp" line="498"/>
         <source>Allocation mismatch</source>
         <translation>Allocation mismatch</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="495"/>
+        <location filename="../content/transaction_dialog.cpp" line="499"/>
         <source>The allocated amount must equal the transaction amount before saving.</source>
         <translation>The allocated amount must equal the transaction amount before saving.</translation>
     </message>

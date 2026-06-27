@@ -11,6 +11,7 @@ class ImportDialog : public QDialog {
 
 	/// Advances through bank accounts in a pending import, skipping those already resolved to a known account.
 	class AccountIterator {
+		/// Stateful: position advances across calls so each invocation resumes after the last matched account.
 		size_t position = 0;
 	public:
 		/// @return the next unmatched bank_account, or nullptr if all accounts are resolved.

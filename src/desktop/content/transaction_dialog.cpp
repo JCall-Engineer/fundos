@@ -21,7 +21,6 @@ TransactionDialog::TransactionDialog(
 	const auto& locale = app_coordinator->context()->currency_locale().info();
 
 	for (const auto& existing : current_allocated_transaction.allocations) {
-		adjusted_balances[existing.fund_id] = fundos::currency{0};
 		current_allocations.push_back(existing);
 	}
 
@@ -38,6 +37,7 @@ TransactionDialog::TransactionDialog(
 	const QString amount_text = QString::fromStdString(current_allocated_transaction.record.amount.to_string(locale));
 	amount_field = new QLineEdit(amount_text, this);
 	amount_field->installEventFilter(this);
+	// Amount cannot be changed on a persisted transaction; use a correction instead.
 	amount_field->setEnabled(!current_allocated_transaction.record.is_persisted());
 
 	outer->addWidget(new QLabel(tr("Date recorded"), this), row, 0);
@@ -189,6 +189,7 @@ bool TransactionDialog::eventFilter(QObject* object, QEvent* event) {
 		return QDialog::eventFilter(object, event);
 	}
 	auto* field = qobject_cast<QLineEdit*>(object);
+	// memo_field excluded: select-all on focus is disruptive for free-form text fields.
 	if (field != nullptr && field != memo_field) {
 		QMetaObject::invokeMethod(field, "selectAll", Qt::QueuedConnection);
 	}
@@ -399,7 +400,7 @@ void TransactionDialog::apply_justification(int combo_index) {
 	}
 
 	if (dynamic_cast<const FundComboHeader*>(standard_item) != nullptr) {
-		return;
+		return; // headers are non-selectable but currentIndexChanged still fires; ignore them
 	}
 
 	if (const auto* fund_item = dynamic_cast<const FundComboItem*>(standard_item)) {
@@ -446,6 +447,8 @@ void TransactionDialog::on_balance_received(int64_t fund_id, fundos::db::result<
 	if (!result) { return; }
 	auto balance = result.value();
 	fundos::currency adjusted = balance;
+	// Adjust balance by adding back the existing allocation so the displayed balance
+	// reflects the fund's state before this transaction, not after.
 	for (const auto& existing : current_allocated_transaction.allocations) {
 		if (existing.fund_id == fund_id) {
 			adjusted += existing.amount;
@@ -488,6 +491,7 @@ void TransactionDialog::on_save_clicked() {
 		allocated_total += allocation.amount;
 	}
 
+	// Empty allocations are allowed; the transaction is saved unallocated.
 	if (!current_allocations.empty() && allocated_total != saving.amount) {
 		QMessageBox::warning(
 			this,

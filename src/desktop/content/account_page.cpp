@@ -18,6 +18,7 @@ AccountPage::AccountPage(
 ) : QWidget(parent), app_coordinator(std::move(coordinator)), record(std::move(opening)), requested_transaction(std::move(requested)) {
 	auto* database = app_coordinator->database();
 	connect(this,     &AccountPage::save_account_requested,   database, &AppDatabase::save_account);
+	// Deletions are implemented as correction transactions; passing a newly constructed transaction to save_transaction.
 	connect(this,     &AccountPage::delete_requested,         database, &AppDatabase::save_transaction);
 	connect(this,     &AccountPage::history_requested,        database, &AppDatabase::request_account_history);
 	connect(database, &AppDatabase::account_saved,            this,     &AccountPage::on_account_saved);
@@ -79,6 +80,7 @@ AccountPage::AccountPage(
 
 		auto today = QDateTime::currentDateTime();
 		if (requested_transaction) {
+			// Use the most-settled date available (as that is what the history is sorted by): cleared > reconciled > recorded.
 			auto effective_date = requested_transaction->date_recorded;
 			if (requested_transaction->date_reconciled) {
 				effective_date = *requested_transaction->date_reconciled;
@@ -275,7 +277,7 @@ void AccountPage::fetch_history() {
 
 	auto* info_layout = new QHBoxLayout(info_row);
 
-	auto* spinner = new LoadingSpinner(this);
+	auto* spinner = new LoadingSpinner(info_row);
 	info_layout->addWidget(spinner);
 
 	fundos::datetime after  = {after_picker->get_date().startOfDay().toMSecsSinceEpoch()};
@@ -286,20 +288,20 @@ void AccountPage::fetch_history() {
 void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history> received) {
 	clear_history();
 	if (!received) {
-		auto* info_row = new QWidget(this);
+		auto* info_row = new QWidget(history_panel);
 		history_layout->addWidget(info_row);
 
 		auto* info_layout = new QHBoxLayout(info_row);
-		info_layout->addWidget(theme::header_label(tr("Error getting transaction history."), history_panel), 0, Qt::AlignCenter);
+		info_layout->addWidget(theme::header_label(tr("Error getting transaction history."), info_row), 0, Qt::AlignCenter);
 		return;
 	}
 	auto& history = received.value();
 	if (history.transactions.empty() && history.ledger_balances.empty()) {
-		auto* info_row = new QWidget(this);
+		auto* info_row = new QWidget(history_panel);
 		history_layout->addWidget(info_row);
 
 		auto* info_layout = new QHBoxLayout(info_row);
-		info_layout->addWidget(theme::header_label(tr("No transactions recorded during the selected period."), history_panel), 0, Qt::AlignCenter);
+		info_layout->addWidget(theme::header_label(tr("No transactions recorded during the selected period."), info_row), 0, Qt::AlignCenter);
 		return;
 	}
 	transaction_widgets.reserve(history.transactions.size()); // Make sure references are stable while constructing the transaction list
@@ -350,6 +352,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		auto* widget = &transaction_widgets.back();
 		widget->record = transaction;
 
+		// Unallocated transactions get a warning background to prompt the user to allocate them.
 		widget->background_color = widget->record.allocations.empty() ? theme::warning_background : theme::surface;
 		if (requested_transaction && widget->record.record.id() == requested_transaction->id()) {
 			widget->background_color = theme::info_background;
@@ -515,6 +518,9 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 						correction.memo = widget->record.record.memo;
 						std::vector<fundos::allocation> allocations;
 
+						// Connected dynamically rather than permanently because delete_requested reuses
+						// AppDatabase::save_transaction, which also drives on_account_saved via account_saved.
+						// A permanent connection here would fire on every save, not just deletions.
 						connect(app_coordinator->database(), &AppDatabase::transaction_saved, this, &AccountPage::on_transaction_deleted);
 						emit delete_requested(correction, allocations);
 					});
@@ -593,6 +599,9 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 	size_t tx_index = 0;
 	size_t lb_index = 0;
 	table->setUpdatesEnabled(false);
+
+	// Merge transactions and ledger balances into a single chronological list.
+	// Ledger balances are interleaved at their date_as_of position relative to transactions.
 	while (tx_index < history.transactions.size() || lb_index < history.ledger_balances.size()) {
 		if (tx_index >= history.transactions.size()) {
 			add_ledger_balance(history.ledger_balances[lb_index++], std::nullopt);
@@ -605,10 +614,17 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 		auto& transaction = history.transactions[tx_index];
 		auto& ledger_balance = history.ledger_balances[lb_index];
 
-		// TODO: decide tie-breaking order when ledger_balance.date_as_of == transaction.effective_date
-		if (ledger_balance.date_as_of > transaction.effective_date) {
+		// >= so that a ledger balance dated the same day as a transaction is treated as including it;
+		// the ledger balance appears before the transaction in the list as a result.
+		// This may need revisiting based on real-world import behavior.
+		if (ledger_balance.date_as_of >= transaction.effective_date) {
 			std::optional<fundos::currency> next_balance = std::nullopt;
 			size_t search = tx_index;
+
+			// Find the next cleared or reconciled transaction balance to compare against the ledger balance.
+			// Cleared transactions came from a bank import and are guaranteed to be reflected in any subsequent ledger balance.
+			// Reconciled transactions are user-affirmed to be settled at their reconciled date.
+			// Pending transactions make no claim about whether the money has actually cleared the bank, so they cannot be meaningfully compared to a reported balance.
 			while (search < history.transactions.size()) {
 				auto& found = history.transactions[search];
 				if (found.record.date_cleared || found.record.date_reconciled) {
