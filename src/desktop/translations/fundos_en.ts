@@ -576,12 +576,12 @@ Reconcile transactions to resolve this discrepancy.</translation>
     <message>
         <location filename="../content/home_page.cpp" line="132"/>
         <source>New Budget</source>
-        <translation type="unfinished"></translation>
+        <translation>New Budget</translation>
     </message>
     <message>
         <location filename="../content/home_page.cpp" line="132"/>
         <source>Budget name:</source>
-        <translation type="unfinished"></translation>
+        <translation>Budget name:</translation>
     </message>
 </context>
 <context>
