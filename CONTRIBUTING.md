@@ -3,14 +3,11 @@
 FundOS welcomes contributions, but the project has strong opinions — especially in the core library.
 Please open an issue before writing code. This lets us align on approach before you invest time in an implementation.
 
-UI layer contribution guidelines will be added as those layers take shape.
-
 ## Philosophy
 
 The core library is the heart of FundOS.
 UI layers are intentionally thin — they display data and call into core.
-Logic belongs in core, not in UI code.
-Contributions that blur this line will be asked to move the logic down.
+Logic belongs in core, not in UI code; contributions that belong in core will be asked to move there.
 
 ## Process
 
@@ -19,9 +16,12 @@ Contributions that blur this line will be asked to move the logic down.
 3. Fork the repository and work on a branch.
 4. Open a pull request referencing the issue.
 
+The core library is held to a strict standard and contributions are reviewed closely.
+UI contributions are held to a lower bar — results matter more than implementation details — but the process is the same.
+
 ## Style — Core Library
 
-The core library is held to a high standard. The rules below are not negotiable.
+The rules below are not negotiable.
 
 ### Indentation and alignment
 
@@ -58,7 +58,7 @@ K&R style. Curly braces are always included, even for single-statement bodies.
 
 ```cpp
 if (condition) {
-    do_something();
+	do_something();
 }
 ```
 
@@ -88,10 +88,10 @@ This keeps git history clean — reordering or removing an entry does not produc
 
 ```cpp
 enum class error : uint8_t {
-    none,
-    not_ready,
-    corrupted,
-    unavailable,
+	none,
+	not_ready,
+	corrupted,
+	unavailable,
 };
 ```
 
@@ -139,7 +139,81 @@ In any translation unit that includes both core library headers and Qt headers, 
 This ensures Qt's macros are not in scope when core library headers are parsed.
 Note that moc-generated files are an exception — Qt controls their include order — which is why the naming restriction above is also necessary.
 
-## Style — UI Layers
+## Style — Qt Desktop Layer
 
-UI contribution guidelines are forthcoming.
-The tab/space, naming, brace, and documentation comment rules above apply universally across all layers.
+The tab/space, braces, naming, trailing comma, and documentation comment rules above apply here too.
+The Qt layer diverges from the core library in a few places.
+
+### Type naming
+
+Qt types use PascalCase (`AppDatabase`, `DatePicker`, `ImportDialog`), matching Qt's own convention.
+Everything else — member variables, local variables, functions — uses `snake_case`.
+
+### Constructor style
+
+When the parameter list is short, everything goes on one line:
+
+```cpp
+AccountPage::AccountPage(AppCoordinator* coordinator, QWidget* parent) : QWidget(parent), app_coordinator(coordinator) {
+```
+
+When the parameter list warrants multiple lines, the initializer list follows the closing `)` and the opening brace ends that line:
+
+```cpp
+AccountPage::AccountPage(
+	AppCoordinator* coordinator,
+	fundos::account opening,
+	std::optional<fundos::transaction> requested,
+	QWidget* parent
+) : QWidget(parent), app_coordinator(std::move(coordinator)), record(std::move(opening)), requested_transaction(std::move(requested)) {
+```
+
+When individual initializers need inline comments, each goes on its own line and the opening brace gets its own line:
+
+```cpp
+explicit DatePickerPopup(QDate value, DatePicker* owner_widget, QWidget* parent = nullptr)
+	: QWidget(parent, Qt::Popup)
+	// Qt::Popup makes this an auto-dismissing top-level window:
+	// clicking outside it closes it automatically, and close() hides it cleanly after a day is picked.
+	, current_date(value)
+	, owner(owner_widget)
+{
+```
+
+### Strings
+
+`tr()` is mandatory for all user-visible strings.
+Use `tr()` with numbered arguments (`%1`, `%2`) rather than string concatenation, so translators can reorder them for their language.
+Any commit that adds or changes `tr()` strings must proofread them before committing — lupdate can sometimes track string mutations and preserve translations, but this is not guaranteed, and orphaned translations are deleted.
+See [TRANSLATING.md](TRANSLATING.md) for the full translation workflow.
+
+### File organization
+
+```text
+desktop/
+  components/    Elements added to a page or dialog (buttons, cards, drag handles, etc.)
+  content/       Whole pages and dialogs
+  shell/         Top-level chrome (MainWindow, StatusBar)
+  *.{hpp,cpp}    Global infrastructure (AppCoordinator, AppDatabase, AppContext)
+```
+
+File organization is a judgment call, not a formula.
+The guiding question is whether splitting a class into its own file makes the codebase easier to navigate, or just adds files.
+Classes that are deeply coupled to one parent and never constructed elsewhere are usually better kept together; classes that do enough on their own to feel like independent abstractions usually warrant their own file.
+
+### Architecture
+
+Database operations run on a dedicated thread via `AppDatabase`.
+OFX file parsing during import runs on its own thread.
+Work that can be moved off the main thread should be.
+
+Decision points and non-obvious choices must be documented with inline comments explaining the rationale.
+
+### Care points
+
+Contributions to the Qt layer are expected to respect:
+
+- **Locale support**: all numeric formatting goes through the core locale types; hard-coded formats are not acceptable.
+- **Visual hierarchy**: spacing, weight, and color should follow the established hierarchy rather than introducing ad hoc styling.
+- **Icon consistency**: icons come from [Tabler Icons](https://tabler.io/icons) (MIT licensed). Do not introduce icons from other sets.
+- **License compliance**: any new dependency must have a license compatible with the AGPL, and its terms must be followed.
