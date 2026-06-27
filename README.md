@@ -1,7 +1,7 @@
 # FundOS
 
 FundOS is a cross-platform, locally-run personal finance application built around envelope budgeting.
-It is currently in active development: the core library is complete and the UI clients are next.
+The core library and Qt desktop app are complete; release packaging is the remaining work before the first release.
 Licensed under the [AGPL](https://www.gnu.org/licenses/agpl-3.0.html).
 
 ## What is Envelope Budgeting?
@@ -62,7 +62,7 @@ When a bank amends a transaction, the correction is stored as a new row linked t
 
 ## Project Status
 
-Active development: core library complete.
+Core library and Qt desktop app complete; packaging in progress.
 
 | Area                                        | Status                                      |
 |---------------------------------------------|---------------------------------------------|
@@ -71,24 +71,29 @@ Active development: core library complete.
 | String translations                         | 🤝 Contributions welcome                    |
 | Database schema                             | ✅ Complete                                 |
 | Transaction recording and correction        | ✅ Complete                                 |
-| OFX import (1.x SGML and 2.x XML)           | ✅ Complete (untested, presumed working)    |
+| OFX import (1.x SGML and 2.x XML)           | ✅ Complete                                 |
 | Account, fund, and budget CRUD              | ✅ Complete                                 |
 | Fund allocation                             | ✅ Complete                                 |
 | Budget automation logic                     | ✅ Complete                                 |
 | Transaction history (filtered views)        | ✅ Complete                                 |
 | Fund history (filtered views)               | ✅ Complete                                 |
+| Qt desktop app                              | ✅ Complete                                 |
+
+### OFX Testing
+
+The OFX parser has been manually tested against real bank exports.
+Automated tests are deferred: committing real financial data is a non-starter, and synthetic files don't reflect the edge cases real bank exports produce.
 
 ## Roadmap
 
-| Phase | Deliverable                        | Status         | Notes                                                                   |
-|-------|------------------------------------|----------------|-------------------------------------------------------------------------|
-| 1     | Core library                       | ✅ Complete    |                                                                         |
-| 2     | OFX parser tests                   | 🔲 Planned     |                                                                         |
-| 3     | Qt desktop app                     | 🚧 In Progress | Windows and Linux, macOS testing pending access to a Mac                |
-| 4     | Android app (Kotlin)               | 🔲 Planned     |                                                                         |
-| 5     | iOS app (Swift)                    | 🔲 Planned     | Pending access to a Mac                                                 |
-| 6     | Cross-device sync                  | 🔲 Planned     | Significant undertaking; design TBD                                     |
-| 7     | Release packaging                  | 🔲 Planned     | MSI (Windows), .deb (Debian), RPM (Fedora/RHEL/openSUSE), APK (Android) |
+| Phase | Deliverable                        | Status         | Notes                                                                    |
+|-------|------------------------------------|----------------|--------------------------------------------------------------------------|
+| 1     | Core library                       | ✅ Complete    |                                                                          |
+| 2     | Qt desktop app                     | ✅ Complete    | Windows and Linux; macOS testing pending access to a Mac                 |
+| 3     | Release packaging                  | 🚧 In Progress | MSI (Windows), .deb (Debian), RPM (Fedora/RHEL/openSUSE)                 |
+| 4     | Android app (Kotlin)               | 🔲 Planned     |                                                                          |
+| 5     | iOS app (Swift)                    | 🔲 Planned     | Pending access to a Mac                                                  |
+| 6     | Cross-device sync                  | 🔲 Planned     | Significant undertaking; design TBD                                      |
 
 ## Architecture
 
@@ -107,7 +112,7 @@ SQLite is vendored as an amalgamation (`sqlite3.c` / `sqlite3.h`).
 
 ## Building
 
-Building FundOS requires Qt6 and CMake. The process is is the same across platforms after you take care of the dependencies.
+Building FundOS requires Qt6 and CMake. The process is the same across platforms after you take care of the dependencies.
 
 ### Windows
 
