@@ -197,6 +197,7 @@ struct statements {
 	)sql" };
 
 	/// Used so that rearranging phases does not violate a unique constraint
+	/// The +1 accounts for position being 0-based (unlike ids which are 1-based), avoiding a collision at position 0.
 	statement_slot shuffle_phases { .sql = R"sql(
 		UPDATE budget_phases
 		SET position = -(position + 1)
@@ -220,6 +221,7 @@ struct statements {
 	)sql" };
 
 	/// Used so that rearranging targets does not violate a unique constraint
+	/// The +1 accounts for position being 0-based (unlike ids which are 1-based), avoiding a collision at position 0.
 	statement_slot shuffle_targets { .sql = R"sql(
 		UPDATE phase_targets
 		SET position = -(position + 1)
@@ -234,6 +236,8 @@ struct statements {
 	)sql" };
 
 	/// Used to find manual transactions that may need to be updated by an import.
+	/// Returns the pool of unmatched transactions on this account — no fitid yet — that an import could potentially assign one to.
+	/// The actual matching (by amount, etc.) happens afterward, in C++; see bank_account::valid_candidates_for and db::prepare_import.
 	statement_slot find_transaction_candidates { .sql = R"sql(
 		SELECT id, amount, date_recorded, memo
 		FROM transactions
@@ -412,12 +416,16 @@ struct statements {
 		SET fund_id = ?, amount = ?
 		WHERE id = ?
 	)sql" };
-	//statement_slot name { .sql = R"sql()sql" };
 };
 static constexpr std::size_t num_prepared = sizeof(statements) / sizeof(statement_slot);
 static_assert(sizeof(statements) % sizeof(statement_slot) == 0, "db_prepared_statements must contain only statement_slot members with no padding");
 
-// I begroan that this layout isn't cache-efficient but prepared statements are only accessed in order once so it doesn't matter and this gives us safety
+// I begroan that this layout isn't cache-efficient.
+// The alternative would be named indices into a flat array, decoupled from the actual statement_slot.
+// That would mean keeping an index list in sync by hand every time a statement is added or removed.
+// This way, adding a new query is just declaring a new named member with its SQL.
+// The array view used by db::prepare() falls out for free via the union below.
+// The only time prepared statements are accessed in-order is during db::prepare(), so the cache cost is moot anyway.
 union db_prepared_statements {
 	statement_slot slots[num_prepared];
 	statements named = {};

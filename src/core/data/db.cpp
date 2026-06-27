@@ -45,7 +45,12 @@ static inline std::string extract_text(sqlite3_stmt* stmt, int index) {
 	return reinterpret_cast<const char*>(sqlite3_column_text(stmt, index));
 }
 static inline void bind_text(sqlite3_stmt* stmt, int index, const std::string& value) {
-	sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_TRANSIENT); // I wanted to use SQLITE_STATIC but implicit string copies has become complicated
+	// SQLITE_STATIC would be cheaper, but `value` here is often a temporary: passing a string literal or a
+	// constexpr string_view implicitly constructs a temporary std::string at the call site, which is
+	// destroyed right after this function returns, well before sqlite3_step actually reads the bound pointer.
+	// Tried per-overload bind functions to dodge the implicit conversion, but the lifetime issues kept
+	// recurring enough that SQLITE_TRANSIENT's copy was the simpler, more honest tradeoff.
+	sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_TRANSIENT);
 }
 
 static inline std::optional<std::string> extract_optional_text(sqlite3_stmt* stmt, int index) {
@@ -54,7 +59,7 @@ static inline std::optional<std::string> extract_optional_text(sqlite3_stmt* stm
 }
 static inline void bind_optional_text(sqlite3_stmt* stmt, int index, const std::optional<std::string>& value) {
 	if (value) {
-		sqlite3_bind_text(stmt, index, value->c_str(), -1, SQLITE_TRANSIENT); // I wanted to use SQLITE_STATIC but implicit string copies has become complicated
+		sqlite3_bind_text(stmt, index, value->c_str(), -1, SQLITE_TRANSIENT);
 	} else {
 		sqlite3_bind_null(stmt, index);
 	}
@@ -83,6 +88,9 @@ static inline void bind_optional_int64(sqlite3_stmt* stmt, int index, const std:
 	}
 }
 
+// classify_sqlite_open_error, classify_sqlite_runtime_error, and the local classifier lambda in backup() look similar but are deliberately separate, not duplicated code that drifted.
+// Each covers a different SQLite operation (open, runtime query/exec, backup), and the set of result codes actually reachable in each context differs
+// — e.g. SQLITE_READONLY and SQLITE_CANTOPEN can't occur once a connection is already open, so runtime error classification omits them.
 db::error db::classify_sqlite_runtime_error(int rc) {
 	switch (rc & 0xFF) {
 		case SQLITE_FULL:
@@ -800,7 +808,9 @@ db::outcome db::save_budget(budget& saving) {
 		});
 		if (!result) { return result; }
 
-		// We are "finding" errors as we save phases
+		// find_phase here is repurposed as error propagation, not search: each visitor returns true to mean
+		// "an error occurred, stop iterating," not "this is the phase I was looking for." phase_err's only use
+		// below is the != nullptr check; the pointer itself is never read. Same trick applies to find_target.
 		auto phase_err = saving.find_phase(
 			[&](int pos, budget_phase<fixed_target>* phase) -> bool {
 				if (upsert_phase(pos, phase, fixed_phase_identifier)) { return true; }
@@ -913,6 +923,10 @@ db::result<transaction> db::fetch_transaction(int64_t id) {
 	);
 }
 
+/// Verifies that every field a caller must not be allowed to silently change still matches the persisted record.
+/// Used by both update_transaction (the user-facing path) and perform_import's match validation.
+/// In both cases, a caller can carry a stale or external copy of a transaction, and this is what catches it drifting from what's actually in the database before any write happens.
+/// date_recorded and memo are intentionally excluded: those are the two fields a caller is allowed to edit.
 static inline bool safe_match(const transaction& lhs, const transaction& rhs) {
 	return (
 		   lhs.account_id     == rhs.account_id
@@ -1007,6 +1021,12 @@ db::outcome db::prepare_import(import::pending_import& pending) {
 			if (!fitid_query && fitid_query.status().code == error::not_found) {
 				auto view = account.valid_candidates_for(txn);
 				for (auto* candidate : view) {
+					// "Good enough for now," not a considered heuristic. view already filters by matching amount.
+					// Picks the first unclaimed candidate within 7 days, in valid_candidates_for's list order.
+					// valid_candidates_for already filters to matching amount, so ties are possible:
+					//   e.g. seven days of identical Little Caesars charges, four imported, three not yet cleared.
+					// There's no real signal here to tell which manual transaction corresponds to which import.
+					// This is part of why user validation of matches still exists downstream.
 					if ((candidate->date_recorded - *txn.record.date_cleared).magnitude() < timedelta::days(7)) {
 						match(candidate);
 						break;
@@ -1472,7 +1492,7 @@ db::result<db::allocation_history> db::fund_history(int64_t fund_id, datetime af
 #pragma region Lifecycle
 
 db::error db::classify_sqlite_open_error(int rc) {
-	switch (rc) {
+	switch (rc & 0xFF) {
 		case SQLITE_FULL:
 			return error::disk_full;
 		case SQLITE_NOMEM:
@@ -1548,6 +1568,7 @@ db::outcome db::backup(const std::string& path) {
 			default:
 				FUNDOS_ASSERT(false, "unhandled sqlite3 backup result code");
 				return error::internal;
+			// TODO: Verify interrupt behavior for backups
 		}
 	};
 
@@ -1639,7 +1660,11 @@ void db::open() {
 		return;
 	}
 
-	int rc = sqlite3_exec(connection, "PRAGMA locking_mode = EXCLUSIVE;", nullptr, nullptr, nullptr); // Adds an extra assurance that the db isn't going to change while we have it open
+	// Adds an extra assurance that the db isn't going to change while we have it open.
+	// Setting this before journal_mode = WAL below has a side effect:
+	//    SQLite locks locking_mode into EXCLUSIVE for the life of the connection, and it can't be changed back to NORMAL without first leaving WAL mode entirely.
+	// That's fine here — this codebase already assumes single-connection, single-writer access throughout, and this just enforces it at the SQLite level too.
+	int rc = sqlite3_exec(connection, "PRAGMA locking_mode = EXCLUSIVE;", nullptr, nullptr, nullptr);
 	if (SQLITE_OK != rc) {
 		open_result.result = status::code::sqlite3_error;
 		open_result.sqlite3_outcome = sqlite_open_error(rc);

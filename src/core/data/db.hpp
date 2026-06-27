@@ -14,14 +14,19 @@
 
 namespace fundos {
 
-/// Not exposed publicly
+/// Implementation detail: defined in the .inc, included by db's own .cpp and by tests.
+/// Tests include it for the migrations defined there, not for db_prepared_statements itself — the two live in the same file for locality.
+/// The .inc was split out specifically because tests could benefit access to migrations (though the need may never arise).
+/// Forward-declared here so db can hold a pointer to it without consumers of this header needing to see prepared-statement/sqlite3 internals.
+/// Not a C++ access boundary (namespaces don't have one) — just a convention that callers of db.hpp have no reason to reach into this namespace; the .inc is the actual gate on who can.
 namespace schema {
 union db_prepared_statements;
 }
 
 class db {
 public:
-	/// Tag type: pass to db(sqlite3*, owns_connection) to transfer connection ownership to db.
+	// Constructors are public mainly so tests can drive a raw sqlite3* through specific preconditions before handing it to db, either borrowed or owned.
+	// "Real" consumers should use open_file/open_memory; the constructors used to be private and reachable only through those factories before this need arose.
 	struct owns_connection {};
 
 	/// Describes the schema relationship discovered when opening a database.
@@ -127,6 +132,10 @@ private:
 	bool managed;
 	sqlite3* connection;
 	schema::db_prepared_statements* prepared;
+
+	// Guards against interrupt() racing close().
+	// sqlite3_interrupt is thread-safe, but the raw connection pointer isn't.
+	// This prevents close() from freeing it out from under an in-flight interrupt() call from another thread.
 	mutable std::shared_mutex connection_mutex;
 
 	int64_t schema = 0;
@@ -141,6 +150,9 @@ private:
 		return std::make_shared<std::string>(msg);
 	}
 
+	// Precondition: only valid to call when the db is not ready (caller should have already checked is_ready()).
+	// FUNDOS_UNREACHABLE below assumes every status::code other than ok/needs_migration implies connection == nullptr
+	// (see status::code's comment) — if that ever stops holding, this becomes genuinely reachable, not just defensive.
 	inline outcome not_ready() {
 		if (connection == nullptr) {
 			return outcome(error::not_ready, "The database connection is closed");
@@ -162,6 +174,9 @@ private:
 	inline outcome sqlite_runtime_error(int rc) {
 		auto error = classify_sqlite_runtime_error(rc);
 		auto message = sqlite_error_message(); // captured before any close
+
+		// corrupted/internal mean the connection itself can no longer be trusted.
+		// Everything else (unavailable, out_of_memory, disk_full, etc.) is an operational condition the connection survives, where a caller might reasonably retry the same operation.
 		if (error == error::corrupted || error == error::internal) {
 			close();
 		}
@@ -175,14 +190,18 @@ public:
 	/// Creates a private in-memory database.
 	static std::shared_ptr<db> open_memory();
 
-	/// Opens in a permanently errored state; used by factory functions to return a failed-but-valid db object.
-	/// Prefer open_file() or open_memory() over this.
+	/// Opens in a permanently errored state; used by factory functions to return a failed-but-valid db object
+	/// when sqlite3_open itself fails (e.g. inaccessible path) and there is no real connection to construct from.
 	explicit db(outcome);
 
 	/// Borrows an existing sqlite3 connection; caller responsible for lifetime, no sqlite3_close on destruction.
+	/// Public primarily so tests can hand db a connection they've manually prepared with specific preconditions
+	/// (e.g. an in-memory db seeded via raw SQL) without db taking ownership of it.
 	explicit db(sqlite3*);
 
 	/// Takes ownership of an existing connection; sqlite3_close is called on destruction.
+	/// Used by the static factories (open_file, open_memory) for normal construction,
+	/// and by tests that want db to own a connection they've manually prepared.
 	explicit db(sqlite3*, owns_connection);
 
 	/// Cleans up prepared statements. Calls sqlite3_close iff owns_connection
@@ -197,7 +216,9 @@ public:
 	bool                         is_connected()   { return connection != nullptr; }
 	bool                         is_ready()       { return open_result.is_ok() && is_connected(); }
 
-	/// Meant to be called from another thread in order to cancel a current request
+	/// Meant to be called from another thread, if the caller has put db on its own thread, in order to cancel a current request.
+	/// sqlite3_interrupt is thread-safe on its own; connection_mutex exists solely to protect against this racing close() freeing the connection out from under it.
+	/// (Whether a separate thread is even worth it for this library is debatable — it's fast enough that the difference is imperceptible — but interrupt() needs to be safe regardless.)
 	void interrupt();
 
 	/// @return 0 on an errored or uninitialized db
