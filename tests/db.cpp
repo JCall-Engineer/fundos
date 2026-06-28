@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include <format>
+#include <string>
+#include <string_view>
 
 #include "data/db.hpp"
 using namespace fundos;
@@ -1384,12 +1386,72 @@ TEST(DbQuery, PrepareImport_PrefersMatchInformation) {
 	EXPECT_EQ(it->date_recorded, previous_import.date_recorded);
 }
 
+bool transaction_exists(sqlite3* connection, const fundos::transaction& transaction, int64_t id = 0) {
+	auto correction_string = [](fundos::transaction::correction_type correct_action) -> std::string_view {
+		switch (correct_action) {
+			case fundos::transaction::correction_type::replaces: return "replace";
+			case fundos::transaction::correction_type::deletes:  return "delete";
+		}
+		FUNDOS_UNREACHABLE();
+	};
+	std::string sql = std::format(
+		"SELECT 1 FROM transactions"
+		" WHERE account_id    =  {}"
+		" AND amount          =  {}"
+		" AND date_recorded   =  {}"
+		" AND memo            = '{}'"
+		" AND date_reconciled IS {}"
+		" AND fitid           IS {}"
+		" AND date_cleared    IS {}"
+		" AND corrects_fitid  IS {}"
+		" AND correct_action  IS {}"
+		" AND corrects_id     IS {}"
+		" AND superseded_by   IS {}",
+		transaction.account_id,
+		transaction.amount.minor_units,
+		transaction.date_recorded.milliseconds_since_epoch,
+		transaction.memo,
+		transaction.date_reconciled ? std::format( "{}",   transaction.date_reconciled->milliseconds_since_epoch) : "NULL",
+		transaction.fitid           ? std::format("'{}'", *transaction.fitid)                                     : "NULL",
+		transaction.date_cleared    ? std::format( "{}",   transaction.date_cleared->milliseconds_since_epoch)    : "NULL",
+		transaction.corrects_fitid  ? std::format("'{}'", *transaction.corrects_fitid)                            : "NULL",
+		transaction.correct_action  ? std::format("'{}'", correction_string(*transaction.correct_action))         : "NULL",
+		transaction.corrects_id     ? std::format( "{}",  *transaction.corrects_id)                               : "NULL",
+		transaction.superseded_by   ? std::format( "{}",  *transaction.superseded_by)                             : "NULL"
+	);
+	int64_t pinned_id = id != 0 ? id : transaction.id();
+	if (pinned_id != 0) {
+		sql += std::format(" AND id = {}", pinned_id);
+	}
+	bool found = false;
+	sqlite3_exec(connection, sql.c_str(),
+		[](void* data, int, char**, char**) {
+			*static_cast<bool*>(data) = true;
+			return 0;
+		}, &found, nullptr
+	);
+	return found;
+}
+
 TEST(DbQuery, PerformImport_InsertsNewTransaction) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM transactions"), 3); // txn + previous_import + fresh_import, matched_import updates previous_import
+	EXPECT_TRUE(transaction_exists(connection, txn, txn.id()));
+	EXPECT_TRUE(transaction_exists(connection, previous_import, previous_import_id));
+	fresh_import.record.account_id    = checking.id();                     // the import process automatically sets account_id
+	fresh_import.record.date_recorded = *fresh_import.record.date_cleared; // the import process takes date_recorded from date_cleared for fresh imports
+	EXPECT_TRUE(transaction_exists(connection, fresh_import.record));
+}
+
+TEST(DbQuery, PerformImport_PreservesExistingMemo) {
+	FUNDOS_TEST_DB();
+	FUNDOS_SEED_IMPORT();
+	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
+	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
+	EXPECT_TRUE(transaction_exists(connection, previous_import, previous_import_id));
 }
 
 TEST(DbQuery, PerformImport_UpdatesMatchedTransaction) {
@@ -1398,10 +1460,8 @@ TEST(DbQuery, PerformImport_UpdatesMatchedTransaction) {
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	pending.accounts[0].transactions[0].memo = fundos::import::imported_transaction::memo_choice::prefer_importing;
 	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
-	auto memo = fetch_string(connection,
-		std::format("SELECT memo FROM transactions WHERE id = {}", previous_import_id).c_str()
-	);
-	EXPECT_EQ(memo, matched_import.record.memo);
+	previous_import.memo = matched_import.record.memo; // prefer_importing replaces memo with the imported value
+	EXPECT_TRUE(transaction_exists(connection, previous_import, previous_import_id));
 }
 
 TEST(DbQuery, PerformImport_CreatesCheckpoint) {
