@@ -221,6 +221,7 @@ void HomePage::make_accounts(const std::vector<fundos::account>& accounts) {
 		connect(database, &AppDatabase::account_balance_received, row, [this, row, id](int64_t account_id, fundos::db::result<fundos::currency> amount) {
 			if (amount && account_id == id) {
 				row->set_amount(theme::currency_label(amount.value(), app_coordinator->context()->currency_locale().info()), amount.value().minor_units != 0);
+				row->on_toggle(show_closed_accounts);
 			}
 		});
 		emit account_balance_requested(id);
