@@ -39,3 +39,17 @@ if(WINDEPLOYQT)
 		COMMENT "Running windeployqt..."
 	)
 endif()
+
+install(TARGETS fundos
+	RUNTIME DESTINATION .
+)
+
+install(FILES "${CMAKE_SOURCE_DIR}/LICENSE"
+	DESTINATION .
+)
+
+install(CODE "
+	execute_process(
+		COMMAND \"${WINDEPLOYQT}\" \"\${CMAKE_INSTALL_PREFIX}/fundos.exe\"
+	)
+")

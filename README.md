@@ -133,6 +133,21 @@ Edit `CMakeUserPresets.json` and replace the placeholder path with your actual Q
 
 After you have taken care of the dependencies you can complete the [common building procedure](#common-building-procedure).
 
+#### Building a Windows Installer
+
+Install [WiX Toolset v3](https://github.com/wixtoolset/wix3/releases) and add its `bin\` directory to your
+`PATH` (typically `C:\Program Files (x86)\WiX Toolset v3.14\bin\`).
+
+Build the release target, then run the install and packaging steps:
+
+```powershell
+cmake --build --preset windows-release-local --parallel
+cmake --install out/build/windows-release --prefix out/install/windows
+cpack --config out/build/windows-release/CPackConfig.cmake -G WIX
+```
+
+The resulting `FundOS-<version>-win64.msi` will appear in the repository root.
+
 ### Linux
 
 > **Note:** Linux support has been confirmed on Arch Linux. Build reports for other distributions are welcome.

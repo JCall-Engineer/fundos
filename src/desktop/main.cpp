@@ -4,8 +4,8 @@
 
 int main(int argc, char* argv[]) {
 	QApplication application(argc, argv);
-	application.setOrganizationName("fundos");
-	application.setApplicationName("fundos");
+	application.setOrganizationName("JCall.Engineer");
+	application.setApplicationName("FundOS");
 	application.setWindowIcon(QIcon(":/icon.svg"));
 	application.setPalette(theme::make_palette());
 
