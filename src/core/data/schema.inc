@@ -89,7 +89,8 @@ CREATE TABLE import_ledger_balances (
 	id                INTEGER PRIMARY KEY,
 	account_id        INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
 	amount            INTEGER NOT NULL,
-	date_as_of        INTEGER NOT NULL
+	date_as_of        INTEGER NOT NULL,
+	UNIQUE(account_id, date_as_of, amount)
 );
 CREATE INDEX idx_import_account_id ON import_ledger_balances(account_id);
 
@@ -291,8 +292,21 @@ struct statements {
 	)sql" };
 
 	statement_slot insert_import_ledger_balance { .sql = R"sql(
-		INSERT INTO import_ledger_balances (account_id, amount, date_as_of)
-		VALUES (?, ?, ?)
+		WITH params AS (
+			SELECT
+				? AS account_id,
+				? AS amount,
+				? AS date_as_of
+		)
+		INSERT OR IGNORE INTO import_ledger_balances (account_id, amount, date_as_of)
+		SELECT params.account_id, params.amount, params.date_as_of
+		FROM params
+		WHERE NOT EXISTS (
+			SELECT 1 FROM import_ledger_balances
+			WHERE account_id = params.account_id
+			AND amount = params.amount
+			AND ABS(date_as_of - params.date_as_of) < 86400 -- One Day
+		)
 	)sql" };
 
 	statement_slot filter_transactions { .sql = R"sql(
