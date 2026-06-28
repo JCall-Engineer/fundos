@@ -7,7 +7,7 @@
 // ─── DragHandle ──────────────────────────────────────────────────────────────
 
 DragHandle::DragHandle(QWidget* parent) : QWidget(parent) {
-	setCursor(Qt::SizeVerCursor);
+	setCursor(Qt::ClosedHandCursor);
 	setFixedSize(16, 24);
 	setAttribute(Qt::WA_Hover);
 }
