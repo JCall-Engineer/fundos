@@ -193,7 +193,9 @@ ofx_token extract_token(parse_context& context) {
 		}
 
 		std::getline(context.file, out.text, '<'); // read until next tag
-		context.file.unget(); // un-consume the <
+		if (context.file.good()) { // GCC will happily peek what we unget instead of EOF if we don't guard the unget, creating an infinite loop at EOF
+			context.file.unget(); // un-consume the <
+		}
 
 		strip(out.text);
 		if (context.encoding == codec::cp1252) {
