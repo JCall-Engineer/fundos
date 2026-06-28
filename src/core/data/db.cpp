@@ -902,22 +902,24 @@ AND corrects_id IS NULL;
 }
 
 db::result<transaction> db::fetch_transaction(int64_t id) {
-	return sql_fetch_one<fundos::transaction>(
+	return sql_fetch_one<transaction>(
 		prepared->named.find_transaction_by_id.statement,
 		[&](sqlite3_stmt* stmt) -> void {
 			sqlite3_bind_int64(stmt, 1, id);
 		},
-		[&](sqlite3_stmt* stmt) -> fundos::transaction {
-			fundos::transaction out;
+		[&](sqlite3_stmt* stmt) -> transaction {
+			transaction out;
 			out.id_            = id;
 			out.account_id     =                                         sqlite3_column_int64  (stmt, 0);
 			out.amount         =                                currency{sqlite3_column_int64  (stmt, 1)};
-			out.date_cleared   =                   as_optional<datetime>(extract_optional_int64(stmt, 2));
-			out.fitid          =                                         extract_optional_text (stmt, 3);
-			out.corrects_fitid =                                         extract_optional_text (stmt, 4);
-			out.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 5));
-			out.corrects_id    =                                         extract_optional_int64(stmt, 6);
-			out.superseded_by  =                                         extract_optional_int64(stmt, 7);
+			out.date_recorded  =                                datetime{sqlite3_column_int64  (stmt, 2)};
+			out.date_cleared   =                   as_optional<datetime>(extract_optional_int64(stmt, 3));
+			out.memo           =                                         extract_text          (stmt, 4);
+			out.fitid          =                                         extract_optional_text (stmt, 5);
+			out.corrects_fitid =                                         extract_optional_text (stmt, 6);
+			out.correct_action = optional_string_to_enum(correction_map, extract_optional_text (stmt, 7));
+			out.corrects_id    =                                         extract_optional_int64(stmt, 8);
+			out.superseded_by  =                                         extract_optional_int64(stmt, 9);
 			return out;
 		}
 	);
@@ -1379,16 +1381,16 @@ db::outcome db::save_transaction(transaction& saving, std::vector<allocation>& a
 }
 
 db::result<db::transaction_history> db::account_history(int64_t account_id, datetime after, datetime before) {
-	using transaction = transaction_history::allocated_transaction;
-	auto fetched_transactions = sql_fetch_many<transaction>(
+	using allocated_transaction = transaction_history::allocated_transaction;
+	auto fetched_transactions = sql_fetch_many<allocated_transaction>(
 		prepared->named.filter_transactions.statement,
 		[&](sqlite3_stmt* stmt) -> void {
 			sqlite3_bind_int64(stmt, 1, account_id);
 			sqlite3_bind_int64(stmt, 2, after.milliseconds_since_epoch);
 			sqlite3_bind_int64(stmt, 3, before.milliseconds_since_epoch);
 		},
-		[&](sqlite3_stmt* stmt) -> transaction {
-			transaction out;
+		[&](sqlite3_stmt* stmt) -> allocated_transaction {
+			allocated_transaction out;
 			out.record.account_id = account_id;
 			out.record.id_             =                                         sqlite3_column_int64  (stmt, 0);
 			out.record.amount          =                               currency {sqlite3_column_int64  (stmt, 1)};

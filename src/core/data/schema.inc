@@ -257,9 +257,11 @@ struct statements {
 		WHERE fitid = ? AND account_id = ?
 	)sql" };
 
-	/// Used to validate transactions aren't modified illegally before saving
+	/// Used to:
+	/// 1. validate transactions aren't modified illegally before saving
+	/// 2. read memo and date_recorded when preserving them during a matched import
 	statement_slot find_transaction_by_id { .sql = R"sql(
-		SELECT account_id, amount, date_cleared, fitid, corrects_fitid, correct_action, corrects_id, superseded_by
+		SELECT account_id, amount, date_recorded, date_cleared, memo, fitid, corrects_fitid, correct_action, corrects_id, superseded_by
 		FROM transactions
 		WHERE id = ?
 	)sql" };
