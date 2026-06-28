@@ -998,6 +998,17 @@ TEST(DbQuery, SaveBudget_ReorderPreservedAcrossSave) {
 }
 
 TEST(DbQuery, AccountHistory_ClearedAndPending) {
+	fundos::datetime
+		  tx1_recorded = date(2026, std::chrono::January,   1) + timedelta::hours(11) + timedelta::minutes(12) + timedelta::seconds(13)
+		, tx1_cleared  = date(2026, std::chrono::January,   4) + timedelta::hours(12) + timedelta::minutes(00) + timedelta::seconds(00)
+		, tx2_recorded = date(2026, std::chrono::January,  15) + timedelta::hours(12) + timedelta::minutes(34) + timedelta::seconds(24)
+		, tx3_recorded = date(2026, std::chrono::February,  1) + timedelta::hours(13) + timedelta::minutes(56) + timedelta::seconds(35)
+		, tx3_cleared  = date(2026, std::chrono::February,  3) + timedelta::hours(12) + timedelta::minutes(00) + timedelta::seconds(00)
+		, tx4_recorded = date(2026, std::chrono::February, 15) + timedelta::hours(14) + timedelta::minutes(18) + timedelta::seconds(46)
+		, tx5_recorded = date(2026, std::chrono::March,     1) + timedelta::hours(15) + timedelta::minutes(29) + timedelta::seconds(57)
+		, tx5_cleared  = date(2026, std::chrono::March,     3) + timedelta::hours(12) + timedelta::minutes(00) + timedelta::seconds(00)
+		;
+
 	FUNDOS_TEST_DB();
 	int rc = sqlite3_exec(connection, std::format(R"sql(
 		INSERT INTO accounts (id, name) VALUES (1, 'Checking');
@@ -1009,14 +1020,14 @@ TEST(DbQuery, AccountHistory_ClearedAndPending) {
 				(4, 1,  33, {}, 'Fourth Transaction', NULL,    NULL),
 				(5, 1,  44, {}, 'Fifth Transaction', 'fitid5', {});
 	)sql",
-		  (date(2026, std::chrono::January,   1) + timedelta::hours(11) + timedelta::minutes(12) + timedelta::seconds(13)).milliseconds_since_epoch // transaction 1
-		, (date(2026, std::chrono::January,   4) + timedelta::hours(12) + timedelta::minutes(00) + timedelta::seconds(00)).milliseconds_since_epoch // transaction 1 cleared
-		, (date(2026, std::chrono::January,  15) + timedelta::hours(12) + timedelta::minutes(34) + timedelta::seconds(24)).milliseconds_since_epoch // transaction 2
-		, (date(2026, std::chrono::February,  1) + timedelta::hours(13) + timedelta::minutes(56) + timedelta::seconds(35)).milliseconds_since_epoch // transaction 3
-		, (date(2026, std::chrono::February,  3) + timedelta::hours(12) + timedelta::minutes(00) + timedelta::seconds(00)).milliseconds_since_epoch // transaction 3 cleared
-		, (date(2026, std::chrono::February, 15) + timedelta::hours(14) + timedelta::minutes(18) + timedelta::seconds(46)).milliseconds_since_epoch // transaction 4
-		, (date(2026, std::chrono::March,     1) + timedelta::hours(15) + timedelta::minutes(29) + timedelta::seconds(57)).milliseconds_since_epoch // transaction 5
-		, (date(2026, std::chrono::March,     3) + timedelta::hours(12) + timedelta::minutes(00) + timedelta::seconds(00)).milliseconds_since_epoch // transaction 5 cleared
+		  tx1_recorded.milliseconds_since_epoch
+		, tx1_cleared.milliseconds_since_epoch
+		, tx2_recorded.milliseconds_since_epoch
+		, tx3_recorded.milliseconds_since_epoch
+		, tx3_cleared.milliseconds_since_epoch
+		, tx4_recorded.milliseconds_since_epoch
+		, tx5_recorded.milliseconds_since_epoch
+		, tx5_cleared.milliseconds_since_epoch
 	).c_str(), nullptr, nullptr, nullptr);
 	ASSERT_EQ(rc, SQLITE_OK);
 
@@ -1026,14 +1037,51 @@ TEST(DbQuery, AccountHistory_ClearedAndPending) {
 	ASSERT_EQ(history.value().ledger_balances.size(), 0);
 	ASSERT_EQ(history.value().transactions.size(), 2);
 
-	ASSERT_EQ(history.value().transactions[0].record.id(), 4);
-	ASSERT_EQ(history.value().transactions[0].account_balance, currency{210});
+	{ // transaction 4
+		EXPECT_EQ(history.value().transactions[0].record.id(), 4);
+		EXPECT_EQ(history.value().transactions[0].record.account_id, 1);
+		EXPECT_EQ(history.value().transactions[0].record.date_recorded, tx4_recorded);
+		EXPECT_EQ(history.value().transactions[0].record.memo, "Fourth Transaction");
+		EXPECT_EQ(history.value().transactions[0].record.amount, currency{33});
+		EXPECT_EQ(history.value().transactions[0].record.date_reconciled, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.fitid, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.date_cleared, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.correct_action, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.corrects_fitid, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.corrects_id, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.superseded_by, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].account_balance, currency{210});
+		EXPECT_EQ(history.value().transactions[0].effective_date, tx4_recorded);
+		EXPECT_TRUE(history.value().transactions[0].allocations.empty());
+	}
 
-	ASSERT_EQ(history.value().transactions[1].record.id(), 3);
-	ASSERT_EQ(history.value().transactions[1].account_balance, currency{122});
+	{ // transaction 3
+		EXPECT_EQ(history.value().transactions[1].record.id(), 3);
+		EXPECT_EQ(history.value().transactions[1].record.account_id, 1);
+		EXPECT_EQ(history.value().transactions[1].record.date_recorded, tx3_recorded);
+		EXPECT_EQ(history.value().transactions[1].record.memo, "Third Transaction");
+		EXPECT_EQ(history.value().transactions[1].record.amount, currency{22});
+		EXPECT_EQ(history.value().transactions[1].record.date_reconciled, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.fitid, "fitid3");
+		EXPECT_EQ(history.value().transactions[1].record.date_cleared, tx3_cleared);
+		EXPECT_EQ(history.value().transactions[1].record.correct_action, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.corrects_fitid, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.corrects_id, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.superseded_by, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].account_balance, currency{122});
+		EXPECT_EQ(history.value().transactions[1].effective_date, tx3_cleared);
+		EXPECT_TRUE(history.value().transactions[1].allocations.empty());
+	}
 }
 
 TEST(DbQuery, FundHistory_Basic) {
+	fundos::datetime
+		  tx1_recorded = date(2026, std::chrono::January,  1) + timedelta::hours(12)
+		, tx2_recorded = date(2026, std::chrono::February, 1) + timedelta::hours(12)
+		, tx3_recorded = date(2026, std::chrono::March,    1) + timedelta::hours(12)
+		, tx4_recorded = date(2026, std::chrono::March,   15) + timedelta::hours(12)
+		, tx5_recorded = date(2026, std::chrono::March,   15) + timedelta::hours(13)
+		;
 	FUNDOS_TEST_DB();
 	int rc = sqlite3_exec(connection, std::format(R"sql(
 		INSERT INTO accounts (id, name) VALUES (1, 'Checking');
@@ -1055,11 +1103,11 @@ TEST(DbQuery, FundHistory_Basic) {
 				(4, 4, 1,  75),
 				(5, 5, 1,  99);
 	)sql",
-		  (date(2026, std::chrono::January,  1) + timedelta::hours(12)).milliseconds_since_epoch // transaction 1
-		, (date(2026, std::chrono::February, 1) + timedelta::hours(12)).milliseconds_since_epoch // transaction 2
-		, (date(2026, std::chrono::March,    1) + timedelta::hours(12)).milliseconds_since_epoch // transaction 3
-		, (date(2026, std::chrono::March,   15) + timedelta::hours(12)).milliseconds_since_epoch // transaction 4
-		, (date(2026, std::chrono::March,   15) + timedelta::hours(13)).milliseconds_since_epoch // transaction 5
+		  tx1_recorded.milliseconds_since_epoch
+		, tx2_recorded.milliseconds_since_epoch
+		, tx3_recorded.milliseconds_since_epoch
+		, tx4_recorded.milliseconds_since_epoch
+		, tx5_recorded.milliseconds_since_epoch
 	).c_str(), nullptr, nullptr, nullptr);
 	ASSERT_EQ(rc, SQLITE_OK);
 
@@ -1067,19 +1115,58 @@ TEST(DbQuery, FundHistory_Basic) {
 	ASSERT_TRUE(static_cast<bool>(history));
 	ASSERT_EQ(history.value().transactions.size(), 3);
 
-	// transaction 4 superseded, transaction 5 replaces it
-	ASSERT_EQ(history.value().transactions[0].record.id(), 5);
-	ASSERT_EQ(history.value().transactions[0].allocated.amount, currency{99});
-	ASSERT_EQ(history.value().transactions[0].fund_balance, currency{274});
+	{ // transaction 4 superseded, transaction 5 replaces it
+		EXPECT_EQ(history.value().transactions[0].record.id(), 5);
+		EXPECT_EQ(history.value().transactions[0].record.account_id, 1);
+		EXPECT_EQ(history.value().transactions[0].record.date_recorded, tx5_recorded);
+		EXPECT_EQ(history.value().transactions[0].record.memo, "Fifth Transaction - Supersedes Fourth");
+		EXPECT_EQ(history.value().transactions[0].record.amount, currency{99});
+		EXPECT_EQ(history.value().transactions[0].record.date_reconciled, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.fitid, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.date_cleared, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.correct_action, fundos::transaction::correction_type::replaces);
+		EXPECT_EQ(history.value().transactions[0].record.corrects_fitid, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].record.corrects_id, 4);
+		EXPECT_EQ(history.value().transactions[0].record.superseded_by, std::nullopt);
+		EXPECT_EQ(history.value().transactions[0].allocated.amount, currency{99});
+		EXPECT_EQ(history.value().transactions[0].fund_balance, currency{274});
+	}
+ 
+	{ // transaction 3
+		EXPECT_EQ(history.value().transactions[1].record.id(), 3);
+		EXPECT_EQ(history.value().transactions[1].record.account_id, 1);
+		EXPECT_EQ(history.value().transactions[1].record.date_recorded, tx3_recorded);
+		EXPECT_EQ(history.value().transactions[1].record.memo, "Third Transaction");
+		EXPECT_EQ(history.value().transactions[1].record.amount, currency{25});
+		EXPECT_EQ(history.value().transactions[1].record.date_reconciled, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.fitid, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.date_cleared, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.correct_action, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.corrects_fitid, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.corrects_id, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].record.superseded_by, std::nullopt);
+		EXPECT_EQ(history.value().transactions[1].allocated.amount, currency{25});
+		EXPECT_EQ(history.value().transactions[1].fund_balance, currency{175});
+	}
 
-	ASSERT_EQ(history.value().transactions[1].record.id(), 3);
-	ASSERT_EQ(history.value().transactions[1].allocated.amount, currency{25});
-	ASSERT_EQ(history.value().transactions[1].fund_balance, currency{175});
+	{ // transaction 2
+		EXPECT_EQ(history.value().transactions[2].record.id(), 2);
+		EXPECT_EQ(history.value().transactions[2].record.account_id, 1);
+		EXPECT_EQ(history.value().transactions[2].record.date_recorded, tx2_recorded);
+		EXPECT_EQ(history.value().transactions[2].record.memo, "Second Transaction");
+		EXPECT_EQ(history.value().transactions[2].record.amount, currency{50});
+		EXPECT_EQ(history.value().transactions[2].record.date_reconciled, std::nullopt);
+		EXPECT_EQ(history.value().transactions[2].record.fitid, std::nullopt);
+		EXPECT_EQ(history.value().transactions[2].record.date_cleared, std::nullopt);
+		EXPECT_EQ(history.value().transactions[2].record.correct_action, std::nullopt);
+		EXPECT_EQ(history.value().transactions[2].record.corrects_fitid, std::nullopt);
+		EXPECT_EQ(history.value().transactions[2].record.corrects_id, std::nullopt);
+		EXPECT_EQ(history.value().transactions[2].record.superseded_by, std::nullopt);
+		EXPECT_EQ(history.value().transactions[2].allocated.amount, currency{50});
+		EXPECT_EQ(history.value().transactions[2].fund_balance, currency{150});
+	}
 
 	// transaction 1 outside date range but contributes to fund_balance
-	ASSERT_EQ(history.value().transactions[2].record.id(), 2);
-	ASSERT_EQ(history.value().transactions[2].allocated.amount, currency{50});
-	ASSERT_EQ(history.value().transactions[2].fund_balance, currency{150});
 }
 
 /// Previous iterations used a helper function instead of a macro but that loses the ability to assert in a test
@@ -1130,33 +1217,87 @@ static std::optional<int64_t> fetch_optional_int64(sqlite3* connection, const ch
 	return value;
 }
 
+bool transaction_exists(sqlite3* connection, const fundos::transaction& transaction, int64_t id = 0) {
+	auto correction_string = [](fundos::transaction::correction_type correct_action) -> std::string_view {
+		switch (correct_action) {
+			case fundos::transaction::correction_type::replaces: return "replace";
+			case fundos::transaction::correction_type::deletes:  return "delete";
+		}
+		FUNDOS_UNREACHABLE();
+	};
+	std::string sql = std::format(
+		"SELECT 1 FROM transactions"
+		" WHERE account_id    =  {}"
+		" AND amount          =  {}"
+		" AND date_recorded   =  {}"
+		" AND memo            = '{}'"
+		" AND date_reconciled IS {}"
+		" AND fitid           IS {}"
+		" AND date_cleared    IS {}"
+		" AND corrects_fitid  IS {}"
+		" AND correct_action  IS {}"
+		" AND corrects_id     IS {}"
+		" AND superseded_by   IS {}",
+		transaction.account_id,
+		transaction.amount.minor_units,
+		transaction.date_recorded.milliseconds_since_epoch,
+		transaction.memo,
+		transaction.date_reconciled ? std::format( "{}",   transaction.date_reconciled->milliseconds_since_epoch) : "NULL",
+		transaction.fitid           ? std::format("'{}'", *transaction.fitid)                                     : "NULL",
+		transaction.date_cleared    ? std::format( "{}",   transaction.date_cleared->milliseconds_since_epoch)    : "NULL",
+		transaction.corrects_fitid  ? std::format("'{}'", *transaction.corrects_fitid)                            : "NULL",
+		transaction.correct_action  ? std::format("'{}'", correction_string(*transaction.correct_action))         : "NULL",
+		transaction.corrects_id     ? std::format( "{}",  *transaction.corrects_id)                               : "NULL",
+		transaction.superseded_by   ? std::format( "{}",  *transaction.superseded_by)                             : "NULL"
+	);
+	int64_t pinned_id = id != 0 ? id : transaction.id();
+	if (pinned_id != 0) {
+		sql += std::format(" AND id = {}", pinned_id);
+	}
+	bool found = false;
+	sqlite3_exec(connection, sql.c_str(),
+		[](void* data, int, char**, char**) {
+			*static_cast<bool*>(data) = true;
+			return 0;
+		}, &found, nullptr
+	);
+	return found;
+}
+
 TEST(DbQuery, SaveTransaction_Insert) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
 	EXPECT_NE(txn.id(), 0);
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM transactions"), 1);
+	EXPECT_TRUE(transaction_exists(connection, txn));
 }
 
 TEST(DbQuery, SaveTransaction_Update) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
+	EXPECT_NE(txn.id(), 0);
 	txn.date_recorded = datetime{86400000}; // 1 day later
 	txn.memo = "Updated";
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(txn, allocations)));
 	EXPECT_EQ(86400000, fetch_int64(connection, "SELECT date_recorded FROM transactions LIMIT 1"));
 	EXPECT_EQ("Updated", fetch_string(connection, "SELECT memo FROM transactions LIMIT 1"));
+	EXPECT_TRUE(transaction_exists(connection, txn));
 }
 
 TEST(DbQuery, SaveTransaction_Update_ImmutableFieldChanged) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
+	EXPECT_NE(txn.id(), 0);
 	txn.amount = currency{99999};
 	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::rejected);
+	txn.amount = currency{10000};
+	EXPECT_TRUE(transaction_exists(connection, txn));
 }
 
 TEST(DbQuery, SaveTransaction_Update_NonexistentId) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
+	EXPECT_NE(txn.id(), 0);
 	sqlite3_exec(connection, "DELETE FROM transactions", nullptr, nullptr, nullptr);
 	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::bad_request);
 }
@@ -1164,6 +1305,7 @@ TEST(DbQuery, SaveTransaction_Update_NonexistentId) {
 TEST(DbQuery, SaveTransaction_InsertCorrection) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
+	EXPECT_NE(txn.id(), 0);
 	transaction correction;
 	correction.account_id    = checking.id();
 	correction.amount        = currency{5000};
@@ -1173,10 +1315,13 @@ TEST(DbQuery, SaveTransaction_InsertCorrection) {
 	correction.correct_action = transaction::correction_type::replaces;
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(correction, allocations)));
 	ASSERT_NE(correction.id(), 0);
-	auto superseded_by = fetch_optional_int64(connection,
+	txn.superseded_by = fetch_optional_int64(connection,
 		std::format("SELECT superseded_by FROM transactions WHERE id = {}", txn.id()).c_str()
 	);
-	EXPECT_EQ(superseded_by, correction.id());
+	EXPECT_EQ(txn.superseded_by, correction.id());
+	EXPECT_EQ(correction.corrects_id, txn.id());
+	EXPECT_TRUE(transaction_exists(connection, txn));
+	EXPECT_TRUE(transaction_exists(connection, correction));
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectAction) {
@@ -1190,6 +1335,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectAction) {
 	correction.corrects_id   = txn.id();
 	// correct_action intentionally omitted
 	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::bad_request);
+	EXPECT_TRUE(transaction_exists(connection, txn));
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectsId) {
@@ -1203,6 +1349,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_ParityMissing_CorrectsId) {
 	correction.correct_action = transaction::correction_type::replaces;
 	// corrects_id intentionally omitted
 	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::bad_request);
+	EXPECT_TRUE(transaction_exists(connection, txn));
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_TargetHasFitid) {
@@ -1212,6 +1359,8 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetHasFitid) {
 		"UPDATE transactions SET fitid = 'imported-fitid', date_cleared = 1 WHERE id = {}", txn.id()
 	);
 	ASSERT_EQ(sqlite3_exec(connection, update.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
+	txn.fitid        = std::string{"imported-fitid"};
+	txn.date_cleared = datetime{1};
 	transaction correction;
 	correction.account_id     = checking.id();
 	correction.amount         = currency{5000};
@@ -1220,21 +1369,23 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetHasFitid) {
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
 	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::rejected);
+	EXPECT_TRUE(transaction_exists(connection, txn));
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
+	EXPECT_NE(txn.id(), 0);
 	transaction superseder;
-	superseder.account_id    = checking.id();
-	superseder.amount        = currency{5000};
-	superseder.date_recorded = datetime{0};
-	superseder.memo          = "Superseder";
+	superseder.account_id     = checking.id();
+	superseder.amount         = currency{5000};
+	superseder.date_recorded  = datetime{0};
+	superseder.memo           = "Superseder";
+	superseder.corrects_id    = txn.id();
+	superseder.correct_action = transaction::correction_type::replaces;
 	ASSERT_TRUE(static_cast<bool>(database->save_transaction(superseder, allocations)));
-	std::string update = std::format(
-		"UPDATE transactions SET superseded_by = {} WHERE id = {}", superseder.id(), txn.id()
-	);
-	ASSERT_EQ(sqlite3_exec(connection, update.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
+	ASSERT_NE(superseder.id(), 0);
+	txn.superseded_by = superseder.id();
 	transaction correction;
 	correction.account_id     = checking.id();
 	correction.amount         = currency{5000};
@@ -1243,11 +1394,14 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetAlreadySuperseded) {
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
 	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::rejected);
+	EXPECT_TRUE(transaction_exists(connection, txn));
+	EXPECT_TRUE(transaction_exists(connection, superseder));
 }
 
 TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED();
+	EXPECT_NE(txn.id(), 0);
 	account savings;
 	savings.name = "Savings";
 	ASSERT_TRUE(static_cast<bool>(database->save_account(savings)));
@@ -1259,6 +1413,7 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	correction.corrects_id    = txn.id();
 	correction.correct_action = transaction::correction_type::replaces;
 	EXPECT_EQ(database->save_transaction(correction, allocations).code, db::error::bad_request);
+	EXPECT_TRUE(transaction_exists(connection, txn));
 }
 
 #define FUNDOS_SEED_IMPORT() \
@@ -1384,53 +1539,6 @@ TEST(DbQuery, PrepareImport_PrefersMatchInformation) {
 	EXPECT_NE(it, account.candidates.end());
 	EXPECT_EQ(it->memo, previous_import.memo);
 	EXPECT_EQ(it->date_recorded, previous_import.date_recorded);
-}
-
-bool transaction_exists(sqlite3* connection, const fundos::transaction& transaction, int64_t id = 0) {
-	auto correction_string = [](fundos::transaction::correction_type correct_action) -> std::string_view {
-		switch (correct_action) {
-			case fundos::transaction::correction_type::replaces: return "replace";
-			case fundos::transaction::correction_type::deletes:  return "delete";
-		}
-		FUNDOS_UNREACHABLE();
-	};
-	std::string sql = std::format(
-		"SELECT 1 FROM transactions"
-		" WHERE account_id    =  {}"
-		" AND amount          =  {}"
-		" AND date_recorded   =  {}"
-		" AND memo            = '{}'"
-		" AND date_reconciled IS {}"
-		" AND fitid           IS {}"
-		" AND date_cleared    IS {}"
-		" AND corrects_fitid  IS {}"
-		" AND correct_action  IS {}"
-		" AND corrects_id     IS {}"
-		" AND superseded_by   IS {}",
-		transaction.account_id,
-		transaction.amount.minor_units,
-		transaction.date_recorded.milliseconds_since_epoch,
-		transaction.memo,
-		transaction.date_reconciled ? std::format( "{}",   transaction.date_reconciled->milliseconds_since_epoch) : "NULL",
-		transaction.fitid           ? std::format("'{}'", *transaction.fitid)                                     : "NULL",
-		transaction.date_cleared    ? std::format( "{}",   transaction.date_cleared->milliseconds_since_epoch)    : "NULL",
-		transaction.corrects_fitid  ? std::format("'{}'", *transaction.corrects_fitid)                            : "NULL",
-		transaction.correct_action  ? std::format("'{}'", correction_string(*transaction.correct_action))         : "NULL",
-		transaction.corrects_id     ? std::format( "{}",  *transaction.corrects_id)                               : "NULL",
-		transaction.superseded_by   ? std::format( "{}",  *transaction.superseded_by)                             : "NULL"
-	);
-	int64_t pinned_id = id != 0 ? id : transaction.id();
-	if (pinned_id != 0) {
-		sql += std::format(" AND id = {}", pinned_id);
-	}
-	bool found = false;
-	sqlite3_exec(connection, sql.c_str(),
-		[](void* data, int, char**, char**) {
-			*static_cast<bool*>(data) = true;
-			return 0;
-		}, &found, nullptr
-	);
-	return found;
 }
 
 TEST(DbQuery, PerformImport_InsertsNewTransaction) {
