@@ -46,6 +46,12 @@ set(CPACK_WIX_INSTALL_SCOPE           "perMachine")
 set(CPACK_WIX_EXTRA_SOURCES           "${CMAKE_SOURCE_DIR}/res/wix_shortcut.wxs")
 set(CPACK_WIX_PATCH_FILE              "${CMAKE_SOURCE_DIR}/res/wix_patch.xml")
 
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+	"libqt6widgets6t64 (>= 6.4), libqt6svg6 (>= 6.4), libqt6concurrent6t64 (>= 6.4)"
+)
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "JCall.Engineer <jcall.engineer@gmail.com>")
+set(CPACK_DEBIAN_PACKAGE_SECTION "finance")
+
 # WiX-specific
 set(CPACK_WIX_UPGRADE_GUID        "3ba342f2-c11c-4d98-ae18-cd65770fd8c9")
 set(CPACK_WIX_PRODUCT_ICON        "${CMAKE_SOURCE_DIR}/res/icon.ico")

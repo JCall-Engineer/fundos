@@ -51,8 +51,10 @@ install(FILES "${CMAKE_SOURCE_DIR}/LICENSE"
 	DESTINATION .
 )
 
-install(CODE "
-	execute_process(
-		COMMAND \"${WINDEPLOYQT}\" \"\${CMAKE_INSTALL_PREFIX}/fundos.exe\"
-	)
-")
+if(WINDEPLOYQT)
+	install(CODE "
+		execute_process(
+			COMMAND \"${WINDEPLOYQT}\" \"\${CMAKE_INSTALL_PREFIX}/fundos.exe\"
+		)
+	")
+endif()

@@ -157,6 +157,7 @@ Install Qt 6 via your package manager:
 - Debian/Ubuntu (apt)
   - `qt6-base-dev`
   - `qt6-tools-dev`
+  - `libqt6svg6-dev`
   - `libvulkan-dev`
 - Fedora (dnf)
   - `qt6-qtbase-devel`
