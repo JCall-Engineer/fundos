@@ -162,7 +162,9 @@ Install Qt 6 via your package manager:
   - `libvulkan-dev`
 - Fedora (dnf)
   - `qt6-qtbase-devel`
-  - `qt6-linguist`
+  - `qt6-qttools-devel`
+  - `qt6-qtsvg-devel`
+  - `libxkbcommon-devel`
   - `vulkan-headers`
 - Arch (pacman)
   - `qt6-base`
@@ -174,13 +176,20 @@ In that case, create a `CMakeUserPresets.json` modeled on `CMakeUserPresets.json
 
 After you have taken care of the dependencies you can complete the [common building procedure](#common-building-procedure).
 
-#### Building a deb Package
+#### Building a Linux Package
+
+Replace `<FORMAT>` with the format for your distribution:
 
 ```bash
-cpack --config out/build/linux-release/CPackConfig.cmake -G DEB
+cpack --config out/build/linux-release/CPackConfig.cmake -G <FORMAT>
 ```
 
-The resulting `FundOS-<version>-Linux.deb` will appear in the repository root.
+| Distro        | Format | Output                       |
+|---------------|--------|------------------------------|
+| Debian/Ubuntu | `DEB`  | `FundOS-<version>-Linux.deb` |
+| Fedora        | `RPM`  | `FundOS-<version>-Linux.rpm` |
+
+The resulting package will appear in the repository root.
 
 ### Common Building Procedure
 

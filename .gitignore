@@ -4,5 +4,6 @@ CMakeUserPresets.json
 _CPack_Packages
 *.msi
 *.deb
+*.rpm
 *.sh
 *.tar.*

@@ -54,6 +54,15 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "finance")
 set(CPACK_BINARY_DEB "ON")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_SOURCE_DIR}/res/postinst")
 
+set(CPACK_RPM_PACKAGE_REQUIRES
+	"qt6-qtbase >= 6.4, qt6-qtsvg >= 6.4"
+)
+set(CPACK_RPM_PACKAGE_LICENSE "AGPL-3.0-or-later")
+set(CPACK_RPM_PACKAGE_GROUP "Applications/Finance")
+set(CPACK_RPM_PACKAGE_URL "https://github.com/JCall-Engineer/fundos")
+set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_SOURCE_DIR}/res/postinst")
+set(CPACK_BINARY_RPM "ON")
+
 # WiX-specific
 set(CPACK_WIX_UPGRADE_GUID        "3ba342f2-c11c-4d98-ae18-cd65770fd8c9")
 set(CPACK_WIX_PRODUCT_ICON        "${CMAKE_SOURCE_DIR}/res/icon.ico")
