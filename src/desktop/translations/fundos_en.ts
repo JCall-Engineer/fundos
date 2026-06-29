@@ -288,7 +288,7 @@ Reconcile transactions to resolve this discrepancy.</translation>
 <context>
     <name>DatePickerPopup</name>
     <message>
-        <location filename="../components/date_picker.cpp" line="663"/>
+        <location filename="../components/date_picker.cpp" line="664"/>
         <source>Today</source>
         <translation>Today</translation>
     </message>
@@ -371,84 +371,84 @@ Reconcile transactions to resolve this discrepancy.</translation>
         <translation>The database structure is unrecognized and cannot be recovered.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="156"/>
+        <location filename="../content/error_page.cpp" line="157"/>
         <source>Database is Corrupted</source>
         <translation>Database is Corrupted</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="157"/>
+        <location filename="../content/error_page.cpp" line="158"/>
         <source>The database file is damaged and cannot be opened.</source>
         <translation>The database file is damaged and cannot be opened.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="168"/>
+        <location filename="../content/error_page.cpp" line="169"/>
         <source>Database Unavailable</source>
         <translation>Database Unavailable</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="169"/>
+        <location filename="../content/error_page.cpp" line="170"/>
         <source>The database is busy or locked by another process.</source>
         <translation>The database is busy or locked by another process.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="178"/>
+        <location filename="../content/error_page.cpp" line="179"/>
         <source>Can&apos;t Open Database</source>
         <translation>Can&apos;t Open Database</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="179"/>
+        <location filename="../content/error_page.cpp" line="180"/>
         <source>The path to the database does not exist or FundOS does not have permission to access it.</source>
         <translation>The path to the database does not exist or FundOS does not have permission to access it.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="188"/>
+        <location filename="../content/error_page.cpp" line="189"/>
         <source>Database is Read-Only</source>
         <translation>Database is Read-Only</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="189"/>
+        <location filename="../content/error_page.cpp" line="190"/>
         <source>FundOS does not have permission to write to the database. Check your filesystem permissions.</source>
         <translation>FundOS does not have permission to write to the database. Check your filesystem permissions.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="198"/>
+        <location filename="../content/error_page.cpp" line="199"/>
         <source>Out of Memory</source>
         <translation>Out of Memory</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="199"/>
+        <location filename="../content/error_page.cpp" line="200"/>
         <source>FundOS ran out of memory while opening the database.</source>
         <translation>FundOS ran out of memory while opening the database.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="208"/>
+        <location filename="../content/error_page.cpp" line="209"/>
         <source>Disk Full</source>
         <translation>Disk Full</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="209"/>
+        <location filename="../content/error_page.cpp" line="210"/>
         <source>There is not enough disk space to open the database.</source>
         <translation>There is not enough disk space to open the database.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="226"/>
-        <location filename="../content/error_page.cpp" line="258"/>
+        <location filename="../content/error_page.cpp" line="229"/>
+        <location filename="../content/error_page.cpp" line="261"/>
         <source>Internal Error</source>
         <translation>Internal Error</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="227"/>
-        <location filename="../content/error_page.cpp" line="259"/>
+        <location filename="../content/error_page.cpp" line="230"/>
+        <location filename="../content/error_page.cpp" line="262"/>
         <source>An unexpected internal error occurred. Please report this issue.</source>
         <translation>An unexpected internal error occurred. Please report this issue.</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="245"/>
+        <location filename="../content/error_page.cpp" line="248"/>
         <source>Storage Error</source>
         <translation>Storage Error</translation>
     </message>
     <message>
-        <location filename="../content/error_page.cpp" line="246"/>
+        <location filename="../content/error_page.cpp" line="249"/>
         <source>The database encountered an unrecoverable error.</source>
         <translation>The database encountered an unrecoverable error.</translation>
     </message>
@@ -892,119 +892,119 @@ Reconcile transactions to resolve this discrepancy.</translation>
 <context>
     <name>LocalePage</name>
     <message>
-        <location filename="../content/locale_page.cpp" line="25"/>
+        <location filename="../content/locale_page.cpp" line="26"/>
         <source>&amp;Cancel</source>
         <translation>&amp;Cancel</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="30"/>
+        <location filename="../content/locale_page.cpp" line="31"/>
         <source>&amp;Save</source>
         <translation>&amp;Save</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="47"/>
+        <location filename="../content/locale_page.cpp" line="48"/>
         <source>CURRENCY</source>
         <translation>CURRENCY</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="59"/>
+        <location filename="../content/locale_page.cpp" line="60"/>
         <source>SCALE</source>
         <translation>SCALE</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="67"/>
+        <location filename="../content/locale_page.cpp" line="68"/>
         <source>SYMBOL</source>
         <translation>SYMBOL</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="72"/>
+        <location filename="../content/locale_page.cpp" line="73"/>
         <source>THOUSANDS SEPARATOR</source>
         <translation>THOUSANDS SEPARATOR</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="77"/>
-        <location filename="../content/locale_page.cpp" line="136"/>
+        <location filename="../content/locale_page.cpp" line="78"/>
+        <location filename="../content/locale_page.cpp" line="137"/>
         <source>DECIMAL SEPARATOR</source>
         <translation>DECIMAL SEPARATOR</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="82"/>
-        <location filename="../content/locale_page.cpp" line="144"/>
+        <location filename="../content/locale_page.cpp" line="83"/>
+        <location filename="../content/locale_page.cpp" line="145"/>
         <source>SYMBOL POSITION</source>
         <translation>SYMBOL POSITION</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="84"/>
-        <location filename="../content/locale_page.cpp" line="146"/>
+        <location filename="../content/locale_page.cpp" line="85"/>
+        <location filename="../content/locale_page.cpp" line="147"/>
         <source>Before</source>
         <translation>Before</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="85"/>
-        <location filename="../content/locale_page.cpp" line="147"/>
+        <location filename="../content/locale_page.cpp" line="86"/>
+        <location filename="../content/locale_page.cpp" line="148"/>
         <source>After</source>
         <translation>After</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="91"/>
+        <location filename="../content/locale_page.cpp" line="92"/>
         <source>NEGATIVE FORMAT</source>
         <translation>NEGATIVE FORMAT</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="93"/>
+        <location filename="../content/locale_page.cpp" line="94"/>
         <source>Leading minus</source>
         <translation>Leading minus</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="94"/>
+        <location filename="../content/locale_page.cpp" line="95"/>
         <source>Trailing minus</source>
         <translation>Trailing minus</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="95"/>
+        <location filename="../content/locale_page.cpp" line="96"/>
         <source>Parentheses</source>
         <translation>Parentheses</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="96"/>
+        <location filename="../content/locale_page.cpp" line="97"/>
         <source>Angle brackets</source>
         <translation>Angle brackets</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="112"/>
-        <location filename="../content/locale_page.cpp" line="159"/>
+        <location filename="../content/locale_page.cpp" line="113"/>
+        <location filename="../content/locale_page.cpp" line="160"/>
         <source>PREVIEW</source>
         <translation>PREVIEW</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="124"/>
+        <location filename="../content/locale_page.cpp" line="125"/>
         <source>PERCENTAGE</source>
         <translation>PERCENTAGE</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="141"/>
+        <location filename="../content/locale_page.cpp" line="142"/>
         <source>Space around number</source>
         <translation>Space around number</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="194"/>
-        <location filename="../content/locale_page.cpp" line="201"/>
+        <location filename="../content/locale_page.cpp" line="205"/>
+        <location filename="../content/locale_page.cpp" line="212"/>
         <source>Custom</source>
         <translation>Custom</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="276"/>
+        <location filename="../content/locale_page.cpp" line="287"/>
         <source>Invalid Input</source>
         <translation>Invalid Input</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="276"/>
+        <location filename="../content/locale_page.cpp" line="287"/>
         <source>Currency symbol is limited to 4 characters (some international characters count as 2 or more)</source>
         <translation>Currency symbol is limited to 4 characters (some international characters count as 2 or more)</translation>
     </message>
     <message>
-        <location filename="../content/locale_page.cpp" line="350"/>
-        <location filename="../content/locale_page.cpp" line="375"/>
+        <location filename="../content/locale_page.cpp" line="361"/>
+        <location filename="../content/locale_page.cpp" line="386"/>
         <source>(incomplete)</source>
         <translation>(incomplete)</translation>
     </message>
@@ -1394,25 +1394,25 @@ Would you like to recover it now? This will replace your current database.</tran
     </message>
     <message>
         <location filename="../shell/status_bar.cpp" line="99"/>
-        <location filename="../shell/status_bar.cpp" line="140"/>
+        <location filename="../shell/status_bar.cpp" line="142"/>
         <source>database is read-only</source>
         <translation>database is read-only</translation>
     </message>
     <message>
         <location filename="../shell/status_bar.cpp" line="101"/>
-        <location filename="../shell/status_bar.cpp" line="142"/>
+        <location filename="../shell/status_bar.cpp" line="144"/>
         <source>out of memory</source>
         <translation>out of memory</translation>
     </message>
     <message>
         <location filename="../shell/status_bar.cpp" line="103"/>
-        <location filename="../shell/status_bar.cpp" line="144"/>
+        <location filename="../shell/status_bar.cpp" line="146"/>
         <source>disk full</source>
         <translation>disk full</translation>
     </message>
     <message>
         <location filename="../shell/status_bar.cpp" line="105"/>
-        <location filename="../shell/status_bar.cpp" line="154"/>
+        <location filename="../shell/status_bar.cpp" line="156"/>
         <source>unexpected internal error</source>
         <translation>unexpected internal error</translation>
     </message>
@@ -1438,73 +1438,73 @@ Would you like to recover it now? This will replace your current database.</tran
         <translation>database busy, try again</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="146"/>
+        <location filename="../shell/status_bar.cpp" line="148"/>
         <source>constraint violation</source>
         <translation>constraint violation</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="148"/>
+        <location filename="../shell/status_bar.cpp" line="150"/>
         <source>record not found</source>
         <translation>record not found</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="150"/>
+        <location filename="../shell/status_bar.cpp" line="152"/>
         <source>incorrect API usage</source>
         <translation>incorrect API usage</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="152"/>
+        <location filename="../shell/status_bar.cpp" line="154"/>
         <source>attempted illegal operation</source>
         <translation>attempted illegal operation</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="204"/>
+        <location filename="../shell/status_bar.cpp" line="206"/>
         <source>123.4 MB</source>
         <extracomment>Minimum width is derived from the longest value we expect to display (a size like &quot;123.4 MB&quot;). The label starts empty; on_db_info fills it once the database thread responds.</extracomment>
         <translation>123.4 MB</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="216"/>
+        <location filename="../shell/status_bar.cpp" line="218"/>
         <source>DATABASE</source>
         <translation>DATABASE</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="217"/>
+        <location filename="../shell/status_bar.cpp" line="219"/>
         <source>size on disk</source>
         <translation>size on disk</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="218"/>
+        <location filename="../shell/status_bar.cpp" line="220"/>
         <source>journal mode</source>
         <translation>journal mode</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="219"/>
+        <location filename="../shell/status_bar.cpp" line="221"/>
         <source>schema version</source>
         <translation>schema version</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="222"/>
+        <location filename="../shell/status_bar.cpp" line="224"/>
         <source>ACTIONS</source>
         <translation>ACTIONS</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="223"/>
+        <location filename="../shell/status_bar.cpp" line="225"/>
         <source>Manage Locale...</source>
         <translation>Manage Locale...</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="224"/>
+        <location filename="../shell/status_bar.cpp" line="226"/>
         <source>Back Up Database...</source>
         <translation>Back Up Database...</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="227"/>
+        <location filename="../shell/status_bar.cpp" line="229"/>
         <source>Restore from Backup...</source>
         <translation>Restore from Backup...</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="231"/>
+        <location filename="../shell/status_bar.cpp" line="233"/>
         <source>Replace with New Database...</source>
         <translation>Replace with New Database...</translation>
     </message>
