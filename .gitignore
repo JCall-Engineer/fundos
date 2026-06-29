@@ -3,3 +3,6 @@ out
 CMakeUserPresets.json
 _CPack_Packages
 *.msi
+*.deb
+*.sh
+*.tar.*

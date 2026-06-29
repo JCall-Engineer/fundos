@@ -43,13 +43,36 @@ if(WINDEPLOYQT)
 	)
 endif()
 
-install(TARGETS fundos
-	RUNTIME DESTINATION .
-)
+if(WIN32)
+	install(TARGETS fundos
+		RUNTIME DESTINATION .
+	)
+else()
+	install(TARGETS fundos
+		RUNTIME DESTINATION bin
+	)
+endif()
 
-install(FILES "${CMAKE_SOURCE_DIR}/LICENSE"
-	DESTINATION .
-)
+if(WIN32)
+	install(FILES "${CMAKE_SOURCE_DIR}/LICENSE"
+		DESTINATION .
+	)
+else()
+	install(FILES "${CMAKE_SOURCE_DIR}/LICENSE"
+		DESTINATION share/doc/fundos
+	)
+	install(FILES "${CMAKE_SOURCE_DIR}/res/fundos.desktop"
+		DESTINATION share/applications
+	)
+	install(FILES "${CMAKE_SOURCE_DIR}/res/icon.svg"
+		DESTINATION share/icons/hicolor/scalable/apps
+		RENAME fundos.svg
+	)
+	install(FILES "${CMAKE_SOURCE_DIR}/res/icon.png"
+		DESTINATION share/icons/hicolor/256x256/apps
+		RENAME fundos.png
+	)
+endif()
 
 if(WINDEPLOYQT)
 	install(CODE "

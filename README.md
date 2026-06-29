@@ -150,7 +150,7 @@ The resulting `FundOS-<version>-win64.msi` will appear in the repository root.
 
 ### Linux
 
-> **Note:** Linux support has been confirmed on Arch Linux. Build reports for other distributions are welcome.
+> **Note:** Linux support has been confirmed on Ubuntu and Arch Linux, including deb packaging on Ubuntu. Fedora support is in progress. Build reports for other distributions are welcome.
 
 Install Qt 6 via your package manager:
 
@@ -158,6 +158,7 @@ Install Qt 6 via your package manager:
   - `qt6-base-dev`
   - `qt6-tools-dev`
   - `libqt6svg6-dev`
+  - `libxkbcommon-dev`
   - `libvulkan-dev`
 - Fedora (dnf)
   - `qt6-qtbase-devel`
@@ -172,6 +173,14 @@ If you install Qt via the Qt Online Installer instead, CMake may not find it aut
 In that case, create a `CMakeUserPresets.json` modeled on `CMakeUserPresets.json.example` and set `CMAKE_PREFIX_PATH` to your Qt installation directory, typically `~/Qt/6.x.x/gcc_64`.
 
 After you have taken care of the dependencies you can complete the [common building procedure](#common-building-procedure).
+
+#### Building a deb Package
+
+```bash
+cpack --config out/build/linux-release/CPackConfig.cmake -G DEB
+```
+
+The resulting `FundOS-<version>-Linux.deb` will appear in the repository root.
 
 ### Common Building Procedure
 

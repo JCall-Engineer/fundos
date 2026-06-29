@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=FundOS
+Comment=Envelope budgeting for people who want to own their data
+Exec=fundos
+Icon=fundos
+Categories=Office;Finance;
+Terminal=false

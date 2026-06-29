@@ -51,6 +51,8 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS
 )
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "JCall.Engineer <jcall.engineer@gmail.com>")
 set(CPACK_DEBIAN_PACKAGE_SECTION "finance")
+set(CPACK_BINARY_DEB "ON")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_SOURCE_DIR}/res/postinst")
 
 # WiX-specific
 set(CPACK_WIX_UPGRADE_GUID        "3ba342f2-c11c-4d98-ae18-cd65770fd8c9")
