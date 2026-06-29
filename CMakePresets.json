@@ -2,30 +2,6 @@
 	"version": 6,
 	"configurePresets": [
 		{
-			"name": "android-debug",
-			"binaryDir": "${sourceDir}/out/build/android-debug",
-			"cacheVariables": {
-				"FUNDOS_PLATFORM": "android",
-				"CMAKE_BUILD_TYPE": "Debug",
-				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/android-debug/bin",
-				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": "${sourceDir}/out/android-debug/bin",
-				"CMAKE_ARCHIVE_OUTPUT_DIRECTORY": "${sourceDir}/out/android-debug/lib"
-			}
-		},
-		{
-			"name": "android-release",
-			"binaryDir": "${sourceDir}/out/build/android-release",
-			"cacheVariables": {
-				"FUNDOS_PLATFORM": "android",
-				"CMAKE_BUILD_TYPE": "Release",
-				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/android-release/bin",
-				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": "${sourceDir}/out/android-release/bin",
-				"CMAKE_ARCHIVE_OUTPUT_DIRECTORY": "${sourceDir}/out/android-release/lib"
-			}
-		},
-		{
 			"name": "linux-debug",
 			"binaryDir": "${sourceDir}/out/build/linux-debug",
 			"cacheVariables": {
@@ -75,16 +51,6 @@
 		}
 	],
 	"buildPresets": [
-		{
-			"name": "android-debug",
-			"configurePreset": "android-debug",
-			"configuration": "Debug"
-		},
-		{
-			"name": "android-release",
-			"configurePreset": "android-release",
-			"configuration": "Release"
-		},
 		{
 			"name": "linux-debug",
 			"configurePreset": "linux-debug",
