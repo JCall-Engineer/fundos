@@ -1,6 +1,7 @@
 #include <optional>
 #include "date_picker.hpp"
 #include "theme.hpp"
+#include <QApplication>
 #include <QCalendar>
 #include <QGridLayout>
 #include <QHBoxLayout>

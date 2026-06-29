@@ -214,7 +214,7 @@ LocalePage::LocalePage(
 
 	// Connect custom percentage controls to preview
 	connect(percentage_decimal_separator,      &QLineEdit::textChanged,         this, &LocalePage::on_percentage_preview);
-	connect(percentage_has_space,              &QCheckBox::checkStateChanged,   this, [this](auto) { on_percentage_preview(); });
+	connect(percentage_has_space,              &QCheckBox::stateChanged,        this, [this](auto) { on_percentage_preview(); });
 	connect(percentage_symbol_placement_group, &QButtonGroup::idClicked,        this, [this](int)  { on_percentage_preview(); });
 
 	// Apply initial currency selection

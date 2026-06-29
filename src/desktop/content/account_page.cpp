@@ -499,7 +499,7 @@ void AccountPage::on_history(fundos::db::result<fundos::db::transaction_history>
 
 						QMessageBox dialog(this);
 						dialog.setWindowTitle(tr("Delete Transaction"));
-						dialog.setText(tr("Delete \"%1\"?").arg(widget->record.record.memo));
+						dialog.setText(tr("Delete \"%1\"?").arg(QString::fromStdString(widget->record.record.memo)));
 						dialog.setInformativeText(tr("This transaction will be permanently removed from your register."));
 						dialog.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
 						dialog.setDefaultButton(QMessageBox::Cancel);
