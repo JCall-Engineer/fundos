@@ -86,14 +86,14 @@ Automated tests are deferred: committing real financial data is a non-starter, a
 
 ## Roadmap
 
-| Phase | Deliverable                        | Status         | Notes                                                                    |
-|-------|------------------------------------|----------------|--------------------------------------------------------------------------|
-| 1     | Core library                       | ✅ Complete    |                                                                          |
-| 2     | Qt desktop app                     | ✅ Complete    | Windows and Linux; macOS testing pending access to a Mac                 |
-| 3     | Release packaging                  | 🚧 In Progress | MSI (Windows), .deb (Debian), RPM (Fedora/RHEL/openSUSE)                 |
-| 4     | Android app (Kotlin)               | 🔲 Planned     |                                                                          |
-| 5     | iOS app (Swift)                    | 🔲 Planned     | Pending access to a Mac                                                  |
-| 6     | Cross-device sync                  | 🔲 Planned     | Significant undertaking; design TBD                                      |
+| Phase | Deliverable                        | Status         | Notes                                                                          |
+|-------|------------------------------------|----------------|--------------------------------------------------------------------------------|
+| 1     | Core library                       | ✅ Complete    |                                                                                |
+| 2     | Qt desktop app                     | ✅ Complete    | Windows and Linux; macOS testing pending access to a Mac                       |
+| 3     | Release packaging                  | ✅ Complete*   | MSI (Windows), .deb (Debian/Ubuntu), RPM (Fedora); *macOS pkg not yet packaged |
+| 4     | Android app (Kotlin)               | 🔲 Planned     |                                                                                |
+| 5     | iOS app (Swift)                    | 🔲 Planned     | Pending access to a Mac                                                        |
+| 6     | Cross-device sync                  | 🔲 Planned     | Significant undertaking; design TBD                                            |
 
 ## Architecture
 
@@ -150,7 +150,7 @@ The resulting `FundOS-<version>-win64.msi` will appear in the repository root.
 
 ### Linux
 
-> **Note:** Linux support has been confirmed on Ubuntu and Arch Linux, including deb packaging on Ubuntu. Fedora support is in progress. Build reports for other distributions are welcome.
+> **Note:** Linux support has been confirmed on Ubuntu, Fedora, and Arch Linux, including deb packaging on Ubuntu and rpm packaging on Fedora. Build reports for other distributions are welcome.
 
 Install Qt 6 via your package manager:
 
@@ -178,7 +178,7 @@ After you have taken care of the dependencies you can complete the [common build
 
 #### Building a Linux Package
 
-Replace `<FORMAT>` with the format for your distribution:
+To package FundOS for your distribution, first build a release version, then run the following command with the `<FORMAT>` for your distribution:
 
 ```bash
 cpack --config out/build/linux-release/CPackConfig.cmake -G <FORMAT>
