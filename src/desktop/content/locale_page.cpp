@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRadioButton>
@@ -177,13 +178,23 @@ LocalePage::LocalePage(
 	// Cancel is only meaningful when locales already exist; first-time setup must commit.
 	setup_layout(current_currency.has_value() && current_percentage.has_value());
 
-	// Defaults to USD and English percentage for first-time setup.
-	// TODO: consider deriving defaults from QLocale::system() instead.
+	// Defaults to system locale on first time setup using USD and English percentage as a fallback
+	QLocale system_locale = QLocale::system();
 	if (!current_currency.has_value()) {
 		current_currency = currency_locale(&fundos::currency_locale::locales.named.USD);
+		QString currency_code = system_locale.currencySymbol(QLocale::CurrencyIsoCode);
+		const auto* detected = fundos::currency_locale::get_locale(currency_code.toStdString());
+		if (detected != nullptr) {
+			current_currency = currency_locale(detected);
+		}
 	}
 	if (!current_percentage.has_value()) {
 		current_percentage = percentage_locale(&fundos::percentage_locale::locales.named.en);
+		QString language = QLocale::languageToCode(QLocale::system().language());
+		const auto* detected = fundos::percentage_locale::get_locale(language.toStdString());
+		if (detected != nullptr) {
+			current_percentage = percentage_locale(detected);
+		}
 	}
 
 	// Populate currency combo
