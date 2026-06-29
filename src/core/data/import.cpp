@@ -267,7 +267,7 @@ void import_transaction(parse_context& context, std::vector<imported_transaction
 				}
 				break;
 			}
-			case ofx_token::type::closing_tag:
+			case ofx_token::type::closing_tag: {
 				if (in.text != close_on) {
 					context.output.set_error(error::malformed);
 					return;
@@ -300,6 +300,11 @@ void import_transaction(parse_context& context, std::vector<imported_transaction
 				imported.record = std::move(transaction);
 				transactions.push_back(std::move(imported));
 				return;
+			}
+			case ofx_token::type::leaf_value:
+			case ofx_token::type::eof:
+				context.output.set_error(error::malformed);
+				return;
 		}
 		in = extract_token(context);
 	}
@@ -319,6 +324,12 @@ void import_transactions(parse_context& context, bank_account& account, std::str
 				break;
 			case ofx_token::type::closing_tag:
 				if (in.text == close_on) { return; }
+				break;
+			case ofx_token::type::leaf_value:
+				break;
+			case ofx_token::type::eof:
+				context.output.set_error(error::malformed);
+				return;
 		}
 		in = extract_token(context);
 	}
@@ -365,6 +376,10 @@ void import_ledger(parse_context& context, bank_account& account, std::string_vi
 					context.output.add_warning(warning::missing_date);
 				}
 				return;
+			case ofx_token::type::leaf_value:
+			case ofx_token::type::eof:
+				context.output.set_error(error::malformed);
+				return;
 		}
 		in = extract_token(context);
 	}
@@ -405,6 +420,11 @@ void import_bank(parse_context& context, std::string_view close_on) {
 					return;
 				}
 				break;
+			case ofx_token::type::leaf_value:
+				break;
+			case ofx_token::type::eof:
+				context.output.set_error(error::malformed);
+				return;
 		}
 		in = extract_token(context);
 	}

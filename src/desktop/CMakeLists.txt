@@ -31,6 +31,9 @@ qt_add_resources(fundos "icons"
 target_include_directories(fundos PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fundos PRIVATE Qt6::Concurrent Qt6::Widgets Qt6::Svg Qt6::SvgWidgets core)
 
+# The core library is careful to zero initialize integral types, and relying on default constructors is pervasive in this codebase
+target_compile_options(fundos PRIVATE -Wno-missing-field-initializers)
+
 find_program(WINDEPLOYQT windeployqt HINTS "${Qt6_DIR}/../../../bin")
 
 if(WINDEPLOYQT)

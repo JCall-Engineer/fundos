@@ -104,7 +104,7 @@ CREATE INDEX idx_allocations_transaction_id ON allocations(transaction_id);
 CREATE INDEX idx_allocations_fund_id ON allocations(fund_id);
 )sql", // version 1
 };
-static constexpr std::size_t schema_latest_version = std::size(schema_migrations);
+static constexpr int64_t schema_latest_version = std::size(schema_migrations);
 
 struct statement_slot {
 	sqlite3_stmt* statement = nullptr;

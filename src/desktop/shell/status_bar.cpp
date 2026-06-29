@@ -136,6 +136,8 @@ void StatusBar::set_status(const fundos::db::outcome& outcome) {
 			return apply_error(disconnected(tr("database is corrupted")));
 		case error::unavailable:
 			return apply_error(disconnected(tr("database busy, try again")));
+		case error::inaccessible: // would not trigger a db::outcome but a db::status
+			FUNDOS_UNREACHABLE();
 		case error::readonly:
 			return apply_error(disconnected(tr("database is read-only")));
 		case error::out_of_memory:

@@ -24,7 +24,7 @@ public:
 	/// True once locales, accounts, funds, and budgets have all been received at least once.
 	/// Gates whether a mutation should fire created() (the first time everything is present) vs refreshed() (already had a full context, this is just an update).
 	/// See on_*_received below.
-	const bool is_ready() const {
+	bool is_ready() const {
 		return (current_context
 			&& current_context->currency
 			&& current_context->percentage

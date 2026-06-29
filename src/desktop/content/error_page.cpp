@@ -140,6 +140,7 @@ ErrorPage::ErrorPage(const fundos::db::status& status, QWidget* parent) : QWidge
 					break;
 				}
 				case schema::none:         // immediately should trigger creation
+				case schema::created:      // would not cause a schema error
 				case schema::current:      // would not cause a schema_error
 				case schema::migrated:     // should overwrite the schema_error
 				case schema::older_schema: // would have triggered code::needs_migration
@@ -220,6 +221,8 @@ ErrorPage::ErrorPage(const fundos::db::status& status, QWidget* parent) : QWidge
 				case error::rejected:    // only returned by query methods
 					FUNDOS_UNREACHABLE();
 					break;
+				case error::interrupted: // We do not currently use interrupts // TODO: Update this if this ever changes
+					FUNDOS_REQUIRE(false, "Interrupt was triggered");
 				case error::internal: {
 					// Something really bad happened and the system is in an unpredictable state: no reasonable action can be taken
 					setup_open_error(

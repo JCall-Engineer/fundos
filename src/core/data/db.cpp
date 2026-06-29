@@ -1851,12 +1851,12 @@ int64_t db::size_on_disk() {
 	return page_count * page_size;
 }
 
-db::db(outcome err) : connection(nullptr), managed(false), prepared(nullptr) {
+db::db(outcome err) : managed(false), connection(nullptr), prepared(nullptr) {
 	open_result.result = status::code::sqlite3_error;
 	open_result.sqlite3_outcome = std::move(err);
 }
-db::db(sqlite3* c)                  : connection(c), managed(false), prepared(new schema::db_prepared_statements()) { open(); }
-db::db(sqlite3* c, owns_connection) : connection(c), managed(true),  prepared(new schema::db_prepared_statements()) { open(); }
+db::db(sqlite3* c)                  : managed(false), connection(c), prepared(new schema::db_prepared_statements()) { open(); }
+db::db(sqlite3* c, owns_connection) : managed(true),  connection(c), prepared(new schema::db_prepared_statements()) { open(); }
 db::~db() { close(); }
 
 #pragma endregion
