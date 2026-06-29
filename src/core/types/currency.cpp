@@ -1,4 +1,5 @@
 #include "currency.hpp"
+#include <algorithm>
 #include <format>
 
 namespace fundos {
