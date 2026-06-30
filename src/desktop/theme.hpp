@@ -118,6 +118,7 @@ static inline QLabel* header_label(const QString& content, QWidget* parent = nul
 	QFont font = label->font();
 	font.setPointSize(font.pointSize() + 2);
 	font.setLetterSpacing(QFont::AbsoluteSpacing, 1.5);
+	font.setBold(true);
 	label->setFont(font);
 	QPalette palette = label->palette();
 	palette.setColor(QPalette::WindowText, theme::text_muted);
