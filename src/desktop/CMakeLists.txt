@@ -3,6 +3,8 @@ find_package(Qt6 REQUIRED COMPONENTS Concurrent Widgets Svg SvgWidgets LinguistT
 set(CMAKE_AUTOMOC ON)
 
 configure_file(app.rc.in app.rc)
+configure_file(version.hpp.in version.hpp)
+
 file(GLOB_RECURSE qt_sources CONFIGURE_DEPENDS *.cpp *.hpp)
 qt_add_executable(fundos WIN32
 	${qt_sources}

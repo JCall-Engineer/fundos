@@ -1,0 +1,8 @@
+#pragma once
+
+namespace version {
+
+/// The version string shown to users and compared during update checks.
+static constexpr char desktop[] = "@FUNDOS_DESKTOP_VERSION@";
+
+} // namespace version
