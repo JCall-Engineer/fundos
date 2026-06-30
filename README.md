@@ -62,22 +62,9 @@ When a bank amends a transaction, the correction is stored as a new row linked t
 
 ## Project Status
 
-Core library and Qt desktop app complete; packaging in progress.
-
-| Area                                        | Status                                      |
-|---------------------------------------------|---------------------------------------------|
-| Underlying types (currency, datetime, etc.) | ✅ Complete                                 |
-| Numeric locale support                      | ✅ Complete                                 |
-| String translations                         | 🤝 Contributions welcome                    |
-| Database schema                             | ✅ Complete                                 |
-| Transaction recording and correction        | ✅ Complete                                 |
-| OFX import (1.x SGML and 2.x XML)           | ✅ Complete                                 |
-| Account, fund, and budget CRUD              | ✅ Complete                                 |
-| Fund allocation                             | ✅ Complete                                 |
-| Budget automation logic                     | ✅ Complete                                 |
-| Transaction history (filtered views)        | ✅ Complete                                 |
-| Fund history (filtered views)               | ✅ Complete                                 |
-| Qt desktop app                              | ✅ Complete                                 |
+Core library, Qt desktop app, and release packaging are complete for Windows and Linux.
+macOS users can build from source; see [building](#building).
+String translations for additional languages are welcome; see [TRANSLATING.md](TRANSLATING.md).
 
 ### OFX Testing
 
@@ -86,14 +73,13 @@ Automated tests are deferred: committing real financial data is a non-starter, a
 
 ## Roadmap
 
-| Phase | Deliverable                        | Status         | Notes                                                                          |
-|-------|------------------------------------|----------------|--------------------------------------------------------------------------------|
-| 1     | Core library                       | ✅ Complete    |                                                                                |
-| 2     | Qt desktop app                     | ✅ Complete    | Windows and Linux; macOS testing pending access to a Mac                       |
-| 3     | Release packaging                  | ✅ Complete*   | MSI (Windows), .deb (Debian/Ubuntu), RPM (Fedora); *macOS pkg not yet packaged |
-| 4     | Android app (Kotlin)               | 🔲 Planned     |                                                                                |
-| 5     | iOS app (Swift)                    | 🔲 Planned     | Pending access to a Mac                                                        |
-| 6     | Cross-device sync                  | 🔲 Planned     | Significant undertaking; design TBD                                            |
+| Phase | Deliverable                        | Status         | Notes                                             |
+|-------|------------------------------------|----------------|---------------------------------------------------|
+| 1     | Core library                       | ✅ Complete    |                                                   |
+| 2     | Qt desktop app                     | ✅ Complete    | Windows and Linux; macOS can be built from source |
+| 3     | Release packaging                  | ✅ Complete    | MSI (Windows), .deb (Debian/Ubuntu), RPM (Fedora) |
+| 4     | Android app (Kotlin)               | 🔲 Planned     |                                                   |
+| 5     | Cross-device sync                  | 🔲 Planned     | Significant undertaking; design TBD               |
 
 ## Architecture
 
@@ -146,7 +132,7 @@ cmake --install out/build/windows-release --prefix out/install/windows
 cpack --config out/build/windows-release/CPackConfig.cmake -G WIX
 ```
 
-The resulting `FundOS-<version>-win64.msi` will appear in the repository root.
+The resulting `FundOS-<version>-win64.msi` will appear in `out/packages/<version>/`.
 
 ### Linux
 
@@ -189,7 +175,7 @@ cpack --config out/build/linux-release/CPackConfig.cmake -G <FORMAT>
 | Debian/Ubuntu | `DEB`  | `FundOS-<version>-Linux.deb` |
 | Fedora        | `RPM`  | `FundOS-<version>-Linux.rpm` |
 
-The resulting package will appear in the repository root.
+The resulting package will appear in `out/packages/<version>/`.
 
 ### Common Building Procedure
 
@@ -199,12 +185,12 @@ FundOS uses CMake with presets. Building is a two-step process: a **configure** 
 
 ### Presets
 
-| Configure preset        | Build preset            | Platform | Notes                                    |
-|-------------------------|-------------------------|----------|------------------------------------------|
-| `windows-debug-local`   | `windows-debug-local`   | Windows  | Requires `CMakeUserPresets.json`         |
-| `windows-release-local` | `windows-release-local` | Windows  | Requires `CMakeUserPresets.json`         |
-| `linux-debug`           | `linux-debug`           | Linux    |                                          |
-| `linux-release`         | `linux-release`         | Linux    |                                          |
+| Configure preset        | Build preset            | Platform | Notes                            |
+|-------------------------|-------------------------|----------|----------------------------------|
+| `windows-debug-local`   | `windows-debug-local`   | Windows  | Requires `CMakeUserPresets.json` |
+| `windows-release-local` | `windows-release-local` | Windows  | Requires `CMakeUserPresets.json` |
+| `linux-debug`           | `linux-debug`           | Linux    |                                  |
+| `linux-release`         | `linux-release`         | Linux    |                                  |
 
 ```powershell
 cmake --preset <configure-preset>
