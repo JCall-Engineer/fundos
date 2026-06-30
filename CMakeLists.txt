@@ -18,7 +18,11 @@ if(MSVC)
 		/Zc:throwingNew  # Assume operator new throws
 	)
 else()
-	add_compile_options(-Wall -Wextra)
+	add_compile_options(
+		-Wall
+		-Wextra
+		-Wno-missing-field-initializers # The core library is careful to zero initialize integral types, and relying on default constructors is pervasive in this codebase
+	)
 endif()
 
 set(VALID_PLATFORMS desktop android)
