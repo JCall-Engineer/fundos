@@ -1342,169 +1342,231 @@ Would you like to recover it now? This will replace your current database.</tran
 <context>
     <name>StatusBar</name>
     <message>
-        <location filename="../shell/status_bar.cpp" line="37"/>
+        <location filename="../shell/status_bar.cpp" line="72"/>
         <source>ready</source>
         <translation>ready</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="71"/>
+        <location filename="../shell/status_bar.cpp" line="118"/>
+        <location filename="../shell/status_bar.cpp" line="147"/>
+        <location filename="../shell/status_bar.cpp" line="159"/>
+        <location filename="../shell/status_bar.cpp" line="308"/>
+        <source>Check for Updates</source>
+        <translation>Check for Updates</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="123"/>
+        <source>Could not reach the update server. Check your connection and try again.</source>
+        <translation>Could not reach the update server. Check your connection and try again.</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="130"/>
+        <location filename="../shell/status_bar.cpp" line="137"/>
+        <source>The update server returned an unexpected response.</source>
+        <translation>The update server returned an unexpected response.</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="148"/>
+        <source>FundOS %1 is available.</source>
+        <translation>FundOS %1 is available.</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="150"/>
+        <source>Download</source>
+        <translation>Download</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="151"/>
+        <source>Later</source>
+        <translation>Later</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="159"/>
+        <source>You are up to date.</source>
+        <translation>You are up to date.</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="177"/>
         <source>migration required</source>
         <translation>migration required</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="73"/>
+        <location filename="../shell/status_bar.cpp" line="179"/>
         <source>db error: null</source>
         <translation>db error: null</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="77"/>
+        <location filename="../shell/status_bar.cpp" line="183"/>
         <source>database requires a newer version of fundos</source>
         <translation>database requires a newer version of fundos</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="79"/>
+        <location filename="../shell/status_bar.cpp" line="185"/>
         <source>database schema is corrupted</source>
         <translation>database schema is corrupted</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="81"/>
+        <location filename="../shell/status_bar.cpp" line="187"/>
         <source>unrecognized database file</source>
         <translation>unrecognized database file</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="83"/>
+        <location filename="../shell/status_bar.cpp" line="189"/>
         <source>schema error code: %1</source>
         <translation>schema error code: %1</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="93"/>
-        <location filename="../shell/status_bar.cpp" line="136"/>
+        <location filename="../shell/status_bar.cpp" line="199"/>
+        <location filename="../shell/status_bar.cpp" line="242"/>
         <source>database is corrupted</source>
         <translation>database is corrupted</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="95"/>
+        <location filename="../shell/status_bar.cpp" line="201"/>
         <source>database unavailable</source>
         <translation>database unavailable</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="97"/>
+        <location filename="../shell/status_bar.cpp" line="203"/>
         <source>could not open the database</source>
         <translation>could not open the database</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="99"/>
-        <location filename="../shell/status_bar.cpp" line="142"/>
+        <location filename="../shell/status_bar.cpp" line="205"/>
+        <location filename="../shell/status_bar.cpp" line="248"/>
         <source>database is read-only</source>
         <translation>database is read-only</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="101"/>
-        <location filename="../shell/status_bar.cpp" line="144"/>
+        <location filename="../shell/status_bar.cpp" line="207"/>
+        <location filename="../shell/status_bar.cpp" line="250"/>
         <source>out of memory</source>
         <translation>out of memory</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="103"/>
-        <location filename="../shell/status_bar.cpp" line="146"/>
+        <location filename="../shell/status_bar.cpp" line="209"/>
+        <location filename="../shell/status_bar.cpp" line="252"/>
         <source>disk full</source>
         <translation>disk full</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="105"/>
-        <location filename="../shell/status_bar.cpp" line="156"/>
+        <location filename="../shell/status_bar.cpp" line="211"/>
+        <location filename="../shell/status_bar.cpp" line="262"/>
         <source>unexpected internal error</source>
         <translation>unexpected internal error</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="107"/>
+        <location filename="../shell/status_bar.cpp" line="213"/>
         <source>db error code: %1</source>
         <translation>db error code: %1</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="122"/>
+        <location filename="../shell/status_bar.cpp" line="228"/>
         <source>disconnected: %1</source>
         <extracomment>Status bar error; %1 is the error description, shown when database connection is lost</extracomment>
         <translation>disconnected: %1</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="134"/>
+        <location filename="../shell/status_bar.cpp" line="240"/>
         <source>database is not ready</source>
         <translation>database is not ready</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="138"/>
+        <location filename="../shell/status_bar.cpp" line="244"/>
         <source>database busy, try again</source>
         <translation>database busy, try again</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="148"/>
+        <location filename="../shell/status_bar.cpp" line="254"/>
         <source>constraint violation</source>
         <translation>constraint violation</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="150"/>
+        <location filename="../shell/status_bar.cpp" line="256"/>
         <source>record not found</source>
         <translation>record not found</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="152"/>
+        <location filename="../shell/status_bar.cpp" line="258"/>
         <source>incorrect API usage</source>
         <translation>incorrect API usage</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="154"/>
+        <location filename="../shell/status_bar.cpp" line="260"/>
         <source>attempted illegal operation</source>
         <translation>attempted illegal operation</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="206"/>
+        <location filename="../shell/status_bar.cpp" line="286"/>
+        <location filename="../shell/status_bar.cpp" line="288"/>
+        <source>About FundOS</source>
+        <translation>About FundOS</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="289"/>
+        <source>FundOS %1
+Envelope budgeting for people who want to own their data.</source>
+        <translation>FundOS %1
+Envelope budgeting for people who want to own their data.</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="300"/>
+        <source>Checking for updates...</source>
+        <translation>Checking for updates...</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="318"/>
+        <source>Documentation</source>
+        <translation>Documentation</translation>
+    </message>
+    <message>
+        <location filename="../shell/status_bar.cpp" line="358"/>
         <source>123.4 MB</source>
         <extracomment>Minimum width is derived from the longest value we expect to display (a size like &quot;123.4 MB&quot;). The label starts empty; on_db_info fills it once the database thread responds.</extracomment>
         <translation>123.4 MB</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="218"/>
+        <location filename="../shell/status_bar.cpp" line="370"/>
         <source>DATABASE</source>
         <translation>DATABASE</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="219"/>
+        <location filename="../shell/status_bar.cpp" line="371"/>
         <source>size on disk</source>
         <translation>size on disk</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="220"/>
+        <location filename="../shell/status_bar.cpp" line="372"/>
         <source>journal mode</source>
         <translation>journal mode</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="221"/>
+        <location filename="../shell/status_bar.cpp" line="373"/>
         <source>schema version</source>
         <translation>schema version</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="224"/>
+        <location filename="../shell/status_bar.cpp" line="376"/>
         <source>ACTIONS</source>
         <translation>ACTIONS</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="225"/>
+        <location filename="../shell/status_bar.cpp" line="377"/>
         <source>Manage Locale...</source>
         <translation>Manage Locale...</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="226"/>
+        <location filename="../shell/status_bar.cpp" line="378"/>
         <source>Back Up Database...</source>
         <translation>Back Up Database...</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="229"/>
+        <location filename="../shell/status_bar.cpp" line="381"/>
         <source>Restore from Backup...</source>
         <translation>Restore from Backup...</translation>
     </message>
     <message>
-        <location filename="../shell/status_bar.cpp" line="233"/>
+        <location filename="../shell/status_bar.cpp" line="385"/>
         <source>Replace with New Database...</source>
         <translation>Replace with New Database...</translation>
     </message>

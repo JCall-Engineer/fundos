@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Concurrent Widgets Svg SvgWidgets LinguistTools)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Svg SvgWidgets LinguistTools)
 
 set(CMAKE_AUTOMOC ON)
 
@@ -30,8 +30,11 @@ qt_add_resources(fundos "icons"
 	FILES ${qt_icons}
 )
 
-target_include_directories(fundos PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(fundos PRIVATE Qt6::Concurrent Qt6::Widgets Qt6::Svg Qt6::SvgWidgets core)
+target_include_directories(fundos PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_CURRENT_BINARY_DIR}
+)
+target_link_libraries(fundos PRIVATE Qt6::Concurrent Qt6::Network Qt6::Widgets Qt6::Svg Qt6::SvgWidgets core)
 
 find_program(WINDEPLOYQT windeployqt HINTS "${Qt6_DIR}/../../../bin")
 

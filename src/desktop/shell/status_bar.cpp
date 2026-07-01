@@ -1,12 +1,31 @@
+#include <tuple>
 #include "status_bar.hpp"
 #include "theme.hpp"
+#include "version.hpp"
+#include "components/loading_spinner.hpp"
+#include <QDesktopServices>
 #include <QHBoxLayout>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMenu>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QUrl>
 #include <QWidgetAction>
+
+void StatusBar::open_download() {
+	QDesktopServices::openUrl(QUrl("https://fundos.jcall.engineer/download"));
+}
+
+void StatusBar::open_guide() {
+	QDesktopServices::openUrl(QUrl("https://fundos.jcall.engineer/guide"));
+}
 
 StatusBar::StatusBar(QWidget* parent) : QStatusBar(parent) {
 	setSizeGripEnabled(false);
 	setStyleSheet("QStatusBar::item { border: none; }");
+
+	network = new QNetworkAccessManager(this);
 
 	auto* left = new QWidget(this);
 	auto* layout = new QHBoxLayout(left);
@@ -30,6 +49,22 @@ StatusBar::StatusBar(QWidget* parent) : QStatusBar(parent) {
 	connect(db_button, &QToolButton::clicked, this, &StatusBar::show_db_menu);
 	addPermanentWidget(db_button);
 	left->setFixedHeight(db_button->height());
+
+	download_button = new QToolButton(this);
+	download_button->setIcon(theme::colored_svg_icon(":/icons/download.svg", theme::text, theme::toolbar_icon_size));
+	download_button->setAutoRaise(true);
+	download_button->setFixedSize(theme::toolbar_icon_size);
+	connect(download_button, &QToolButton::clicked, this, &StatusBar::open_download);
+	addPermanentWidget(download_button);
+	download_button->setVisible(false);
+	check_for_updates(false);
+
+	help_button = new QToolButton(this);
+	help_button->setIcon(theme::colored_svg_icon(":/icons/help.svg", theme::text, theme::toolbar_icon_size));
+	help_button->setAutoRaise(true);
+	help_button->setFixedSize(theme::toolbar_icon_size);
+	connect(help_button, &QToolButton::clicked, this, &StatusBar::show_help_menu);
+	addPermanentWidget(help_button);
 }
 
 void StatusBar::apply_ready() {
@@ -53,6 +88,77 @@ void StatusBar::apply_error(const QString& message) {
 	} else {
 		apply_yellow(message);
 	}
+}
+
+static bool is_newer(const QString& remote, const QString& local) {
+	auto parse = [](const QString& version) -> std::tuple<int, int, int> {
+		const QStringList parts = version.split('.');
+		if (parts.size() != 3) {
+			return { 0, 0, 0 };
+		}
+		return { parts[0].toInt(), parts[1].toInt(), parts[2].toInt() };
+	};
+	return parse(remote) > parse(local);
+}
+
+void StatusBar::check_for_updates(bool user_initiated) {
+	if (current_update_state == update_state::checking) {
+		return;
+	}
+	current_update_state = update_state::checking;
+	update_reply = network->get(QNetworkRequest(QUrl("https://fundos.jcall.engineer/version.json")));
+	connect(update_reply, &QNetworkReply::finished, this, [this, user_initiated]() {
+		update_reply->deleteLater();
+
+		auto fail = [&](const QString& message) {
+			download_button->setVisible(false);
+			current_update_state = update_state::idle;
+			update_reply = nullptr;
+			if (user_initiated) {
+				QMessageBox::warning(this, tr("Check for Updates"), message);
+			}
+		};
+
+		if (update_reply->error() != QNetworkReply::NoError) {
+			return fail(tr("Could not reach the update server. Check your connection and try again."));
+		}
+
+		const QJsonDocument document = QJsonDocument::fromJson(update_reply->readAll());
+		update_reply = nullptr;
+
+		if (!document.isObject() || !document.object().contains("version")) {
+			return fail(tr("The update server returned an unexpected response."));
+		}
+
+		const QString remote = document.object().value("version").toString();
+		const QString local  = QString::fromLatin1(version::desktop);
+
+		if (remote.isEmpty()) {
+			return fail(tr("The update server returned an unexpected response."));
+		}
+
+		current_update_state = is_newer(remote, local) ? update_state::available : update_state::up_to_date;
+
+		download_button->setVisible(false);
+		if (current_update_state == update_state::available) {
+			download_button->setVisible(true);
+			if (user_initiated) {
+				QMessageBox box(this);
+				box.setWindowTitle(tr("Check for Updates"));
+				box.setText(tr("FundOS %1 is available.").arg(remote));
+				box.setIcon(QMessageBox::Information);
+				QPushButton* download_action = box.addButton(tr("Download"), QMessageBox::AcceptRole);
+				box.addButton(tr("Later"), QMessageBox::RejectRole);
+				box.exec();
+				if (box.clickedButton() == download_action) {
+					open_download();
+				}
+			}
+			emit update_available();
+		} else if (user_initiated) {
+			QMessageBox::information(this, tr("Check for Updates"), tr("You are up to date."));
+		}
+	});
 }
 
 void StatusBar::on_db_open(fundos::db::status open_result) {
@@ -172,6 +278,52 @@ static QString format_size(int64_t bytes) {
 		}
 	}
 	return QString::number(bytes) + " B";
+}
+
+void StatusBar::show_help_menu() {
+	auto* menu = new QMenu(this);
+
+	auto* about_action = menu->addAction(tr("About FundOS"));
+	connect(about_action, &QAction::triggered, this, [this]() {
+		QMessageBox::about(this, tr("About FundOS"),
+			tr("FundOS %1\nEnvelope budgeting for people who want to own their data.")
+				.arg(QString::fromLatin1(version::desktop))
+		);
+	});
+
+	menu->addSeparator();
+
+	auto* checking_widget = new QWidget(menu);
+	auto* checking_layout = new QHBoxLayout(checking_widget);
+	checking_layout->setContentsMargins(16, 4, 16, 4);
+	checking_layout->addWidget(new LoadingSpinner(checking_widget));
+	checking_layout->addWidget(new QLabel(tr("Checking for updates..."), checking_widget));
+	auto* checking_action = new QWidgetAction(menu);
+	checking_action->setDefaultWidget(checking_widget);
+	checking_action->setEnabled(false);
+	checking_action->setVisible(current_update_state == update_state::checking);
+	menu->addAction(checking_action);
+
+	if (current_update_state != update_state::checking) {
+		auto* check_action = menu->addAction(tr("Check for Updates"));
+		connect(check_action, &QAction::triggered, this, [this, check_action, checking_action]() {
+			check_action->setVisible(false);
+			checking_action->setVisible(true);
+			check_for_updates(true);
+		});
+	}
+
+	menu->addSeparator();
+
+	auto* guide_action = menu->addAction(tr("Documentation"));
+	connect(guide_action, &QAction::triggered, this, &StatusBar::open_guide);
+
+	menu->adjustSize();
+
+	// Position menu so its bottom-right corner aligns with the button's top-right corner.
+	menu->exec(help_button->mapToGlobal(
+		help_button->rect().topRight() - QPoint(menu->width(), menu->height())
+	));
 }
 
 void StatusBar::show_db_menu() {
