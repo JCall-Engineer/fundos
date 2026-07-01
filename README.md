@@ -89,7 +89,6 @@ FundOS is structured as a thin-client architecture across all platforms:
 core/        C++20 library: all business logic, SQLite persistence, OFX parsing
 desktop/     Qt application (Windows, Linux, macOS)
 android/     Kotlin application via JNI/NDK
-ios/         Swift application (planned)
 ```
 
 All business logic lives in `core`.
