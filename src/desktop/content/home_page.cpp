@@ -256,6 +256,7 @@ void HomePage::make_funds(const std::vector<fundos::fund>& funds) {
 		connect(database, &AppDatabase::fund_balance_received, row, [this, row, id](int64_t fund_id, fundos::db::result<fundos::currency> amount) {
 			if (amount && fund_id == id) {
 				row->set_amount(theme::currency_label(amount.value(), app_coordinator->context()->currency_locale().info()), amount.value().minor_units != 0);
+				row->on_toggle(show_closed_funds);
 			}
 		});
 		emit fund_balance_requested(id);
