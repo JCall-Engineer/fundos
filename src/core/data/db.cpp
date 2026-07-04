@@ -1184,8 +1184,7 @@ db::outcome db::save_allocations(transaction& saving, std::vector<allocation>& a
 	std::string fund_finder_sql = R"sql(
 		SELECT COUNT(*)
 		FROM funds
-		WHERE closed_at IS NULL
-		AND id IN (
+		WHERE id IN (
 	)sql";
 
 	for (auto& entry : allocations) {
@@ -1235,7 +1234,7 @@ db::outcome db::save_allocations(transaction& saving, std::vector<allocation>& a
 				sqlite3_bind_int64(stmt, static_cast<int>(i) + 1, allocations[i].fund_id);
 			}
 		},
-		"Attempted to allocate to one or more funds which do not exist or are closed"
+		"Attempted to allocate to one or more funds which do not exist"
 	);
 	if (!find_funds) { return find_funds; }
 
