@@ -78,7 +78,9 @@ void PhaseWidget::build_header_row(QVBoxLayout* layout, const QString& kind_labe
 
 	fund_combo = new QComboBox(header);
 	for (const auto& fund : app_coordinator->context()->funds()) {
-		fund_combo->addItem(QString::fromStdString(fund.name), static_cast<qlonglong>(fund.id()));
+		if (!fund.closed_at.has_value()) {
+			fund_combo->addItem(QString::fromStdString(fund.name), static_cast<qlonglong>(fund.id()));
+		}
 	}
 
 	auto* add_button = new QPushButton(tr("Add target"), header);

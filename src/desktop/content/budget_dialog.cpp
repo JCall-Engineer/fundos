@@ -65,12 +65,14 @@ BudgetDialog::BudgetDialog(AppCoordinator* coordinator, fundos::budget opening, 
 
 		overflow_combo = new QComboBox(controls);
 		for (const auto& fund : app_coordinator->context()->funds()) {
-			overflow_combo->addItem(
-				QString::fromStdString(fund.name),
-				static_cast<qlonglong>(fund.id())
-			);
-			if (fund.id() == record.overflow_fund) {
-				overflow_combo->setCurrentIndex(overflow_combo->count() - 1);
+			if (!fund.closed_at.has_value()) {
+				overflow_combo->addItem(
+					QString::fromStdString(fund.name),
+					static_cast<qlonglong>(fund.id())
+				);
+				if (fund.id() == record.overflow_fund) {
+					overflow_combo->setCurrentIndex(overflow_combo->count() - 1);
+				}
 			}
 		}
 		// New budgets have no overflow_fund set; initialize it to the combo's default selection.

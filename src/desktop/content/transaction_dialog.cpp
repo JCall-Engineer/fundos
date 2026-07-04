@@ -210,7 +210,11 @@ void TransactionDialog::populate_justified_by_combo() {
 		if (adjusted_balances.count(fund.id())) {
 			item->balance = adjusted_balances.at(fund.id());
 		}
-		model->appendRow(item);
+		if (!fund.closed_at.has_value() || (item->balance.has_value()) && item->balance->minor_units != 0) {
+			model->appendRow(item);
+		} else {
+			delete item;
+		}
 	}
 
 	auto* budget_header = new FundComboHeader(tr("With budget"));
@@ -245,7 +249,11 @@ void TransactionDialog::populate_add_fund_combo() {
 		if (adjusted_balances.count(fund.id())) {
 			item->balance = adjusted_balances.at(fund.id());
 		}
-		model->appendRow(item);
+		if (!fund.closed_at.has_value() || (item->balance.has_value()) && item->balance->minor_units != 0) {
+			model->appendRow(item);
+		} else {
+			delete item;
+		}
 	}
 
 	add_fund_combo->setModel(model);
