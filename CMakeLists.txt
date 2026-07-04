@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 project(fundos LANGUAGES C CXX)
-set(FUNDOS_DESKTOP_VERSION 1.0.0)
+set(FUNDOS_DESKTOP_VERSION 1.0.1)
 set(FUNDOS_DISPLAY_NAME  "FundOS")
 set(FUNDOS_VENDOR        "JCall.Engineer")
 set(FUNDOS_DESCRIPTION   "Envelope budgeting for people who want to own their data")
