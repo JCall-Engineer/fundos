@@ -210,7 +210,7 @@ void TransactionDialog::populate_justified_by_combo() {
 		if (adjusted_balances.count(fund.id())) {
 			item->balance = adjusted_balances.at(fund.id());
 		}
-		if (!fund.closed_at.has_value() || (item->balance.has_value()) && item->balance->minor_units != 0) {
+		if (!fund.closed_at.has_value() || (item->balance.has_value() && item->balance->minor_units != 0)) {
 			model->appendRow(item);
 		} else {
 			delete item;
@@ -249,7 +249,7 @@ void TransactionDialog::populate_add_fund_combo() {
 		if (adjusted_balances.count(fund.id())) {
 			item->balance = adjusted_balances.at(fund.id());
 		}
-		if (!fund.closed_at.has_value() || (item->balance.has_value()) && item->balance->minor_units != 0) {
+		if (!fund.closed_at.has_value() || (item->balance.has_value() && item->balance->minor_units != 0)) {
 			model->appendRow(item);
 		} else {
 			delete item;
