@@ -2,6 +2,14 @@
 
 All notable changes to FundOS are documented here.
 
+## [1.0.1] — 2026-07-03
+
+### Fixed
+
+- Funds with a balance not appearing on initial home page load
+- Closed funds appearing in the transaction dialog and budget editor combo boxes even without a balance
+- Closed funds being blocked from allocation, preventing users from saving a transaction against them; closed funds are now a cosmetic convenience only
+
 ## [1.0.0] — 2026-06-30
 
 ### Added
