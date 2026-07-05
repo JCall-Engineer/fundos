@@ -52,7 +52,7 @@ public:
 		out_of_memory,   // potentially transient error
 		disk_full,       // potentially transient error
 		constraint,      // either a FOREIGN KEY or UNIQUE violation
-		not_found,       // query did not yield resulting data
+		not_found,       // query did not yield any data
 		bad_request,     // incorrect API usage
 		rejected,        // data does not satisfy preconditions
 		interrupted,     // sqlite3_interrupt was called, most likely from fundos::db::interrupt
