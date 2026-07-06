@@ -1,6 +1,13 @@
+<!-- markdownlint-disable MD024 -->
 # Changelog
 
 All notable changes to FundOS are documented here.
+
+## [1.0.2] — 2026-07-06
+
+### Fixed
+
+- Ledger balance checkpoints displayed out of order in account history, causing bank-balance rows to appear interleaved with the wrong transactions and produce spurious discrepancy rows
 
 ## [1.0.1] — 2026-07-03
 

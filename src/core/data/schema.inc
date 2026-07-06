@@ -407,7 +407,7 @@ struct statements {
 		SELECT id, amount, date_as_of
 		FROM import_ledger_balances
 		WHERE account_id = ? AND date_as_of BETWEEN ? AND ?
-		ORDER BY date_as_of
+		ORDER BY date_as_of DESC
 	)sql" };
 
 	statement_slot get_transaction_allocations { .sql = R"sql(
