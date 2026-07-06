@@ -270,17 +270,17 @@ Reconcile transactions to resolve this discrepancy.</translation>
         <translation>Overflow fund</translation>
     </message>
     <message>
-        <location filename="../content/budget_dialog.cpp" line="82"/>
+        <location filename="../content/budget_dialog.cpp" line="84"/>
         <source>Fixed phase</source>
         <translation>Fixed phase</translation>
     </message>
     <message>
-        <location filename="../content/budget_dialog.cpp" line="83"/>
+        <location filename="../content/budget_dialog.cpp" line="85"/>
         <source>Percentage phase</source>
         <translation>Percentage phase</translation>
     </message>
     <message>
-        <location filename="../content/budget_dialog.cpp" line="100"/>
+        <location filename="../content/budget_dialog.cpp" line="102"/>
         <source>Phases</source>
         <translation>Phases</translation>
     </message>
@@ -1271,47 +1271,47 @@ Would you like to recover it now? This will replace your current database.</tran
         <translation>Percentage phase</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="84"/>
+        <location filename="../components/phase_widget.cpp" line="86"/>
         <source>Add target</source>
         <translation>Add target</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="90"/>
+        <location filename="../components/phase_widget.cpp" line="92"/>
         <source>Remove phase</source>
         <translation>Remove phase</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="104"/>
+        <location filename="../components/phase_widget.cpp" line="106"/>
         <source>Fund</source>
         <translation>Fund</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="105"/>
+        <location filename="../components/phase_widget.cpp" line="107"/>
         <source>Amount</source>
         <translation>Amount</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="106"/>
+        <location filename="../components/phase_widget.cpp" line="108"/>
         <source>Cap</source>
         <translation>Cap</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="107"/>
+        <location filename="../components/phase_widget.cpp" line="109"/>
         <source>Overdraw</source>
         <translation>Overdraw</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="115"/>
+        <location filename="../components/phase_widget.cpp" line="117"/>
         <source>Percentage</source>
         <translation>Percentage</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="190"/>
+        <location filename="../components/phase_widget.cpp" line="192"/>
         <source>none</source>
         <translation>none</translation>
     </message>
     <message>
-        <location filename="../components/phase_widget.cpp" line="222"/>
+        <location filename="../components/phase_widget.cpp" line="224"/>
         <source>Remove target</source>
         <translation>Remove target</translation>
     </message>
@@ -1645,27 +1645,27 @@ Envelope budgeting for people who want to own their data.</translation>
         <translation>By fund</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="216"/>
+        <location filename="../content/transaction_dialog.cpp" line="220"/>
         <source>With budget</source>
         <translation>With budget</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="231"/>
+        <location filename="../content/transaction_dialog.cpp" line="235"/>
         <source>Select a fund to add...</source>
         <translation>Select a fund to add...</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="309"/>
+        <location filename="../content/transaction_dialog.cpp" line="317"/>
         <source>Unknown fund</source>
         <translation>Unknown fund</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="498"/>
+        <location filename="../content/transaction_dialog.cpp" line="506"/>
         <source>Allocation mismatch</source>
         <translation>Allocation mismatch</translation>
     </message>
     <message>
-        <location filename="../content/transaction_dialog.cpp" line="499"/>
+        <location filename="../content/transaction_dialog.cpp" line="507"/>
         <source>The allocated amount must equal the transaction amount before saving.</source>
         <translation>The allocated amount must equal the transaction amount before saving.</translation>
     </message>
