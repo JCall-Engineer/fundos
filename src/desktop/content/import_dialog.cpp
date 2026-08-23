@@ -439,6 +439,11 @@ void ImportDialog::show_transaction_page() {
 			card_grid->addWidget(existing_memo_label,              7, 1, 1, 1);
 			card_grid->addWidget(existing_memo,                    7, 2, 1, 2);
 
+			card_grid->setColumnStretch(0, 0);
+			card_grid->setColumnStretch(1, 0);
+			card_grid->setColumnStretch(2, 1); // memo date and amount values stretch to fill available space, the rest shrink to minimum
+			card_grid->setColumnStretch(3, 0);
+
 			CardWidgets card_widgets = CardWidgets{
 				.card                   = card,
 				.status_matched_label   = status_matched_label,
