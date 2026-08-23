@@ -1131,7 +1131,7 @@ TEST(DbQuery, FundHistory_Basic) {
 		EXPECT_EQ(history.value().transactions[0].allocated.amount, currency{99});
 		EXPECT_EQ(history.value().transactions[0].fund_balance, currency{274});
 	}
- 
+
 	{ // transaction 3
 		EXPECT_EQ(history.value().transactions[1].record.id(), 3);
 		EXPECT_EQ(history.value().transactions[1].record.account_id, 1);
@@ -1547,7 +1547,7 @@ TEST(DbQuery, PerformImport_InsertsNewTransaction) {
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM transactions"), 3); // txn + previous_import + fresh_import, matched_import updates previous_import
 	EXPECT_TRUE(transaction_exists(connection, txn, txn.id()));
 	EXPECT_TRUE(transaction_exists(connection, previous_import, previous_import_id));
-	
+
 	fundos::transaction expected_fresh;
 	expected_fresh.account_id     = checking.id();             // the import process sets account_id from the target account
 	expected_fresh.amount         = fresh_import.amount;

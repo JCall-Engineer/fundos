@@ -1114,8 +1114,8 @@ db::outcome db::perform_import(import::pending_import& pending) {
 						saving.memo = matched.memo;
 					}
 
-					if (matched.account_id != account.account_id){ return outcome(error::bad_request, "Matched transaction belongs to a different account"); }
-					if (matched.amount     != importing.amount)  { return outcome(error::bad_request, "Matched transaction has a different amount"); }
+					if (matched.account_id != account.account_id) { return outcome(error::bad_request, "Matched transaction belongs to a different account"); }
+					if (matched.amount     != importing.amount)   { return outcome(error::bad_request, "Matched transaction has a different amount"); }
 					if (matched.fitid) {
 						if (matched.fitid          != importing.fitid)          { return outcome(error::bad_request, "Matched transaction has a different fitid"); }
 						if (matched.correct_action != importing.correct_action) { return outcome(error::bad_request, "Matched transaction has a different correct action"); }
