@@ -66,20 +66,27 @@ namespace import {
 struct imported_transaction {
 	enum class memo_choice : uint8_t {
 		prefer_existing,
-		prefer_importing,
+		prefer_name,
+		prefer_memo,
 	};
 
 	/// Controls which memo is committed; only meaningful when a match is set.
-	memo_choice memo = memo_choice::prefer_existing;
+	memo_choice choice = memo_choice::prefer_existing;
 
-	/// Populated by the importer
-	/// @note importer must ensure fitid and cleared are populated
-	transaction record;
+	std::string fitid;
+	datetime date_cleared;
+	currency amount;
+
+	std::string name;
+	std::string memo;
+
+	std::optional<std::string> corrects_fitid;
+	std::optional<transaction::correction_type> correct_action;
 
 	/// Returns true if match was found by fitid — the match is definitive and cannot be changed.
 	/// fitid is a bank-issued unique identifier, so this match is closer to ground truth than any
 	/// heuristic candidate match; allowing a user override here would let them create inconsistent data.
-	bool is_definitive_match() const { return match_ != nullptr && match_->fitid == record.fitid; }
+	bool is_definitive_match() const { return match_ != nullptr && match_->fitid == fitid; }
 
 	/// Match suggestions are initialized by db::prepare_import, can be adjusted by the user if not definitive.
 	/// @return false (and does nothing) if this transaction already has a definitive fitid match.
@@ -123,8 +130,8 @@ struct bank_account {
 		for (const auto& candidate : candidates) {
 			if (claimed.contains(&candidate)) { continue; }
 			if (candidate.fitid) { continue; } // Should never trigger: db::prepare_import (the only populator of candidates) always claims fitid'd candidates already.
-			if (candidate.amount != subject.record.amount) { continue; }
-			if (subject.record.correct_action.has_value() && candidate.corrects_id.has_value()) { continue; }
+			if (candidate.amount != subject.amount) { continue; }
+			if (subject.correct_action.has_value() && candidate.corrects_id.has_value()) { continue; }
 			view.push_back(&candidate);
 		}
 		return view;
@@ -137,7 +144,7 @@ struct bank_account {
 			candidates.begin(),
 			candidates.end(),
 			[&txn](const fundos::transaction& candidate) {
-				return !candidate.fitid && candidate.amount == txn.record.amount;
+				return !candidate.fitid && candidate.amount == txn.amount;
 			}
 		);
 	}

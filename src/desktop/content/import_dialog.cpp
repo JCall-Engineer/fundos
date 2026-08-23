@@ -36,7 +36,7 @@ QString ImportDialog::warning_message(fundos::import::warning type, int32_t coun
 
 ImportDialog::ImportDialog(AppCoordinator* coordinator, QWidget* parent) : QDialog(parent), app_coordinator(coordinator) {
 	setWindowTitle(tr("Import from Bank"));
-	setMinimumWidth(600);
+	setMinimumWidth(800);
 
 	layout = new QVBoxLayout(this);
 
@@ -224,10 +224,11 @@ void ImportDialog::show_account_page(fundos::import::bank_account* bank_account)
 	auto* preview = new QListWidget(page);
 	preview->setFixedHeight(150);
 	for (const auto& imported : bank_account->transactions) {
-		//: List preview row: transaction memo followed by amount (e.g. "LITTLE CAESARS — $7.58")
-		preview->addItem(tr("%1 — %2", "memo followed by amount")
-			.arg(QString::fromStdString(imported.record.memo))
-			.arg(QString::fromStdString(imported.record.amount.to_string(app_coordinator->context()->currency_locale().info()))));
+		//: List preview row: transaction memo followed by amount (e.g. "LITTLE CAESARS (UNCATEGORIZED) — $7.58")
+		preview->addItem(tr("%1 (%2) — %3", "name (memo) — amount")
+			.arg(QString::fromStdString(imported.name))
+			.arg(QString::fromStdString(imported.memo))
+			.arg(QString::fromStdString(imported.amount.to_string(app_coordinator->context()->currency_locale().info()))));
 	}
 
 	auto* prompt = new QLabel(tr("Assign bank account \"%1\" to:").arg(QString::fromStdString(bank_account->acct_id)), page);
@@ -292,7 +293,8 @@ void ImportDialog::show_transaction_page() {
 	auto* vbox          = new QVBoxLayout(page);
 	auto* bulk_row      = new QHBoxLayout();
 	auto* use_existing  = new QPushButton(tr("Use All &Existing Memos"), page);
-	auto* use_imported  = new QPushButton(tr("Use All &Imported Memos"), page);
+	auto* use_names     = new QPushButton(tr("Use All Imported &Names"), page);
+	auto* use_memos     = new QPushButton(tr("Use All Imported &Memos"), page);
 	auto* show_all      = new QCheckBox(tr("Show &All Transactions"), page);
 	auto* list_header   = theme::header_label(tr("Transactions with potential matches in your register:"), page);
 	auto* scroll        = new QScrollArea(page);
@@ -303,7 +305,8 @@ void ImportDialog::show_transaction_page() {
 	auto* finish        = new QPushButton(tr("&Finish"), page);
 
 	bulk_row->addWidget(use_existing);
-	bulk_row->addWidget(use_imported);
+	bulk_row->addWidget(use_names);
+	bulk_row->addWidget(use_memos);
 	bulk_row->addStretch();
 	bulk_row->addWidget(show_all);
 
@@ -324,7 +327,8 @@ void ImportDialog::show_transaction_page() {
 		QLabel*       existing_date;
 		QLabel*       existing_memo;
 		QRadioButton* radio_existing;
-		QRadioButton* radio_importing;
+		QRadioButton* radio_name;
+		QRadioButton* radio_memo;
 		QWidget*      memo_row;
 		bool          has_decision;
 	};
@@ -366,18 +370,19 @@ void ImportDialog::show_transaction_page() {
 
 			auto* importing_hbox = new QHBoxLayout();
 			auto* importing_label = new QLabel(tr("Importing"), card);
-			//: Transaction date as reported by the bank; em dash shown when date is unavailable
 			auto* importing_date  = new QLabel(
-				txn.record.date_cleared
-					? QDateTime::fromMSecsSinceEpoch(txn.record.date_cleared->milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat))
-					: tr("—", "date unavailable"),
+				QDateTime::fromMSecsSinceEpoch(txn.date_cleared.milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat)),
 				card
 			);
-			auto* importing_memo  = new QLabel(QString::fromStdString(txn.record.memo), card);
+			auto* importing_name  = new QLabel(QString::fromStdString(txn.name), card);
+			importing_name->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+			importing_name->setWordWrap(false);
+			auto* importing_memo  = new QLabel(QString::fromStdString(txn.memo), card);
 			importing_memo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 			importing_memo->setWordWrap(false);
 			importing_hbox->addWidget(importing_label);
 			importing_hbox->addWidget(importing_date);
+			importing_hbox->addWidget(importing_name);
 			importing_hbox->addWidget(importing_memo);
 			importing_hbox->addStretch();
 
@@ -395,29 +400,46 @@ void ImportDialog::show_transaction_page() {
 			// Footer row
 			auto* footer_row    = new QHBoxLayout();
 			auto* amount_label  = new QLabel(
-				tr("Amount: %1").arg(QString::fromStdString(txn.record.amount.to_string(app_coordinator->context()->currency_locale().info()))),
+				tr("Amount: %1").arg(QString::fromStdString(txn.amount.to_string(app_coordinator->context()->currency_locale().info()))),
 				card
 			);
-			auto* memo_widget   = new QWidget(card);
-			auto* memo_hbox     = new QHBoxLayout(memo_widget);
-			auto* memo_label    = new QLabel(tr("Use Memo"), memo_widget);
-			auto* radio_existing  = new QRadioButton(tr("Existing"), memo_widget);
-			auto* radio_importing = new QRadioButton(tr("Importing"), memo_widget);
-			auto* button_group  = new QButtonGroup(memo_widget);
+			auto* memo_widget    = new QWidget(card);
+			auto* memo_hbox      = new QHBoxLayout(memo_widget);
+			auto* memo_label     = new QLabel(tr("Use Memo"), memo_widget);
+			auto* radio_existing = new QRadioButton(tr("Existing"), memo_widget);
+			auto* radio_name     = new QRadioButton(tr("Imported Name"), memo_widget);
+			auto* radio_memo     = new QRadioButton(tr("Imported Memo"), memo_widget);
+			auto* button_group   = new QButtonGroup(memo_widget);
 
 			button_group->addButton(radio_existing,  static_cast<int>(memo_choice::prefer_existing));
-			button_group->addButton(radio_importing, static_cast<int>(memo_choice::prefer_importing));
+			button_group->addButton(radio_name, static_cast<int>(memo_choice::prefer_name));
+			button_group->addButton(radio_memo, static_cast<int>(memo_choice::prefer_memo));
 
-			(txn.memo == memo_choice::prefer_existing ? radio_existing : radio_importing)->setChecked(true);
+			if (!has_match && txn.choice == memo_choice::prefer_existing) {
+				txn.choice = memo_choice::prefer_name;
+			}
+
+			switch (txn.choice) {
+				case memo_choice::prefer_existing:
+					radio_existing->setChecked(true);
+					break;
+				case memo_choice::prefer_name:
+					radio_name->setChecked(true);
+					break;
+				case memo_choice::prefer_memo:
+					radio_memo->setChecked(true);
+					break;
+			}
 			memo_widget->setVisible(has_match);
 
 			memo_hbox->addWidget(memo_label);
 			memo_hbox->addWidget(radio_existing);
-			memo_hbox->addWidget(radio_importing);
+			memo_hbox->addWidget(radio_name);
+			memo_hbox->addWidget(radio_memo);
 			memo_hbox->setContentsMargins(0, 0, 0, 0);
 
 			connect(button_group, &QButtonGroup::idClicked, this, [&txn](int id) {
-				txn.memo = static_cast<memo_choice>(id);
+				txn.choice = static_cast<memo_choice>(id);
 			});
 
 			footer_row->addWidget(amount_label);
@@ -505,7 +527,8 @@ void ImportDialog::show_transaction_page() {
 				.existing_date   = existing_date,
 				.existing_memo   = existing_memo,
 				.radio_existing  = radio_existing,
-				.radio_importing = radio_importing,
+				.radio_name      = radio_name,
+				.radio_memo      = radio_memo,
 				.memo_row        = memo_widget,
 				.has_decision    = has_decision,
 			});
@@ -535,23 +558,36 @@ void ImportDialog::show_transaction_page() {
 		for (auto& bank_account : importing->accounts) {
 			for (auto& txn : bank_account.transactions) {
 				if (txn.get_match() != nullptr) {
-					txn.memo = memo_choice::prefer_existing;
+					txn.choice = memo_choice::prefer_existing;
 				}
 			}
 		}
 		for (auto& widgets : *all_cards) {
-			widgets.radio_existing->setChecked(true);
+			if (widgets.radio_existing->isVisible()) {
+				widgets.radio_existing->setChecked(true);
+			}
 		}
 	});
 
-	connect(use_imported, &QPushButton::clicked, this, [this, all_cards]() {
+	connect(use_names, &QPushButton::clicked, this, [this, all_cards]() {
 		for (auto& bank_account : importing->accounts) {
 			for (auto& txn : bank_account.transactions) {
-				txn.memo = memo_choice::prefer_importing;
+				txn.choice = memo_choice::prefer_name;
 			}
 		}
 		for (auto& widgets : *all_cards) {
-			widgets.radio_importing->setChecked(true);
+			widgets.radio_name->setChecked(true);
+		}
+	});
+
+	connect(use_memos, &QPushButton::clicked, this, [this, all_cards]() {
+		for (auto& bank_account : importing->accounts) {
+			for (auto& txn : bank_account.transactions) {
+				txn.choice = memo_choice::prefer_memo;
+			}
+		}
+		for (auto& widgets : *all_cards) {
+			widgets.radio_memo->setChecked(true);
 		}
 	});
 

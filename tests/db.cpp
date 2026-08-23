@@ -1439,17 +1439,15 @@ TEST(DbQuery, SaveTransaction_InsertCorrection_TargetWrongAccount) {
 	int64_t previous_import_id = sqlite3_last_insert_rowid(connection); \
 	(void)previous_import_id; \
 	import::imported_transaction matched_import; \
-	matched_import.record.fitid         = previous_import.fitid; \
-	matched_import.record.date_cleared  = previous_import.date_cleared; \
-	matched_import.record.amount        = previous_import.amount; \
-	matched_import.record.date_recorded = previous_import.date_recorded + timedelta::days(3); \
-	matched_import.record.memo    = "New Memo"; \
+	matched_import.fitid         = *previous_import.fitid; \
+	matched_import.date_cleared  = *previous_import.date_cleared; \
+	matched_import.amount        =  previous_import.amount; \
+	matched_import.memo    = "New Memo"; \
 	import::imported_transaction fresh_import; \
-	fresh_import.record.fitid         = std::string{"fitid-new"}; \
-	fresh_import.record.date_cleared  = CLOSED_AT + timedelta::days(21); \
-	fresh_import.record.amount        = currency{2000}; \
-	fresh_import.record.date_recorded = datetime{0}; \
-	fresh_import.record.memo          = "Fresh"; \
+	fresh_import.fitid         = std::string{"fitid-new"}; \
+	fresh_import.date_cleared  = CLOSED_AT + timedelta::days(21); \
+	fresh_import.amount        = currency{2000}; \
+	fresh_import.memo          = "Fresh"; \
 	import::pending_import pending; \
 	import::bank_account bank; \
 	bank.acct_id = "checking-123"; \
@@ -1484,8 +1482,8 @@ TEST(DbQuery, PrepareImport_FuzzyMatch) {
 		"INSERT INTO transactions (account_id, amount, date_recorded, memo) "
 		"VALUES ({}, {}, {}, 'Fuzzy Candidate')",
 		checking.id(),
-		fresh_import.record.amount.minor_units,
-		fresh_import.record.date_cleared->milliseconds_since_epoch - timedelta::days(3).milliseconds
+		fresh_import.amount.minor_units,
+		fresh_import.date_cleared.milliseconds_since_epoch - timedelta::days(3).milliseconds
 	);
 	ASSERT_EQ(sqlite3_exec(connection, sql.c_str(), nullptr, nullptr, nullptr), SQLITE_OK);
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
@@ -1497,14 +1495,14 @@ TEST(DbQuery, PrepareImport_FuzzyMatch) {
 TEST(DbQuery, PrepareImport_MissingFitid) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	pending.accounts[0].transactions[0].record.fitid = std::nullopt;
+	pending.accounts[0].transactions[0].fitid = std::string();
 	EXPECT_EQ(database->prepare_import(pending).code, db::error::bad_request);
 }
 
 TEST(DbQuery, PrepareImport_MissingCleared) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	pending.accounts[0].transactions[0].record.date_cleared = std::nullopt;
+	pending.accounts[0].transactions[0].date_cleared = {0};
 	EXPECT_EQ(database->prepare_import(pending).code, db::error::bad_request);
 }
 
@@ -1549,9 +1547,17 @@ TEST(DbQuery, PerformImport_InsertsNewTransaction) {
 	EXPECT_EQ(count_rows(connection, "SELECT COUNT(*) FROM transactions"), 3); // txn + previous_import + fresh_import, matched_import updates previous_import
 	EXPECT_TRUE(transaction_exists(connection, txn, txn.id()));
 	EXPECT_TRUE(transaction_exists(connection, previous_import, previous_import_id));
-	fresh_import.record.account_id    = checking.id();                     // the import process automatically sets account_id
-	fresh_import.record.date_recorded = *fresh_import.record.date_cleared; // the import process takes date_recorded from date_cleared for fresh imports
-	EXPECT_TRUE(transaction_exists(connection, fresh_import.record));
+	
+	fundos::transaction expected_fresh;
+	expected_fresh.account_id     = checking.id();             // the import process sets account_id from the target account
+	expected_fresh.amount         = fresh_import.amount;
+	expected_fresh.date_recorded  = fresh_import.date_cleared; // the import process takes date_recorded from date_cleared for fresh imports
+	expected_fresh.date_cleared   = fresh_import.date_cleared;
+	expected_fresh.fitid          = fresh_import.fitid;
+	expected_fresh.memo           = fresh_import.name;         // unmatched transaction: memo resolution falls back to name
+	expected_fresh.corrects_fitid = fresh_import.corrects_fitid;
+	expected_fresh.correct_action = fresh_import.correct_action;
+	EXPECT_TRUE(transaction_exists(connection, expected_fresh));
 }
 
 TEST(DbQuery, PerformImport_PreservesExistingMemo) {
@@ -1566,9 +1572,9 @@ TEST(DbQuery, PerformImport_UpdatesMatchedTransaction) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
-	pending.accounts[0].transactions[0].memo = fundos::import::imported_transaction::memo_choice::prefer_importing;
+	pending.accounts[0].transactions[0].choice = fundos::import::imported_transaction::memo_choice::prefer_memo;
 	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
-	previous_import.memo = matched_import.record.memo; // prefer_importing replaces memo with the imported value
+	previous_import.memo = matched_import.memo; // prefer_memo replaces memo with the imported value
 	EXPECT_TRUE(transaction_exists(connection, previous_import, previous_import_id));
 }
 
@@ -1602,8 +1608,8 @@ TEST(DbQuery, PerformImport_StaleMatch) {
 TEST(DbQuery, PerformImport_ResolvesCorrections) {
 	FUNDOS_TEST_DB();
 	FUNDOS_SEED_IMPORT();
-	pending.accounts[0].transactions[1].record.corrects_fitid = std::string{"fitid-existing"};
-	pending.accounts[0].transactions[1].record.correct_action = transaction::correction_type::replaces;
+	pending.accounts[0].transactions[1].corrects_fitid = std::string{"fitid-existing"};
+	pending.accounts[0].transactions[1].correct_action = transaction::correction_type::replaces;
 	ASSERT_TRUE(static_cast<bool>(database->prepare_import(pending)));
 	ASSERT_TRUE(static_cast<bool>(database->perform_import(pending)));
 	auto corrects_id = fetch_optional_int64(connection,
@@ -1764,5 +1770,8 @@ TEST(DbQuery, AllocateTransaction_ClosedFund) {
 	alloc.fund_id = groceries.id();
 	alloc.amount = currency{10000};
 	allocations.push_back(alloc);
-	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::rejected);
+
+	// closed_at is a visual anchor only (hides the fund from selection UI);
+	// the database layer does not restrict allocations against closed funds. See 43c1844.
+	EXPECT_EQ(database->save_transaction(txn, allocations).code, db::error::none);
 }

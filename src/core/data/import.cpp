@@ -163,6 +163,7 @@ struct ofx_token {
 		leaf_value,
 		opening_tag,
 		closing_tag,
+		self_closing_tag,
 	};
 	type type = type::leaf_value;
 	std::string text;
@@ -188,6 +189,12 @@ ofx_token extract_token(parse_context& context) {
 			}
 
 			std::getline(context.file, out.text, '>'); // read until '>'
+			if (out.type == ofx_token::type::opening_tag && out.text.ends_with('/')) {
+				out.text.pop_back();
+				out.type = ofx_token::type::self_closing_tag;
+			}
+
+			strip(out.text);
 			upper(out.text);
 			return out;
 		}
@@ -219,8 +226,13 @@ static const std::string_view FITID_TAG  = "FITID";
 static const std::string_view NAME_TAG   = "NAME";
 static const std::string_view MEMO_TAG   = "MEMO";
 void import_transaction(parse_context& context, std::vector<imported_transaction>& transactions, std::string_view close_on) {
-	transaction transaction;
-	std::optional<currency> pending_amount;
+	std::optional<std::string> pending_fitid; // optional so we can validate its presence in the OFX
+	std::optional<datetime> pending_date;     // optional so we can validate its presence in the OFX
+	std::optional<currency> pending_amount;   // optional so we can validate its presence in the OFX
+	std::string pending_name; // not optional since an empty string and a missing string are functionally equivalent
+	std::string pending_memo; // not optional since an empty string and a missing string are functionally equivalent
+	std::optional<std::string> pending_corrects_fitid;                  // optional because it's truly optional
+	std::optional<transaction::correction_type> pending_correct_action; // optional because it's truly optional
 	ofx_token in = extract_token(context);
 	while (in.type != ofx_token::type::eof) {
 		switch (in.type) {
@@ -230,35 +242,34 @@ void import_transaction(parse_context& context, std::vector<imported_transaction
 					context.output.set_error(error::malformed);
 					return;
 				}
-				if (in.text == MEMO_TAG || (in.text == NAME_TAG && transaction.memo.empty())) {
-					transaction.memo = value.text;
+				if (in.text == MEMO_TAG) {
+					pending_memo = std::move(value.text);
+				} else if (in.text == NAME_TAG) {
+					pending_name = std::move(value.text);
 				} else if (in.text == FITID_TAG) {
-					transaction.fitid = value.text;
+					pending_fitid = std::move(value.text);
 				} else if (in.text == AMOUNT_TAG) {
-					auto parsed = currency::from_string(value.text, context.locale);
-					if (!parsed) {
+					pending_amount = currency::from_string(value.text, context.locale);
+					if (!pending_amount) {
 						context.output.add_warning(warning::bad_amount);
 						context.output.add_warning(warning::skipped_transaction);
 						return;
 					}
-					pending_amount = *parsed;
 				} else if (in.text == DATE_TAG) {
-					auto parsed = parse_ofx_datetime(value.text);
-					if (!parsed) {
+					pending_date = parse_ofx_datetime(value.text);
+					if (!pending_date) {
 						context.output.add_warning(warning::bad_date);
 						context.output.add_warning(warning::skipped_transaction);
 						return;
 					}
-					transaction.date_recorded = *parsed;
-					transaction.date_cleared = *parsed;
 				} else if (in.text == CORRECT_FITID_TAG) {
-					transaction.corrects_fitid = value.text;
+					pending_corrects_fitid = std::move(value.text);
 				} else if (in.text == CORRECT_ACTION_TAG) {
 					upper(strip(value.text));
 					if (value.text == CORRECT_REPLACE) {
-						transaction.correct_action = transaction::correction_type::replaces;
+						pending_correct_action = transaction::correction_type::replaces;
 					} else if (value.text == CORRECT_DELETE) {
-						transaction.correct_action = transaction::correction_type::deletes;
+						pending_correct_action = transaction::correction_type::deletes;
 					} else {
 						context.output.add_warning(warning::bad_correction);
 						context.output.add_warning(warning::skipped_transaction);
@@ -269,38 +280,44 @@ void import_transaction(parse_context& context, std::vector<imported_transaction
 			}
 			case ofx_token::type::closing_tag: {
 				if (in.text != close_on) {
-					context.output.set_error(error::malformed);
-					return;
+					break;
 				}
-				if (transaction.fitid == std::nullopt) {
+				if (pending_fitid == std::nullopt || pending_fitid->empty()) {
 					context.output.add_warning(warning::missing_fitid);
 					context.output.add_warning(warning::skipped_transaction);
 					return;
 				}
-				if (transaction.corrects_fitid.has_value() != transaction.correct_action.has_value()) {
+				if (pending_corrects_fitid.has_value() != pending_correct_action.has_value()) {
 					context.output.add_warning(warning::bad_correction);
 					context.output.add_warning(warning::skipped_transaction);
 					return;
 				}
-				if (transaction.date_recorded.milliseconds_since_epoch == 0) {
+				if (!pending_date.has_value() || pending_date->milliseconds_since_epoch == 0) {
 					context.output.add_warning(warning::missing_date);
 					context.output.add_warning(warning::skipped_transaction);
 					return;
 				}
-				bool is_delete = transaction.correct_action == transaction::correction_type::deletes;
-				if (!pending_amount && !is_delete) {
+				bool is_delete = pending_correct_action == transaction::correction_type::deletes;
+				if (!pending_amount.has_value() && !is_delete) {
 					context.output.add_warning(warning::missing_amount);
 					context.output.add_warning(warning::skipped_transaction);
 					return;
 				}
-				if (pending_amount) {
-					transaction.amount = *pending_amount;
-				}
 				imported_transaction imported;
-				imported.record = std::move(transaction);
+				if (pending_amount.has_value()) {
+					imported.amount     = *pending_amount;
+				}
+				imported.fitid          = *pending_fitid;
+				imported.date_cleared   = *pending_date;
+				imported.memo           = std::move(pending_memo);
+				imported.name           = std::move(pending_name);
+				imported.corrects_fitid = std::move(pending_corrects_fitid);
+				imported.correct_action = pending_correct_action;
 				transactions.push_back(std::move(imported));
 				return;
 			}
+			case ofx_token::type::self_closing_tag:
+				break;
 			case ofx_token::type::leaf_value:
 			case ofx_token::type::eof:
 				context.output.set_error(error::malformed);
@@ -325,6 +342,7 @@ void import_transactions(parse_context& context, bank_account& account, std::str
 			case ofx_token::type::closing_tag:
 				if (in.text == close_on) { return; }
 				break;
+			case ofx_token::type::self_closing_tag:
 			case ofx_token::type::leaf_value:
 				break;
 			case ofx_token::type::eof:
@@ -376,6 +394,8 @@ void import_ledger(parse_context& context, bank_account& account, std::string_vi
 					context.output.add_warning(warning::missing_date);
 				}
 				return;
+			case ofx_token::type::self_closing_tag:
+				break;
 			case ofx_token::type::leaf_value:
 			case ofx_token::type::eof:
 				context.output.set_error(error::malformed);
@@ -420,6 +440,7 @@ void import_bank(parse_context& context, std::string_view close_on) {
 					return;
 				}
 				break;
+			case ofx_token::type::self_closing_tag:
 			case ofx_token::type::leaf_value:
 				break;
 			case ofx_token::type::eof:
