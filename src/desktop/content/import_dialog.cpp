@@ -7,6 +7,7 @@
 #include <QtConcurrent>
 #include <QFileDialog>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -36,7 +37,7 @@ QString ImportDialog::warning_message(fundos::import::warning type, int32_t coun
 
 ImportDialog::ImportDialog(AppCoordinator* coordinator, QWidget* parent) : QDialog(parent), app_coordinator(coordinator) {
 	setWindowTitle(tr("Import from Bank"));
-	setMinimumWidth(800);
+	setMinimumWidth(725);
 
 	layout = new QVBoxLayout(this);
 
@@ -288,6 +289,27 @@ void ImportDialog::show_account_page(fundos::import::bank_account* bank_account)
 	adjustSize();
 }
 
+struct CardWidgets {
+	QFrame*       card;
+	QLabel*       status_matched_label;
+	QLabel*       status_unmatched_label;
+	QLabel*       existing_date_label;
+	QLabel*       existing_memo_label;
+	QLabel*       existing_date;
+	QLabel*       existing_memo;
+	QRadioButton* radio_existing;
+	QRadioButton* radio_name;
+	QRadioButton* radio_memo;
+};
+
+static void set_existing_visible(const CardWidgets& card_widgets, bool visible) {
+	card_widgets.existing_date_label->setVisible(visible);
+	card_widgets.existing_memo_label->setVisible(visible);
+	card_widgets.existing_date->setVisible(visible);
+	card_widgets.existing_memo->setVisible(visible);
+	card_widgets.radio_existing->setVisible(visible);
+}
+
 void ImportDialog::show_transaction_page() {
 	auto* page          = new QWidget(this);
 	auto* vbox          = new QVBoxLayout(page);
@@ -295,8 +317,7 @@ void ImportDialog::show_transaction_page() {
 	auto* use_existing  = new QPushButton(tr("Use All &Existing Memos"), page);
 	auto* use_names     = new QPushButton(tr("Use All Imported &Names"), page);
 	auto* use_memos     = new QPushButton(tr("Use All Imported &Memos"), page);
-	auto* show_all      = new QCheckBox(tr("Show &All Transactions"), page);
-	auto* list_header   = theme::header_label(tr("Transactions with potential matches in your register:"), page);
+	auto* list_header   = theme::header_label(tr("Review Transactions:"), page);
 	auto* scroll        = new QScrollArea(page);
 	auto* scroll_widget = new QWidget(scroll);
 	auto* card_layout   = new QVBoxLayout(scroll_widget);
@@ -307,8 +328,6 @@ void ImportDialog::show_transaction_page() {
 	bulk_row->addWidget(use_existing);
 	bulk_row->addWidget(use_names);
 	bulk_row->addWidget(use_memos);
-	bulk_row->addStretch();
-	bulk_row->addWidget(show_all);
 
 	scroll->setMinimumHeight(400);
 	scroll->setWidget(scroll_widget);
@@ -320,18 +339,6 @@ void ImportDialog::show_transaction_page() {
 	button_row->addWidget(finish);
 
 	using memo_choice = fundos::import::imported_transaction::memo_choice;
-
-	struct CardWidgets {
-		QFrame*       card;
-		QWidget*      existing_row;
-		QLabel*       existing_date;
-		QLabel*       existing_memo;
-		QRadioButton* radio_existing;
-		QRadioButton* radio_name;
-		QRadioButton* radio_memo;
-		QWidget*      memo_row;
-		bool          has_decision;
-	};
 
 	auto all_cards = std::make_shared<std::vector<CardWidgets>>();
 	size_t count_transactions = 0;
@@ -346,74 +353,99 @@ void ImportDialog::show_transaction_page() {
 			const bool has_match      = txn.get_match() != nullptr;
 			const bool is_definitive  = txn.is_definitive_match();
 			const bool can_match      = bank_account.has_any_candidates(txn);
-			const bool has_decision   = is_definitive || can_match;
 
-			auto* card        = new QFrame(scroll_widget);
-			auto* card_vbox   = new QVBoxLayout(card);
+			auto* card      = new QFrame(scroll_widget);
+			auto* card_grid = new QGridLayout(card);
 			card->setFrameShape(QFrame::StyledPanel);
 
-			// Middle section
-			auto* middle      = new QWidget(card);
-			auto* middle_vbox = new QVBoxLayout(middle);
-			middle_vbox->setContentsMargins(0, 0, 0, 0);
+			auto* importing_label = theme::header_label(tr("Imported Transaction"), card);
+			auto* importing_amount_label = new QLabel(tr("Amount"), card);
+			auto* importing_date_label   = new QLabel(tr("Date"), card);
+			auto* importing_name_label   = new QLabel(tr("Name"), card);
+			auto* importing_memo_label   = new QLabel(tr("Memo"), card);
 
-			auto* existing_row  = new QWidget(middle);
-			auto* existing_hbox = new QHBoxLayout(existing_row);
-			auto* existing_label = new QLabel(tr("Existing"), existing_row);
-			auto* existing_date  = new QLabel(existing_row);
-			auto* existing_memo  = new QLabel(existing_row);
-			existing_hbox->addWidget(existing_label);
-			existing_hbox->addWidget(existing_date);
-			existing_hbox->addWidget(existing_memo);
-			existing_hbox->addStretch();
-			existing_hbox->setContentsMargins(0, 0, 0, 0);
+			auto* importing_amount = new QLabel(
+				QString::fromStdString(txn.amount.to_string(app_coordinator->context()->currency_locale().info())),
+				card
+			);
 
-			auto* importing_hbox = new QHBoxLayout();
-			auto* importing_label = new QLabel(tr("Importing"), card);
-			auto* importing_date  = new QLabel(
+			auto* importing_date = new QLabel(
 				QDateTime::fromMSecsSinceEpoch(txn.date_cleared.milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat)),
 				card
 			);
-			auto* importing_name  = new QLabel(QString::fromStdString(txn.name), card);
+
+			auto* importing_name = new QLabel(QString::fromStdString(txn.name), card);
 			importing_name->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 			importing_name->setWordWrap(false);
-			auto* importing_memo  = new QLabel(QString::fromStdString(txn.memo), card);
+
+			auto* importing_memo = new QLabel(QString::fromStdString(txn.memo), card);
 			importing_memo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 			importing_memo->setWordWrap(false);
-			importing_hbox->addWidget(importing_label);
-			importing_hbox->addWidget(importing_date);
-			importing_hbox->addWidget(importing_name);
-			importing_hbox->addWidget(importing_memo);
-			importing_hbox->addStretch();
+
+			auto* status_definitive_label = theme::header_label(tr("Previous Import"), card);
+			auto* status_matched_label    = theme::header_label(tr("Selected Match"), card);
+			auto* status_unmatched_label  = theme::header_label(tr("Unmatched (Will Create New Transaction)"), card);
+			auto* existing_date_label = new QLabel(tr("Date"), card);
+			auto* existing_memo_label = new QLabel(tr("Memo"), card);
+			auto* existing_date = new QLabel(card);
+			auto* existing_memo = new QLabel(card);
+
+			auto* radio_existing = new QRadioButton(tr("Use"), card);
+			auto* radio_name     = new QRadioButton(tr("Use"), card);
+			auto* radio_memo     = new QRadioButton(tr("Use"), card);
+
+			auto* button_group   = new QButtonGroup(card);
+			button_group->addButton(radio_existing,  static_cast<int>(memo_choice::prefer_existing));
+			button_group->addButton(radio_name, static_cast<int>(memo_choice::prefer_name));
+			button_group->addButton(radio_memo, static_cast<int>(memo_choice::prefer_memo));
+
+			constexpr int STATUS_ROW = 5;
+			constexpr int MATCH_COL  = 3;
+			card_grid->addWidget(importing_label,                  0, 0, 1, MATCH_COL + 1);
+
+			card_grid->addWidget(importing_amount_label,           1, 1, 1, 1);
+			card_grid->addWidget(importing_date_label,             2, 1, 1, 1);
+			card_grid->addWidget(importing_name_label,             3, 1, 1, 1);
+			card_grid->addWidget(importing_memo_label,             4, 1, 1, 1);
+
+			card_grid->addWidget(radio_name,                       3, 0, 1, 1);
+			card_grid->addWidget(radio_memo,                       4, 0, 1, 1);
+
+			card_grid->addWidget(importing_amount,                 1, 2, 1, 2);
+			card_grid->addWidget(importing_date,                   2, 2, 1, 2);
+			card_grid->addWidget(importing_name,                   3, 2, 1, 2);
+			card_grid->addWidget(importing_memo,                   4, 2, 1, 2);
+
+			card_grid->addWidget(status_definitive_label, STATUS_ROW, 1, 1, MATCH_COL - 1);
+			card_grid->addWidget(status_matched_label,    STATUS_ROW, 1, 1, MATCH_COL - 1);
+			card_grid->addWidget(status_unmatched_label,  STATUS_ROW, 1, 1, MATCH_COL - 1);
+
+			card_grid->addWidget(existing_date_label,              6, 1, 1, 1);
+			card_grid->addWidget(existing_date,                    6, 2, 1, 2);
+			card_grid->addWidget(radio_existing,                   7, 0, 1, 1);
+			card_grid->addWidget(existing_memo_label,              7, 1, 1, 1);
+			card_grid->addWidget(existing_memo,                    7, 2, 1, 2);
+
+			CardWidgets card_widgets = CardWidgets{
+				.card                   = card,
+				.status_matched_label   = status_matched_label,
+				.status_unmatched_label = status_unmatched_label,
+				.existing_date_label    = existing_date_label,
+				.existing_memo_label    = existing_memo_label,
+				.existing_date          = existing_date,
+				.existing_memo          = existing_memo,
+				.radio_existing         = radio_existing,
+				.radio_name             = radio_name,
+				.radio_memo             = radio_memo,
+			};
 
 			if (has_match) {
 				existing_date->setText(QDateTime::fromMSecsSinceEpoch(txn.get_match()->date_recorded.milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat)));
 				existing_memo->setText(QString::fromStdString(txn.get_match()->memo));
-				existing_row->setVisible(true);
+				set_existing_visible(card_widgets, true);
 			} else {
-				existing_row->setVisible(false);
+				set_existing_visible(card_widgets, false);
 			}
-
-			middle_vbox->addWidget(existing_row);
-			middle_vbox->addLayout(importing_hbox);
-
-			// Footer row
-			auto* footer_row    = new QHBoxLayout();
-			auto* amount_label  = new QLabel(
-				tr("Amount: %1").arg(QString::fromStdString(txn.amount.to_string(app_coordinator->context()->currency_locale().info()))),
-				card
-			);
-			auto* memo_widget    = new QWidget(card);
-			auto* memo_hbox      = new QHBoxLayout(memo_widget);
-			auto* memo_label     = new QLabel(tr("Use Memo"), memo_widget);
-			auto* radio_existing = new QRadioButton(tr("Existing"), memo_widget);
-			auto* radio_name     = new QRadioButton(tr("Imported Name"), memo_widget);
-			auto* radio_memo     = new QRadioButton(tr("Imported Memo"), memo_widget);
-			auto* button_group   = new QButtonGroup(memo_widget);
-
-			button_group->addButton(radio_existing,  static_cast<int>(memo_choice::prefer_existing));
-			button_group->addButton(radio_name, static_cast<int>(memo_choice::prefer_name));
-			button_group->addButton(radio_memo, static_cast<int>(memo_choice::prefer_memo));
 
 			if (!has_match && txn.choice == memo_choice::prefer_existing) {
 				txn.choice = memo_choice::prefer_name;
@@ -430,38 +462,29 @@ void ImportDialog::show_transaction_page() {
 					radio_memo->setChecked(true);
 					break;
 			}
-			memo_widget->setVisible(has_match);
-
-			memo_hbox->addWidget(memo_label);
-			memo_hbox->addWidget(radio_existing);
-			memo_hbox->addWidget(radio_name);
-			memo_hbox->addWidget(radio_memo);
-			memo_hbox->setContentsMargins(0, 0, 0, 0);
 
 			connect(button_group, &QButtonGroup::idClicked, this, [&txn](int id) {
 				txn.choice = static_cast<memo_choice>(id);
 			});
 
-			footer_row->addWidget(amount_label);
-			footer_row->addStretch();
-			footer_row->addWidget(memo_widget);
-
-			// Header row (saved for last so that the match button can reference other objects)
-			auto* header_row  = new QHBoxLayout();
+			status_definitive_label->setVisible(false);
+			status_unmatched_label->setVisible(false);
+			status_matched_label->setVisible(false);
 			if (is_definitive) {
 				++count_definitive;
-				auto* definitive = new QLabel(tr("Already Imported"), card);
-				header_row->addWidget(definitive);
+				status_definitive_label->setVisible(true);
 			} else if (!can_match) {
 				++count_new;
-				auto* creating = new QLabel(tr("Importing as New Transaction"), card);
-				header_row->addWidget(creating);
+				status_unmatched_label->setVisible(true);
+				auto* no_match_label = new QLabel(tr("No Matches Available"), card);
+				card_grid->addWidget(no_match_label, STATUS_ROW, MATCH_COL, 1, 1);
 			} else {
 				++count_matchable;
+				(has_match ? status_matched_label : status_unmatched_label)->setVisible(true);
 				auto* match_button = new QPushButton(has_match ? tr("Change Match") : tr("Assign Match"), card);
-				header_row->addWidget(match_button);
+				card_grid->addWidget(match_button, STATUS_ROW, MATCH_COL, 1, 1);
 
-				connect(match_button, &QPushButton::clicked, this, [this, &txn, &bank_account, match_button, existing_row, existing_date, existing_memo, memo_widget]() {
+				connect(match_button, &QPushButton::clicked, this, [this, &txn, &bank_account, match_button, card_widgets]() {
 					auto* picker        = new QDialog(this);
 					auto* picker_vbox   = new QVBoxLayout(picker);
 					auto* picker_list   = new QListWidget(picker);
@@ -485,23 +508,25 @@ void ImportDialog::show_transaction_page() {
 					connect(picker_list, &QListWidget::itemSelectionChanged, this, [picker_list, select]() {
 						select->setEnabled(!picker_list->selectedItems().isEmpty());
 					});
-					connect(clear, &QPushButton::clicked, picker, [picker, &txn, match_button, existing_row, memo_widget]() {
+					connect(clear, &QPushButton::clicked, picker, [picker, &txn, match_button, card_widgets]() {
 						txn.set_match(nullptr);
 						match_button->setText(tr("Assign Match"));
-						existing_row->setVisible(false);
-						memo_widget->setVisible(false);
+						card_widgets.status_matched_label->setVisible(false);
+						card_widgets.status_unmatched_label->setVisible(true);
+						set_existing_visible(card_widgets, false);
 						picker->accept();
 					});
-					connect(select, &QPushButton::clicked, picker, [picker, picker_list, &txn, match_button, existing_row, existing_date, existing_memo, memo_widget]() {
+					connect(select, &QPushButton::clicked, picker, [picker, picker_list, &txn, match_button, card_widgets]() {
 						auto* item = picker_list->currentItem();
 						if (!item) { return; }
 						const auto* candidate = reinterpret_cast<const fundos::transaction*>(item->data(Qt::UserRole).value<quintptr>());
 						txn.set_match(candidate);
 						match_button->setText(tr("Change Match"));
-						existing_date->setText(QDateTime::fromMSecsSinceEpoch(candidate->date_recorded.milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat)));
-						existing_memo->setText(QString::fromStdString(candidate->memo));
-						existing_row->setVisible(true);
-						memo_widget->setVisible(true);
+						card_widgets.status_matched_label->setVisible(true);
+						card_widgets.status_unmatched_label->setVisible(false);
+						card_widgets.existing_date->setText(QDateTime::fromMSecsSinceEpoch(candidate->date_recorded.milliseconds_since_epoch).toString(QLocale::system().dateFormat(QLocale::ShortFormat)));
+						card_widgets.existing_memo->setText(QString::fromStdString(candidate->memo));
+						set_existing_visible(card_widgets, true);
 						picker->accept();
 					});
 
@@ -515,25 +540,8 @@ void ImportDialog::show_transaction_page() {
 					picker->exec();
 				});
 			}
-			header_row->addStretch();
 
-			card_vbox->addLayout(header_row);
-			card_vbox->addWidget(middle);
-			card_vbox->addLayout(footer_row);
-
-			all_cards->push_back(CardWidgets{
-				.card            = card,
-				.existing_row    = existing_row,
-				.existing_date   = existing_date,
-				.existing_memo   = existing_memo,
-				.radio_existing  = radio_existing,
-				.radio_name      = radio_name,
-				.radio_memo      = radio_memo,
-				.memo_row        = memo_widget,
-				.has_decision    = has_decision,
-			});
-
-			card->setVisible(has_decision);
+			all_cards->push_back(card_widgets);
 			card_layout->addWidget(card);
 		}
 	}
@@ -588,14 +596,6 @@ void ImportDialog::show_transaction_page() {
 		}
 		for (auto& widgets : *all_cards) {
 			widgets.radio_memo->setChecked(true);
-		}
-	});
-
-	connect(show_all, &QCheckBox::toggled, this, [all_cards](bool checked) {
-		for (auto& widgets : *all_cards) {
-			if (!widgets.has_decision) {
-				widgets.card->setVisible(checked);
-			}
 		}
 	});
 
