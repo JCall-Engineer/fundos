@@ -52,4 +52,10 @@ signals:
 
 public:
 	explicit ImportDialog(AppCoordinator* coordinator, QWidget* parent = nullptr);
+
+public slots:
+	void done(int result) override;
+	void adjust_height() {
+		resize(width(), sizeHint().height());
+	}
 };

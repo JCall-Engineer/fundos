@@ -37,7 +37,13 @@ QString ImportDialog::warning_message(fundos::import::warning type, int32_t coun
 
 ImportDialog::ImportDialog(AppCoordinator* coordinator, QWidget* parent) : QDialog(parent), app_coordinator(coordinator) {
 	setWindowTitle(tr("Import from Bank"));
-	setMinimumWidth(725);
+	setMinimumWidth(500);
+
+	QSettings settings;
+	if (settings.contains("import_dialog/width") && settings.contains("import_dialog/position")) {
+		resize(settings.value("import_dialog/width").toInt(), height());
+		move(settings.value("import_dialog/position").toPoint());
+	}
 
 	layout = new QVBoxLayout(this);
 
@@ -52,6 +58,13 @@ ImportDialog::ImportDialog(AppCoordinator* coordinator, QWidget* parent) : QDial
 	connect(db,   &AppDatabase::import_performed,            this, &ImportDialog::on_import_performed);
 
 	show_file_selection_page();
+}
+
+void ImportDialog::done(int result) {
+	QSettings settings;
+	settings.setValue("import_dialog/width", width());
+	settings.setValue("import_dialog/position", pos());
+	QDialog::done(result);
 }
 
 void ImportDialog::show_file_selection_page() {
@@ -115,7 +128,7 @@ void ImportDialog::show_file_selection_page() {
 		delete item;
 	}
 	layout->addWidget(page);
-	adjustSize();
+	adjust_height();
 }
 
 void ImportDialog::show_spinner_page(const QString& description) {
@@ -138,7 +151,7 @@ void ImportDialog::show_spinner_page(const QString& description) {
 		delete item;
 	}
 	layout->addWidget(page);
-	adjustSize();
+	adjust_height();
 }
 
 void ImportDialog::show_parse_error_page(fundos::import::error error) {
@@ -175,7 +188,7 @@ void ImportDialog::show_parse_error_page(fundos::import::error error) {
 		delete item;
 	}
 	layout->addWidget(page);
-	adjustSize();
+	adjust_height();
 }
 
 void ImportDialog::show_warnings_page(const fundos::import::result& result) {
@@ -211,7 +224,7 @@ void ImportDialog::show_warnings_page(const fundos::import::result& result) {
 		delete item;
 	}
 	layout->addWidget(page);
-	adjustSize();
+	adjust_height();
 }
 
 void ImportDialog::show_account_page(fundos::import::bank_account* bank_account) {
@@ -286,7 +299,7 @@ void ImportDialog::show_account_page(fundos::import::bank_account* bank_account)
 		delete item;
 	}
 	layout->addWidget(page);
-	adjustSize();
+	adjust_height();
 }
 
 struct CardWidgets {
@@ -615,7 +628,7 @@ void ImportDialog::show_transaction_page() {
 		delete item;
 	}
 	layout->addWidget(page);
-	adjustSize();
+	adjust_height();
 }
 
 void ImportDialog::show_success_page(int32_t imported, int32_t merged) {
@@ -642,7 +655,7 @@ void ImportDialog::show_success_page(int32_t imported, int32_t merged) {
 		delete item;
 	}
 	layout->addWidget(page);
-	adjustSize();
+	adjust_height();
 }
 
 void ImportDialog::on_parse_finished() {
@@ -721,7 +734,7 @@ void ImportDialog::on_import_prepared(fundos::db::outcome result) {
 			delete item;
 		}
 		layout->addWidget(page);
-		adjustSize();
+		adjust_height();
 		return;
 	}
 	show_transaction_page();
@@ -753,7 +766,7 @@ void ImportDialog::on_import_performed(fundos::db::outcome result) {
 			delete item;
 		}
 		layout->addWidget(page);
-		adjustSize();
+		adjust_height();
 		return;
 	}
 
