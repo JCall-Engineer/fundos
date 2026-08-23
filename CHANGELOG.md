@@ -10,6 +10,7 @@ All notable changes to FundOS are documented here.
 - Update OFX parser to stop treating closing tags in transactions as malformed
 - Update OFX parser to handle self closing tags more gracefully
 - Update import process to allow user selection of name or memo field for imported memo
+- Update import dialog so it remembers its user-adjusted geometry
 
 ## [1.0.2] — 2026-07-06
 
